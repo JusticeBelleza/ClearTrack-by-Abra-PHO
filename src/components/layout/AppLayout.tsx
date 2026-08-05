@@ -24,7 +24,7 @@ export default function AppLayout() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-white tracking-wide">ClearTrack</h1>
-            <p className="text-xs text-slate-400">Provincial Health Office</p>
+            <p className="text-xs text-slate-400">by Abra PHO</p>
           </div>
         </div>
         
