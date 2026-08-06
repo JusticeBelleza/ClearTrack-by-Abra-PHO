@@ -1,8 +1,10 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   Search, Activity, AlertCircle, MapPin, Briefcase, 
-  User, Clock, ChevronRight, ArrowLeft, PenTool, Eye, X, CheckCircle, ChevronDown, Save, FileText, Check
+  User, Clock, ChevronRight, ArrowLeft, PenTool, X, CheckCircle, ChevronDown, Save, FileText, Check
 } from 'lucide-react';
+import { toast } from 'sonner';
+import { supabase } from '../lib/supabase';
 
 // --- Shared Animation Styles for Modals ---
 const modalAnimationStyles = `
@@ -17,62 +19,19 @@ const modalAnimationStyles = `
     @keyframes desktopZoomOut { from { transform: scale(1); opacity: 1; } to { transform: scale(0.95); opacity: 0; } }
     
     /* Apply Animation Classes */
-    .animate-overlay-fade { animation: customFadeIn 0.5s ease-out forwards; }
-    .animate-overlay-fade-out { animation: customFadeOut 0.4s ease-in forwards; }
-    .animate-responsive-modal { animation: iosSlideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    .animate-overlay-fade { animation: customFadeIn 0.4s ease-out forwards; }
+    .animate-overlay-fade-out { animation: customFadeOut 0.3s ease-in forwards; }
+    .animate-responsive-modal { animation: iosSlideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
     .animate-responsive-modal-close { animation: iosSlideDown 0.4s cubic-bezier(0.3, 0, 0.8, 0.15) forwards; }
+
+    .custom-scrollbar::-webkit-scrollbar { display: none; }
+    .custom-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     
     @media (min-width: 640px) {
         .animate-responsive-modal { animation: desktopZoomIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .animate-responsive-modal-close { animation: desktopZoomOut 0.3s cubic-bezier(0.3, 0, 0.8, 0.15) forwards; }
     }
 `;
-
-// --- Mock Data ---
-const mockActiveDocs = [
-  { 
-    id: 'DOC-2026-084', 
-    subject: 'Budget Request for Q3 Medical Supplies', 
-    isUrgent: true,
-    originator: 'Sarah Lee', 
-    currentLocation: 'Provincial Budget Office',
-    assignedTo: 'Maria Santos', 
-    status: 'In Transit',
-    aging: '2 days', 
-    step: 2,
-    totalSteps: 4
-  },
-  { 
-    id: 'DOC-2026-085', 
-    subject: 'PhilHealth Accreditation Renewal',
-    isUrgent: false,
-    originator: 'Dr. Santos', 
-    currentLocation: 'Governor\'s Office', 
-    assignedTo: 'Juan Dela Cruz',
-    status: 'Awaiting Signature', 
-    aging: '4 hours', 
-    step: 3,
-    totalSteps: 5
-  }
-];
-
-const destinationOffices = [
-  "Provincial Budget Office",
-  "Provincial Accounting Office",
-  "Provincial Treasurer's Office",
-  "Governor's Office",
-  "Provincial Administrator's Office",
-  "Sangguniang Panlalawigan",
-  "HRMO"
-];
-
-// Mock employee list (System Admin is intentionally excluded here to simulate the .neq('role', 'admin') database filter)
-const mockClerks = [
-  "Sarah Lee (PHO)",
-  "Maria Santos (Budget Office)",
-  "Juan Dela Cruz (Governor's Office)",
-  "Dr. Santos (PHO)"
-];
 
 // --- Custom Senior-Friendly Dropdown Component ---
 function CustomSelect({ options, value, onChange, placeholder }: any) {
@@ -96,8 +55,8 @@ function CustomSelect({ options, value, onChange, placeholder }: any) {
           onClick={() => setIsOpen(!isOpen)}
           className={`w-full px-4 py-3.5 bg-slate-50 border-2 rounded-xl flex justify-between items-center transition-all text-base outline-none active:scale-[0.99] ${
             isOpen
-              ? 'border-slate-900 ring-4 ring-slate-900/10 bg-white'
-              : 'border-slate-400 hover:bg-slate-100 hover:border-slate-600'
+              ? 'border-blue-600 ring-4 ring-blue-600/10 bg-white'
+              : 'border-slate-300 hover:bg-slate-100 hover:border-slate-400'
           } ${!value ? 'text-slate-500' : 'text-slate-900 font-bold'}`}
         >
           <span className="truncate">
@@ -110,30 +69,34 @@ function CustomSelect({ options, value, onChange, placeholder }: any) {
         </button>
   
         {isOpen && (
-          <div className="absolute z-20 w-full mt-2 bg-white border-2 border-slate-400 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="absolute z-20 w-full mt-2 bg-white border-2 border-slate-300 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
             <div className="max-h-60 overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
-              {options.map((option: any, idx: number) => {
-                const optValue = option.value || option;
-                const optLabel = option.label || option;
-                const isSelected = optValue === value;
-  
-                return (
-                  <div
-                    key={idx}
-                    onClick={() => {
-                      onChange(optValue);
-                      setIsOpen(false);
-                    }}
-                    className={`px-4 py-3 text-base rounded-lg cursor-pointer transition-colors flex items-center active:scale-95 ${
-                      isSelected
-                        ? 'bg-slate-900 text-white font-bold'
-                        : 'text-slate-800 hover:bg-slate-100 font-medium'
-                    }`}
-                  >
-                    {optLabel}
-                  </div>
-                );
-              })}
+              {options.length === 0 ? (
+                  <div className="px-4 py-3 text-sm text-slate-500 text-center italic">Loading...</div>
+              ) : (
+                  options.map((option: any, idx: number) => {
+                    const optValue = option.value || option;
+                    const optLabel = option.label || option;
+                    const isSelected = optValue === value;
+      
+                    return (
+                      <div
+                        key={idx}
+                        onClick={() => {
+                          onChange(optValue);
+                          setIsOpen(false);
+                        }}
+                        className={`px-4 py-3 text-base rounded-lg cursor-pointer transition-colors flex items-center active:scale-95 ${
+                          isSelected
+                            ? 'bg-blue-600 text-white font-bold'
+                            : 'text-slate-800 hover:bg-slate-100 font-medium'
+                        }`}
+                      >
+                        {optLabel}
+                      </div>
+                    );
+                  })
+              )}
             </div>
           </div>
         )}
@@ -143,27 +106,67 @@ function CustomSelect({ options, value, onChange, placeholder }: any) {
 
 // --- Main Processing View ---
 export default function Processing() {
+  const [documents, setDocuments] = useState<any[]>([]);
+  const [departments, setDepartments] = useState<{label: string, value: string}[]>([]);
+  const [clerks, setClerks] = useState<{label: string, value: string}[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
   const [trailDoc, setTrailDoc] = useState<any>(null);
-  
-  // Real-time search state
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Enterprise Auto-Filter Logic
+  useEffect(() => {
+      fetchData();
+  }, []);
+
+  const fetchData = async () => {
+      setIsLoading(true);
+      try {
+          const [docsRes, deptRes, empRes] = await Promise.all([
+              supabase.from('documents').select('*').order('created_at', { ascending: false }),
+              supabase.from('departments').select('name').order('name'),
+              supabase.from('employees').select('name, department').order('name')
+          ]);
+
+          if (docsRes.data) {
+              // Filter out 'sealed' (completed) documents from the active processing feed
+              const activeDocs = docsRes.data.filter((d: any) => d.status !== 'sealed');
+              setDocuments(activeDocs);
+          }
+          
+          if (deptRes.data) setDepartments(deptRes.data.map(d => ({ label: d.name, value: d.name })));
+          if (empRes.data) setClerks(empRes.data.map(e => ({ label: `${e.name} (${e.department})`, value: e.name })));
+      } catch (err) {
+          console.error("Fetch Error:", err);
+          toast.error("Failed to load active documents.");
+      } finally {
+          setIsLoading(false);
+      }
+  };
+
+  // Enterprise Auto-Filter Logic against Real DB Columns
   const filteredDocs = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
-    if (!query) return mockActiveDocs;
+    if (!query) return documents;
     
-    return mockActiveDocs.filter(doc => 
-        doc.subject.toLowerCase().includes(query) ||
-        doc.id.toLowerCase().includes(query) ||
-        doc.assignedTo.toLowerCase().includes(query) ||
-        doc.currentLocation.toLowerCase().includes(query)
+    return documents.filter(doc => 
+        (doc.title || '').toLowerCase().includes(query) ||
+        (doc.reference_no || '').toLowerCase().includes(query) ||
+        (doc.current_location || '').toLowerCase().includes(query)
     );
-  }, [searchQuery]);
+  }, [searchQuery, documents]);
+
+  if (isLoading) {
+      return (
+          <div className="flex flex-col items-center justify-center min-h-[50vh]">
+              <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+              <p className="mt-4 text-slate-500 font-bold">Loading Active Documents...</p>
+          </div>
+      );
+  }
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto animate-in fade-in duration-500">
+    <div className="space-y-6 max-w-5xl mx-auto animate-in fade-in duration-500 pb-12">
       <style>{modalAnimationStyles}</style>
 
       <div className="flex flex-col md:flex-row justify-between md:items-end gap-4 mb-4">
@@ -181,21 +184,19 @@ export default function Processing() {
                 type="text" 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by Subject, ID, Location, or Liaison..." 
-                className="w-full pl-14 pr-14 py-4 rounded-xl border-2 border-slate-400 focus:border-slate-900 focus:ring-4 focus:ring-slate-900/10 outline-none font-bold text-slate-900 placeholder:text-slate-500 transition-all text-lg shadow-sm" 
+                placeholder="Search by Title, ID, or Location..." 
+                className="w-full pl-14 pr-14 py-4 rounded-xl border-2 border-slate-300 focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10 outline-none font-bold text-slate-900 placeholder:text-slate-500 transition-all text-lg shadow-sm" 
               />
               {/* Clear Search Button */}
               {searchQuery && (
                   <button 
                     onClick={() => setSearchQuery("")}
                     className="absolute right-4 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-full transition-all active:scale-90"
-                    title="Clear search"
                   >
                       <X size={20} strokeWidth={3} />
                   </button>
               )}
           </div>
-          {/* Real-time Results Feedback */}
           <p className="text-sm font-bold text-slate-500 px-2 animate-in fade-in">
               {filteredDocs.length} {filteredDocs.length === 1 ? 'document' : 'documents'} found
           </p>
@@ -203,18 +204,15 @@ export default function Processing() {
 
       {/* Empty State */}
       {filteredDocs.length === 0 && (
-          <div className="bg-white border-2 border-dashed border-slate-300 rounded-2xl p-10 flex flex-col items-center justify-center text-center animate-in zoom-in-95 duration-300">
-              <div className="bg-slate-100 p-4 rounded-full mb-4">
-                <Search size={32} className="text-slate-400" />
+          <div className="bg-white border-2 border-dashed border-slate-300 rounded-3xl p-10 flex flex-col items-center justify-center text-center animate-in zoom-in-95 duration-300">
+              <div className="bg-slate-50 p-4 rounded-full mb-4">
+                <Search size={36} className="text-slate-400" />
               </div>
               <h3 className="text-xl font-black text-slate-900 mb-2">No documents found</h3>
               <p className="text-base font-medium text-slate-600 max-w-md">
-                  We couldn't find any active documents matching "<span className="text-slate-900 font-bold">{searchQuery}</span>". Try adjusting your search terms.
+                 We couldn't find any active documents matching your criteria. Try adjusting your search terms or routing a new document.
               </p>
-              <button 
-                onClick={() => setSearchQuery("")}
-                className="mt-6 px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-all active:scale-95 border-2 border-slate-900"
-              >
+              <button onClick={() => setSearchQuery("")} className="mt-6 px-6 py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-all active:scale-95 border-2 border-slate-900">
                   Clear Search
               </button>
           </div>
@@ -223,57 +221,42 @@ export default function Processing() {
       {/* Document Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
         {filteredDocs.map(doc => (
-            <div key={doc.id} className={`bg-white rounded-2xl border-2 ${doc.isUrgent ? 'border-red-500 shadow-lg shadow-red-100' : 'border-slate-300'} shadow-sm p-5 flex flex-col hover:border-slate-500 transition-colors relative overflow-hidden animate-in fade-in zoom-in-95 duration-200`}>
+            <div key={doc.id} className={`bg-white rounded-3xl border-2 ${doc.is_urgent ? 'border-red-400 shadow-md shadow-red-100' : 'border-slate-300'} shadow-sm p-5 flex flex-col hover:border-slate-500 transition-colors relative overflow-hidden animate-in fade-in zoom-in-95 duration-200`}>
                 
-                {doc.isUrgent && <div className="absolute top-0 left-0 w-full h-1.5 bg-red-600"></div>}
+                {doc.is_urgent && <div className="absolute top-0 left-0 w-full h-1.5 bg-red-600"></div>}
                 
                 <div className="flex justify-between items-start mb-4 mt-1">
                     <div className="flex items-center gap-2">
-                        <span className="text-sm font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md font-mono border border-slate-200">{doc.id}</span>
-                        {doc.isUrgent && <span className="flex items-center gap-1 text-xs font-black text-red-700 bg-red-100 px-2.5 py-1 rounded-full border-2 border-red-200 uppercase tracking-wider animate-pulse"><AlertCircle size={14} strokeWidth={3}/> Rush</span>}
+                        <span className="text-sm font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md font-mono border border-slate-200">{doc.reference_no || doc.id}</span>
+                        {doc.is_urgent && <span className="flex items-center gap-1 text-xs font-black text-red-700 bg-red-50 px-2.5 py-1 rounded-full border-2 border-red-200 uppercase tracking-wider animate-pulse"><AlertCircle size={14} strokeWidth={3}/> Rush</span>}
                     </div>
                 </div>
                 
-                <h4 className="font-black text-xl text-slate-900 mb-4 leading-tight">{doc.subject}</h4>
+                <h4 className="font-black text-xl text-slate-900 mb-4 leading-tight">{doc.title || doc.subject}</h4>
                 
                 <div className="bg-slate-50 p-4 rounded-xl border-2 border-slate-200 mb-5 flex-1 space-y-3">
                     <div className="flex items-start gap-3">
                         <MapPin size={18} className="text-slate-500 mt-0.5 shrink-0" />
-                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Current Location</span>{doc.currentLocation}</p>
-                    </div>
-                    <div className="flex items-start gap-3">
-                        <Briefcase size={18} className="text-slate-500 mt-0.5 shrink-0" />
-                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Assigned To (Liaison)</span>{doc.assignedTo}</p>
+                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Current Location</span>{doc.current_location || 'Processing'}</p>
                     </div>
                     <div className="flex items-start gap-3">
                         <Clock size={18} className="text-slate-500 mt-0.5 shrink-0" />
-                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Pending For</span>{doc.aging}</p>
+                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Logged On</span>{new Date(doc.created_at).toLocaleDateString()}</p>
                     </div>
                 </div>
                 
-                <div className="mt-auto mb-4">
-                    <div className="flex justify-between text-xs font-bold text-slate-600 mb-2 uppercase tracking-wider">
-                        <span>Routing Progress</span>
-                        <span>Step {doc.step} of {doc.totalSteps}</span>
-                    </div>
-                    <div className="w-full bg-slate-200 rounded-full h-2 border border-slate-300 overflow-hidden">
-                        <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${(doc.step / doc.totalSteps) * 100}%` }}></div>
-                    </div>
-                </div>
-
-                <div className="flex gap-2">
+                <div className="flex gap-2 mt-auto">
                     <button 
                         onClick={() => setTrailDoc(doc)}
                         className="flex-1 py-2.5 px-2 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 border-2 border-slate-300 text-sm"
-                        title="View Digital Trail"
                     >
                         <Clock size={16} /> Track
                     </button>
                     <button 
                         onClick={() => setSelectedDoc(doc)}
-                        className="flex-[1.5] py-2.5 px-2 bg-slate-900 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-sm border-2 border-slate-900 hover:border-blue-700"
+                        className="flex-[1.5] py-2.5 px-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-sm border-2 border-blue-700"
                     >
-                        Handover <ChevronRight size={16} />
+                        Action <ChevronRight size={16} />
                     </button>
                 </div>
             </div>
@@ -281,7 +264,7 @@ export default function Processing() {
       </div>
 
       {/* Overlays */}
-      {selectedDoc && <HandoverScreen doc={selectedDoc} onBack={() => setSelectedDoc(null)} />}
+      {selectedDoc && <HandoverScreen doc={selectedDoc} departments={departments} clerks={clerks} onBack={() => setSelectedDoc(null)} onSuccess={fetchData} />}
       {trailDoc && <DigitalTrailModal doc={trailDoc} onBack={() => setTrailDoc(null)} />}
     </div>
   );
@@ -293,51 +276,13 @@ function DigitalTrailModal({ doc, onBack }: any) {
 
     const handleClose = () => {
         setIsClosing(true);
-        setTimeout(() => {
-            onBack();
-        }, 400); 
+        setTimeout(() => { onBack(); }, 400); 
     };
 
-    const timeline = [
-        {
-            id: 1,
-            date: "Aug 6",
-            time: "11:50 AM",
-            title: "Received at Destination",
-            description: `Document has arrived and was received by Maria Santos at the ${doc.currentLocation}.`,
-            status: "current"
-        },
-        {
-            id: 2,
-            date: "Aug 6",
-            time: "08:27 AM",
-            title: "In Transit",
-            description: `Handed over to ${doc.assignedTo} (Liaison) heading to ${doc.currentLocation}.`,
-            status: "completed"
-        },
-        {
-            id: 3,
-            date: "Aug 5",
-            time: "05:16 PM",
-            title: "Signed and Released",
-            description: "Document signed by Dr. Santos at the PHO Office and released for routing.",
-            status: "completed"
-        },
-        {
-            id: 4,
-            date: "Aug 5",
-            time: "09:09 AM",
-            title: "Document Created",
-            description: `Initiated and logged into the system by ${doc.originator}.`,
-            status: "completed"
-        }
-    ];
-
     return (
-        <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosing ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
-            <div className={`bg-white w-full max-w-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden shadow-2xl rounded-t-2xl sm:rounded-2xl ${isClosing ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
+        <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/60 backdrop-blur-sm ${isClosing ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
+            <div className={`bg-white w-full max-w-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden shadow-2xl rounded-t-2xl sm:rounded-3xl ${isClosing ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
                 
-                {/* Header Container */}
                 <div className="bg-slate-900 text-white relative flex flex-col shrink-0">
                     <div className="w-16 h-1.5 bg-white/30 rounded-full mx-auto mt-3 sm:hidden shrink-0"></div>
                     <div className="p-5 pt-3 sm:pt-6 flex items-center justify-between">
@@ -349,59 +294,28 @@ function DigitalTrailModal({ doc, onBack }: any) {
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-white">
-                    
-                    {/* Document Header Info */}
+                <div className="flex-1 overflow-y-auto p-5 sm:p-8 bg-white">
                     <div className="mb-8 border-b-2 border-slate-100 pb-6">
-                        <p className="text-sm font-bold text-slate-500 mb-1 font-mono">{doc.id}</p>
-                        <p className="font-black text-xl text-slate-900 leading-tight">
-                            {doc.subject}
-                        </p>
+                        <p className="text-sm font-bold text-slate-500 mb-1 font-mono">{doc.reference_no}</p>
+                        <p className="font-black text-xl text-slate-900 leading-tight">{doc.title}</p>
                     </div>
 
-                    {/* Tracker Timeline (E-Commerce Style) */}
-                    <div className="flex flex-col">
-                        {timeline.map((step, idx) => {
-                            const isLast = idx === timeline.length - 1;
-                            return (
-                                <div key={step.id} className="flex group">
-                                    
-                                    {/* Left: Date & Time */}
-                                    <div className="w-20 sm:w-24 shrink-0 text-left pt-1">
-                                        <p className="text-sm sm:text-base font-bold text-slate-700">{step.date}</p>
-                                        <p className="text-xs sm:text-sm font-bold text-slate-500">{step.time}</p>
-                                    </div>
-
-                                    {/* Middle: Timeline Graphic */}
-                                    <div className="relative flex flex-col items-center px-3 sm:px-5">
-                                        {/* Node */}
-                                        <div className="z-10 w-6 h-6 rounded-full bg-slate-300 flex items-center justify-center shrink-0 border-2 border-white shadow-sm mt-0.5">
-                                            <Check size={14} className="text-white" strokeWidth={4} />
-                                        </div>
-                                        {/* Continuous Line */}
-                                        {!isLast && (
-                                            <div className="absolute top-6 bottom-[-0.5rem] w-[2px] bg-slate-200"></div>
-                                        )}
-                                    </div>
-
-                                    {/* Right: Content */}
-                                    <div className="flex-1 pb-10">
-                                        <h4 className="text-base sm:text-lg font-black text-slate-900">{step.title}</h4>
-                                        <p className="text-sm sm:text-base font-medium text-slate-700 mt-1 leading-snug">{step.description}</p>
-                                    </div>
-
-                                </div>
-                            );
-                        })}
+                    <div className="space-y-6">
+                        <div className="bg-slate-50 p-5 rounded-2xl border-2 border-slate-200 space-y-4">
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm font-bold text-slate-500 uppercase">Current Status</span>
+                                <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-lg font-bold text-sm">{doc.status || 'Processing'}</span>
+                            </div>
+                            <div className="flex justify-between items-center">
+                                <span className="text-sm font-bold text-slate-500 uppercase">Current Location</span>
+                                <span className="font-bold text-slate-900">{doc.current_location || 'Originating Office'}</span>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                {/* Footer */}
                 <div className="bg-slate-50 p-4 sm:p-6 pb-8 sm:pb-6 border-t-2 border-slate-200 flex shrink-0">
-                    <button 
-                        onClick={handleClose}
-                        className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-4 rounded-xl shadow-lg transition-all active:scale-95 text-base border-2 border-slate-900"
-                    >
+                    <button onClick={handleClose} className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl shadow-lg transition-all active:scale-95 text-base border-2 border-slate-900">
                         Close Tracker
                     </button>
                 </div>
@@ -411,24 +325,26 @@ function DigitalTrailModal({ doc, onBack }: any) {
 }
 
 // --- Handover & Signature Modal ---
-function HandoverScreen({ doc, onBack }: any) {
+function HandoverScreen({ doc, departments, clerks, onBack, onSuccess }: any) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [isDrawing, setIsDrawing] = useState(false);
     const [isRejecting, setIsRejecting] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
     
+    // Form States
     const [destination, setDestination] = useState('');
     const [receivingClerk, setReceivingClerk] = useState('');
     const [rejectOffice, setRejectOffice] = useState('');
+    const [rejectReason, setRejectReason] = useState('');
 
     const [isClosing, setIsClosing] = useState(false);
 
     const handleClose = () => {
       setIsClosing(true);
-      setTimeout(() => {
-        onBack();
-      }, 400); 
+      setTimeout(() => { onBack(); }, 400); 
     };
 
+    // Signature Canvas Logic
     useEffect(() => {
         const canvas = canvasRef.current;
         if (!canvas) return;
@@ -499,15 +415,81 @@ function HandoverScreen({ doc, onBack }: any) {
         }
     };
 
+    // --- Action Handlers --- //
+    const handleSaveRouting = async () => {
+        if (!destination || !receivingClerk) {
+            toast.error("Validation Error", { description: "Please select a destination and receiving clerk." });
+            return;
+        }
+        setIsSubmitting(true);
+        try {
+            const { error } = await supabase.from('documents').update({
+                current_location: destination,
+                status: 'routing' // Matches ENUM exactly
+            }).eq('id', doc.id);
+
+            if (error) throw error;
+            toast.success("Document Routed Successfully!", { description: `Forwarded to ${destination}.`});
+            onSuccess();
+            handleClose();
+        } catch (e: any) {
+            toast.error("Failed to route document", { description: e.message });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleComplete = async () => {
+        setIsSubmitting(true);
+        try {
+            const { error } = await supabase.from('documents').update({
+                status: 'sealed' // Matches ENUM exactly
+            }).eq('id', doc.id);
+
+            if (error) throw error;
+            toast.success("Document Completed!", { description: "It has been sealed and moved to history." });
+            onSuccess();
+            handleClose();
+        } catch (e: any) {
+            toast.error("Failed to complete document", { description: e.message });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    const handleReject = async () => {
+        if (!rejectOffice || !rejectReason.trim()) {
+            toast.error("Validation Error", { description: "Please provide the returning office and the reason for rejection." });
+            return;
+        }
+        setIsSubmitting(true);
+        try {
+            const { error } = await supabase.from('documents').update({
+                status: 'pending', // Fallback for rejected since 'returned' doesn't exist
+                current_location: rejectOffice,
+                remarks: rejectReason.trim()
+            }).eq('id', doc.id);
+
+            if (error) throw error;
+            toast.success("Document Returned", { description: "The originator has been notified." });
+            onSuccess();
+            handleClose();
+        } catch (e: any) {
+            toast.error("Failed to reject document", { description: e.message });
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     return (
-        <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosing ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
+        <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/60 backdrop-blur-sm ${isClosing ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
             
-            <div className={`bg-white w-full max-w-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden shadow-2xl rounded-t-2xl sm:rounded-2xl ${isClosing ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
+            <div className={`bg-white w-full max-w-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden shadow-2xl rounded-t-2xl sm:rounded-3xl ${isClosing ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
                 
                 <div className={`text-white relative flex flex-col shrink-0 ${isRejecting ? 'bg-red-700' : 'bg-slate-900'}`}>
                     <div className="w-16 h-1.5 bg-white/30 rounded-full mx-auto mt-3 sm:hidden shrink-0"></div>
                     <div className="p-5 pt-3 sm:pt-6 flex items-center justify-between">
-                        <button onClick={handleClose} className="p-2 -ml-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors active:scale-90">
+                        <button onClick={handleClose} disabled={isSubmitting} className="p-2 -ml-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors active:scale-90 disabled:opacity-50">
                             <ArrowLeft size={24} />
                         </button>
                         <h3 className="font-black text-xl">{isRejecting ? 'Reject & Return' : 'Record Handover'}</h3>
@@ -515,16 +497,13 @@ function HandoverScreen({ doc, onBack }: any) {
                     </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-6 sm:p-8 space-y-8">
+                <div className="flex-1 overflow-y-auto p-5 sm:p-8 space-y-8 custom-scrollbar">
                     
                     <div className="bg-slate-50 p-5 rounded-2xl border-2 border-slate-200">
-                        <p className="text-sm font-bold text-slate-500 mb-2 font-mono">{doc.id}</p>
+                        <p className="text-sm font-bold text-slate-500 mb-2 font-mono">{doc.reference_no}</p>
                         <p className="font-black text-xl text-slate-900 leading-tight mb-3 flex items-start gap-2">
-                            {doc.isUrgent && <AlertCircle size={24} className="text-red-600 shrink-0 mt-0.5" />}
-                            {doc.subject}
-                        </p>
-                        <p className="text-sm text-slate-700 font-bold flex items-center gap-2">
-                            <User size={16} className="text-slate-500"/> Assigned by: {doc.originator}
+                            {doc.is_urgent && <AlertCircle size={24} className="text-red-600 shrink-0 mt-0.5" />}
+                            {doc.title}
                         </p>
                     </div>
 
@@ -533,35 +512,35 @@ function HandoverScreen({ doc, onBack }: any) {
                             <div>
                                 <label className="block text-base font-bold text-slate-900 mb-2">Destination Office *</label>
                                 <CustomSelect 
-                                    options={destinationOffices} 
+                                    options={departments} 
                                     value={destination} 
                                     onChange={setDestination} 
-                                    placeholder="Select office..." 
+                                    placeholder="Select receiving office..." 
                                 />
                             </div>
 
                             <div>
                                 <label className="block text-base font-bold text-slate-900 mb-2">Receiving Clerk / Liaison *</label>
                                 <CustomSelect 
-                                    options={mockClerks} 
+                                    options={clerks} 
                                     value={receivingClerk} 
                                     onChange={setReceivingClerk} 
-                                    placeholder="Select receiving clerk..." 
+                                    placeholder="Select employee..." 
                                 />
                             </div>
 
                             <div>
                                 <div className="flex justify-between items-end mb-2">
                                     <label className="block text-base font-bold text-slate-900 flex items-center gap-2"><PenTool size={20}/> Signature *</label>
-                                    <button onClick={clearSignature} className="text-sm text-slate-600 font-bold hover:text-slate-900 transition-colors bg-slate-100 px-3 py-1.5 rounded-lg border-2 border-slate-300 active:scale-95">Clear Pad</button>
+                                    <button onClick={clearSignature} type="button" className="text-sm text-slate-600 font-bold hover:text-slate-900 transition-colors bg-slate-100 px-3 py-1.5 rounded-lg border-2 border-slate-300 active:scale-95">Clear Pad</button>
                                 </div>
-                                <div className="border-4 border-slate-400 rounded-2xl bg-slate-50 overflow-hidden touch-none relative">
+                                <div className="border-4 border-slate-300 rounded-2xl bg-slate-50 overflow-hidden touch-none relative">
                                     <div className="absolute top-1/2 left-4 right-4 h-0 border-b-2 border-dashed border-slate-300 pointer-events-none"></div>
                                     <canvas 
                                         ref={canvasRef} 
                                         width={600} 
-                                        height={250} 
-                                        className="w-full h-[250px] cursor-crosshair bg-transparent relative z-10"
+                                        height={200} 
+                                        className="w-full h-[200px] cursor-crosshair bg-transparent relative z-10"
                                         style={{ touchAction: 'none' }}
                                     />
                                 </div>
@@ -573,15 +552,15 @@ function HandoverScreen({ doc, onBack }: any) {
                             <div className="bg-red-50 border-2 border-red-300 rounded-2xl p-5 flex items-start gap-4">
                                 <AlertCircle className="text-red-600 shrink-0 mt-0.5" size={28} />
                                 <div>
-                                    <h4 className="font-black text-xl text-red-900 mb-1">Return to Originator</h4>
-                                    <p className="text-base text-red-700 font-medium leading-snug">This document will be sent back to <strong>{doc.originator}</strong>. Please provide the exact reason for refusal.</p>
+                                    <h4 className="font-black text-xl text-red-900 mb-1">Return Document</h4>
+                                    <p className="text-base text-red-700 font-medium leading-snug">This document will be returned to a previous office. Please provide the exact reason for refusal.</p>
                                 </div>
                             </div>
 
                             <div>
-                                <label className="block text-base font-bold text-slate-900 mb-2">Rejecting Office *</label>
+                                <label className="block text-base font-bold text-slate-900 mb-2">Returning To Office *</label>
                                 <CustomSelect 
-                                    options={destinationOffices} 
+                                    options={departments} 
                                     value={rejectOffice} 
                                     onChange={setRejectOffice} 
                                     placeholder="Select office..." 
@@ -591,34 +570,38 @@ function HandoverScreen({ doc, onBack }: any) {
                             <div>
                                 <label className="block text-base font-bold text-slate-900 mb-2">Reason for Rejection *</label>
                                 <textarea 
+                                    value={rejectReason}
+                                    onChange={(e) => setRejectReason(e.target.value)}
                                     placeholder="E.g., Missing signature, incorrect attachments..." 
-                                    className="w-full p-4 bg-slate-50 border-2 border-slate-400 rounded-xl focus:border-red-600 focus:ring-4 focus:ring-red-600/10 outline-none text-base font-bold text-slate-900 placeholder:text-slate-500 min-h-[140px] resize-y" 
+                                    className="w-full p-4 bg-slate-50 border-2 border-slate-300 rounded-xl focus:border-red-600 focus:ring-4 focus:ring-red-600/10 outline-none text-base font-bold text-slate-900 placeholder:text-slate-500 min-h-[140px] resize-y transition-colors" 
                                 ></textarea>
                             </div>
                         </div>
                     )}
                 </div>
 
-                <div className="bg-slate-50 p-4 sm:p-6 pb-8 sm:pb-6 border-t-2 border-slate-200 flex flex-row gap-3 sm:gap-4 shrink-0">
+                <div className="bg-slate-50 p-4 sm:p-6 pb-8 sm:pb-6 border-t-2 border-slate-200 flex flex-row gap-3 shrink-0">
                     {!isRejecting ? (
                         <>
                             <button 
                                 onClick={() => setIsRejecting(true)}
-                                className="flex-1 sm:flex-none px-0 sm:px-6 py-4 bg-white border-2 border-red-300 text-red-700 hover:bg-red-50 font-bold rounded-xl transition-all active:scale-95 text-base flex justify-center items-center gap-2"
+                                disabled={isSubmitting}
+                                className="flex-1 sm:flex-none px-0 sm:px-6 py-4 bg-white border-2 border-red-300 text-red-700 hover:bg-red-50 font-bold rounded-xl transition-all active:scale-95 text-base flex justify-center items-center gap-2 disabled:opacity-50"
                             >
                                 <X size={24} strokeWidth={3} />
                                 <span className="hidden sm:block">Reject</span>
                             </button>
                             <button 
-                                onClick={() => { console.log("Handover recorded."); handleClose(); }}
-                                className="flex-[2] sm:flex-1 bg-slate-900 hover:bg-blue-700 text-white font-bold py-4 px-0 sm:px-6 rounded-xl shadow-lg transition-all active:scale-95 text-base flex justify-center items-center gap-2 border-2 border-slate-900 hover:border-blue-700"
+                                onClick={handleSaveRouting}
+                                disabled={isSubmitting}
+                                className="flex-[2] sm:flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-0 sm:px-6 rounded-xl shadow-lg transition-all active:scale-95 text-base flex justify-center items-center gap-2 border-2 border-blue-700 disabled:opacity-50"
                             >
-                                <Save size={24} strokeWidth={2.5} />
-                                <span className="hidden sm:block">Save & Continue Routing</span>
+                                {isSubmitting ? <span className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : <><Save size={24} strokeWidth={2.5} /><span className="hidden sm:block">Save Routing</span></>}
                             </button>
                             <button 
-                                onClick={() => { console.log("Document completed."); handleClose(); }}
-                                className="flex-1 sm:flex-none px-0 sm:px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 text-base border-2 border-emerald-700"
+                                onClick={handleComplete}
+                                disabled={isSubmitting}
+                                className="flex-1 sm:flex-none px-0 sm:px-6 bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-4 rounded-xl shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95 text-base border-2 border-emerald-700 disabled:opacity-50"
                                 title="Mark as Completed"
                             >
                                 <CheckCircle size={24} strokeWidth={2.5} />
@@ -629,17 +612,18 @@ function HandoverScreen({ doc, onBack }: any) {
                         <>
                             <button 
                                 onClick={() => setIsRejecting(false)}
-                                className="flex-1 bg-white border-2 border-slate-400 text-slate-800 hover:bg-slate-100 font-bold py-4 rounded-xl transition-all active:scale-95 text-base flex justify-center items-center gap-2"
+                                disabled={isSubmitting}
+                                className="flex-1 bg-white border-2 border-slate-300 text-slate-800 hover:bg-slate-100 font-bold py-4 rounded-xl transition-all active:scale-95 text-base flex justify-center items-center gap-2 disabled:opacity-50"
                             >
                                 <ArrowLeft size={24} strokeWidth={3} />
-                                <span className="hidden sm:block">Cancel Rejection</span>
+                                <span className="hidden sm:block">Cancel</span>
                             </button>
                             <button 
-                                onClick={() => { console.log("Returned to originator."); handleClose(); }}
-                                className="flex-[2] bg-red-600 hover:bg-red-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all active:scale-95 text-base flex items-center justify-center gap-2 border-2 border-red-700"
+                                onClick={handleReject}
+                                disabled={isSubmitting}
+                                className="flex-[2] bg-red-600 hover:bg-red-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all active:scale-95 text-base flex items-center justify-center gap-2 border-2 border-red-700 disabled:opacity-50"
                             >
-                                <AlertCircle size={24} strokeWidth={3} />
-                                <span className="hidden sm:block">Confirm Rejection</span>
+                                {isSubmitting ? <span className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : <><AlertCircle size={24} strokeWidth={3} /><span className="hidden sm:block">Confirm Rejection</span></>}
                             </button>
                         </>
                     )}

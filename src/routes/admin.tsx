@@ -3,10 +3,26 @@ import {
   Building2, FolderTree, Users, Shield, Plus, 
   Trash2, X, Activity, Database, AlertTriangle, 
   ClipboardList, Settings, Server, Clock, Search,
-  Save, ChevronDown, Phone, Key, Zap, MapPin, Hash, AlertCircle
+  Save, ChevronDown, Phone, Key, Zap, MapPin, Hash, AlertCircle, Mail
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase'; 
+import { createClient } from '@supabase/supabase-js'; 
+
+// --- ADMIN BYPASS CLIENT ---
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || '';
+
+const supabaseAdmin = createClient(
+  supabaseUrl || 'https://placeholder.supabase.co', 
+  serviceRoleKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.dummy_key', 
+  {
+    auth: {
+      autoRefreshToken: false,
+      persistSession: false 
+    }
+  }
+);
 
 // --- Shared Modal Animation Styles ---
 const modalAnimationStyles = `
@@ -113,27 +129,48 @@ export default function SystemAdmin() {
   // --- Modal Open/Close States ---
   const [isDeptModalOpen, setIsDeptModalOpen] = useState(false);
   const [isClosingDept, setIsClosingDept] = useState(false);
+  
   const [isCatModalOpen, setIsCatModalOpen] = useState(false);
   const [isClosingCat, setIsClosingCat] = useState(false);
+  
   const [isEmpModalOpen, setIsEmpModalOpen] = useState(false);
   const [isClosingEmp, setIsClosingEmp] = useState(false);
 
-  // Delete Confirmation State
+  // Delete Confirmation States
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
   const [isClosingDelete, setIsClosingDelete] = useState(false);
+
+  const [deleteCatConfirm, setDeleteCatConfirm] = useState<{ id: string; name: string } | null>(null);
+  const [isClosingCatDelete, setIsClosingCatDelete] = useState(false);
+
+  const [deleteEmpConfirm, setDeleteEmpConfirm] = useState<{ id: string; name: string; emp_id: string } | null>(null);
+  const [isClosingEmpDelete, setIsClosingEmpDelete] = useState(false);
 
   const closeDeptModal = () => { setIsClosingDept(true); setTimeout(() => { setIsDeptModalOpen(false); setIsClosingDept(false); }, 400); };
   const closeCatModal = () => { setIsClosingCat(true); setTimeout(() => { setIsCatModalOpen(false); setIsClosingCat(false); }, 400); };
   const closeEmpModal = () => { setIsClosingEmp(true); setTimeout(() => { setIsEmpModalOpen(false); setIsClosingEmp(false); }, 400); };
+  
   const closeDeleteModal = () => { 
       setIsClosingDelete(true); 
       setTimeout(() => { setDeleteConfirm(null); setIsClosingDelete(false); }, 400); 
   };
+  const closeCatDeleteModal = () => { 
+      setIsClosingCatDelete(true); 
+      setTimeout(() => { setDeleteCatConfirm(null); setIsClosingCatDelete(false); }, 400); 
+  };
+  const closeEmpDeleteModal = () => { 
+      setIsClosingEmpDelete(true); 
+      setTimeout(() => { setDeleteEmpConfirm(null); setIsClosingEmpDelete(false); }, 400); 
+  };
 
   // --- Form States ---
   const [newOffice, setNewOffice] = useState({ office_id: '', office_name: '', office_address: '' });
-  const [newCat, setNewCat] = useState('');
-  const [newEmp, setNewEmp] = useState({ emp_id: '', name: '', designation: '', department: '', contactNumber: '', password: '', confirmPassword: '' });
+  const [newCat, setNewCat] = useState({ category_id: '', name: '' });
+  
+  const [newEmp, setNewEmp] = useState({ 
+    emp_id: '', name: '', email: '', designation: '', 
+    department: '', contactNumber: '', password: '', confirmPassword: '' 
+  });
 
   // --- Data Fetching ---
   useEffect(() => {
@@ -176,8 +213,18 @@ export default function SystemAdmin() {
       setIsDeptModalOpen(true);
   };
 
+  const openCatModal = () => {
+      const generatedId = 'CAT-' + Math.floor(1000 + Math.random() * 9000);
+      setNewCat({ category_id: generatedId, name: '' });
+      setIsCatModalOpen(true);
+  };
+
   const openEmployeeModal = () => {
-      setNewEmp({ emp_id: '', name: '', designation: '', department: departments[0]?.name || '', contactNumber: '', password: '', confirmPassword: '' });
+      setNewEmp({ 
+          emp_id: '', name: '', email: '', designation: '', 
+          department: departments[0]?.name || '', contactNumber: '', 
+          password: '', confirmPassword: '' 
+      });
       setIsEmpModalOpen(true);
   }
 
@@ -186,6 +233,7 @@ export default function SystemAdmin() {
       setNewEmp({...newEmp, password: pass, confirmPassword: pass});
   };
 
+  // Departments Handlers
   const handleAddDepartment = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newOffice.office_name.trim() || !newOffice.office_address.trim()) {
@@ -225,35 +273,49 @@ export default function SystemAdmin() {
       closeDeleteModal();
   };
 
+  // Categories Handlers
   const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCat.trim()) return;
+    if (!newCat.name.trim()) {
+        toast.error('Please provide a category name.');
+        return;
+    }
     
-    const { data, error } = await supabase.from('categories').insert([{ name: newCat.trim() }]).select();
+    const { data, error } = await supabase.from('categories').insert([{ 
+        name: newCat.name.trim(),
+        category_id: newCat.category_id 
+    }]).select();
+
     if (error) {
         toast.error('Failed to add category', { description: error.message });
         return;
     }
     if (data) setCategories([...categories, data[0]]);
-    setNewCat(''); 
+    
     closeCatModal(); 
     toast.success('Document category added successfully');
-    logAuditAction(`Added new category: ${newCat.trim()}`);
+    logAuditAction(`Added new category: ${newCat.name.trim()} (${newCat.category_id})`);
   };
 
-  const handleDeleteCategory = async (id: string, name: string) => {
+  const confirmDeleteCategory = async () => {
+      if (!deleteCatConfirm) return;
+      const { id, name } = deleteCatConfirm;
+
       const { error } = await supabase.from('categories').delete().eq('id', id);
-      if (error) toast.error('Failed to delete category');
-      else {
+      if (error) {
+          toast.error('Failed to delete category');
+      } else {
           setCategories(categories.filter(c => c.id !== id));
-          toast.success('Category removed');
+          toast.success('Category removed successfully');
           logAuditAction(`Deleted category: ${name}`);
       }
+      closeCatDeleteModal();
   };
 
+  // Employee Handlers
   const handleAddEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newEmp.emp_id || !newEmp.name || !newEmp.designation || !newEmp.contactNumber || !newEmp.password) { 
+    if (!newEmp.emp_id || !newEmp.name || !newEmp.email || !newEmp.designation || !newEmp.contactNumber || !newEmp.password) { 
         toast.error('Please fill all required fields.'); 
         return; 
     }
@@ -261,34 +323,77 @@ export default function SystemAdmin() {
         toast.error('Passwords do not match.');
         return;
     }
+
+    if (!serviceRoleKey) {
+        toast.error('Configuration Error', { description: 'Missing VITE_SUPABASE_SERVICE_ROLE_KEY in environment variables.' });
+        return;
+    }
     
+    // 1. Create the user in Supabase Authentication via Admin bypass
+    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+        email: newEmp.email.trim(),
+        password: newEmp.password,
+        email_confirm: true, // Auto-confirm so the user can log in instantly
+        user_metadata: { full_name: newEmp.name }
+    });
+
+    if (authError) {
+        toast.error('Auth Creation Failed', { description: authError.message });
+        return;
+    }
+
+    const userId = authData.user.id;
+
+    // 2. Insert into the public employees directory
     const { data, error } = await supabase.from('employees').insert([{ 
         emp_id: newEmp.emp_id, 
         name: newEmp.name, 
+        email: newEmp.email.trim(),
         designation: newEmp.designation, 
         department: newEmp.department, 
         contact_number: newEmp.contactNumber 
     }]).select();
 
     if (error) {
-        toast.error('Failed to register employee', { description: error.message });
+        toast.error('Directory Error', { description: error.message });
         return;
+    }
+
+    // 3. Guarantee the profile is created and fully synced via UPSERT
+    const { error: profileError } = await supabaseAdmin.from('profiles').upsert({
+        id: userId,
+        full_name: newEmp.name,
+        emp_id: newEmp.emp_id,
+        department: newEmp.department,
+        designation: newEmp.designation,
+        contact_number: newEmp.contactNumber,
+        role: 'pho_staff'               // <-- Explicitly locks them into the Staff role
+    });
+
+    if (profileError) {
+        console.error("Profile Sync Error:", profileError);
+        toast.error('Profile warning', { description: 'Login created, but profile sync failed.' });
     }
 
     if (data) setEmployees([data[0], ...employees]);
     closeEmpModal(); 
-    toast.success('Employee registered successfully', { description: 'Account created.' });
+    toast.success('Employee registered successfully', { description: 'The new user can log in immediately.' });
     logAuditAction(`Registered new employee: ${newEmp.emp_id}`);
   };
 
-  const handleDeleteEmployee = async (id: string, emp_id: string) => {
+  const confirmDeleteEmployee = async () => {
+      if (!deleteEmpConfirm) return;
+      const { id, name, emp_id } = deleteEmpConfirm;
+
       const { error } = await supabase.from('employees').delete().eq('id', id);
-      if (error) toast.error('Failed to deactivate employee');
-      else {
+      if (error) {
+          toast.error('Failed to permanently delete employee');
+      } else {
           setEmployees(employees.filter(e => e.id !== id));
-          toast.success('Employee account deactivated');
-          logAuditAction(`Deactivated employee: ${emp_id}`);
+          toast.success('Employee permanently deleted');
+          logAuditAction(`Deleted employee: ${emp_id} (${name})`);
       }
+      closeEmpDeleteModal();
   };
 
   const saveGlobalSettings = async () => {
@@ -319,10 +424,11 @@ export default function SystemAdmin() {
   };
 
   const sessionOptions = [
-    { value: '15', label: '15 Minutes' },
     { value: '30', label: '30 Minutes' },
     { value: '60', label: '1 Hour' },
-    { value: '120', label: '2 Hours' }
+    { value: '480', label: '8 Hours' },
+    { value: '1440', label: '24 Hours' },
+    { value: 'never', label: 'Never' }
   ];
 
   if (isLoading) {
@@ -362,28 +468,10 @@ export default function SystemAdmin() {
       {mainTab === 'dashboard' && (
         <div className="space-y-6 animate-in fade-in zoom-in-95 duration-300">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-5">
-            <StatCard title="System Uptime" value="99.9%" icon={<Server className="text-emerald-600" />} color="bg-emerald-50 border-emerald-200" />
-            <StatCard title="Active Users" value={employees.length} icon={<Users className="text-blue-600" />} color="bg-blue-50 border-blue-200" />
-            <StatCard title="Global Active Docs" value="12" icon={<FolderTree className="text-indigo-600" />} color="bg-indigo-50 border-indigo-200" />
-            <StatCard title="System Warnings" value="0" icon={<AlertTriangle className="text-orange-600" />} color="bg-orange-50 border-orange-200" />
-          </div>
-
-          <div className="bg-white rounded-3xl border-2 border-slate-300 shadow-sm overflow-hidden p-6 sm:p-8">
-            <h3 className="text-xl font-black text-slate-900 mb-4 flex items-center gap-2">
-               <Database size={24} className="text-slate-500" /> Database Health
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="bg-slate-50 p-5 rounded-2xl border-2 border-slate-200">
-                    <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Storage Used</p>
-                    <p className="text-2xl font-black text-slate-900">45.2 GB <span className="text-sm text-emerald-600 font-bold ml-2">Healthy</span></p>
-                    <div className="w-full bg-slate-200 rounded-full h-2 mt-3"><div className="bg-emerald-500 h-2 rounded-full w-[45%]"></div></div>
-                </div>
-                <div className="bg-slate-50 p-5 rounded-2xl border-2 border-slate-200">
-                    <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">API Response Time</p>
-                    <p className="text-2xl font-black text-slate-900">124 ms</p>
-                    <p className="text-sm font-bold text-slate-600 mt-2">Optimal Performance</p>
-                </div>
-            </div>
+            <StatCard title="Registered Offices" value={departments.length} icon={<Building2 className="text-emerald-600" />} color="bg-emerald-50 border-emerald-200" />
+            <StatCard title="Active Employees" value={employees.length} icon={<Users className="text-blue-600" />} color="bg-blue-50 border-blue-200" />
+            <StatCard title="Doc Categories" value={categories.length} icon={<FolderTree className="text-indigo-600" />} color="bg-indigo-50 border-indigo-200" />
+            <StatCard title="Audit Logs" value={auditLogs.length} icon={<ClipboardList className="text-orange-600" />} color="bg-orange-50 border-orange-200" />
           </div>
         </div>
       )}
@@ -435,16 +523,21 @@ export default function SystemAdmin() {
                 <div className="bg-white rounded-3xl border-2 border-slate-300 shadow-sm overflow-hidden animate-in fade-in">
                     <div className="bg-slate-50 px-6 py-4 border-b-2 border-slate-200 flex justify-between items-center">
                         <h3 className="text-lg font-black text-slate-900">Document Categories</h3>
-                        <button onClick={() => setIsCatModalOpen(true)} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm flex items-center gap-1.5 transition-all active:scale-95 shadow-md">
+                        <button onClick={openCatModal} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm flex items-center gap-1.5 transition-all active:scale-95 shadow-md">
                             <Plus size={16} strokeWidth={3} /> Add Category
                         </button>
                     </div>
                     <div className="p-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {categories.map((cat) => (
-                                <div key={cat.id} className="flex items-center justify-between p-4 bg-white rounded-2xl border-2 border-slate-200 shadow-sm">
-                                    <span className="font-bold text-slate-900 text-base">{cat.name}</span>
-                                    <button onClick={() => handleDeleteCategory(cat.id, cat.name)} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors"><Trash2 size={18} /></button>
+                                <div key={cat.id} className="flex items-start justify-between p-5 bg-white rounded-2xl border-2 border-slate-200 shadow-sm">
+                                    <div>
+                                        <div className="flex items-center gap-2 mb-1.5">
+                                            <span className="text-xs font-bold font-mono bg-slate-100 px-2 py-0.5 rounded border border-slate-200 text-slate-600">{cat.category_id || 'CAT-LEGACY'}</span>
+                                            <h4 className="font-black text-slate-900 text-lg leading-tight">{cat.name}</h4>
+                                        </div>
+                                    </div>
+                                    <button onClick={() => setDeleteCatConfirm({ id: cat.id, name: cat.name })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors shrink-0"><Trash2 size={18} /></button>
                                 </div>
                             ))}
                         </div>
@@ -470,9 +563,10 @@ export default function SystemAdmin() {
                                         <h4 className="font-black text-lg text-slate-900">{emp.name}</h4>
                                     </div>
                                     <p className="text-sm font-bold text-slate-600">{emp.designation} <span className="mx-2 text-slate-300">|</span> <span className="text-blue-600">{emp.department}</span></p>
+                                    {emp.email && <p className="text-sm text-slate-500 mt-1 flex items-center gap-1.5"><Mail size={14}/>{emp.email}</p>}
                                 </div>
-                                <button onClick={() => handleDeleteEmployee(emp.id, emp.emp_id)} className="self-end sm:self-center px-4 py-2 text-sm font-bold border-2 border-slate-200 text-slate-600 hover:text-red-600 hover:border-red-200 hover:bg-red-50 rounded-xl transition-colors">
-                                    Deactivate Account
+                                <button onClick={() => setDeleteEmpConfirm({ id: emp.id, name: emp.name, emp_id: emp.emp_id })} className="p-3 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors shrink-0 self-end sm:self-center">
+                                    <Trash2 size={20} />
                                 </button>
                             </div>
                         ))}
@@ -535,12 +629,12 @@ export default function SystemAdmin() {
           VIEW 4: GLOBAL SYSTEM SETTINGS
       ========================================= */}
       {mainTab === 'settings' && (
-        <div className="bg-white rounded-3xl border-2 border-slate-300 shadow-sm overflow-hidden animate-in fade-in zoom-in-95 duration-300">
-            <div className="bg-slate-900 px-6 py-5 flex items-center gap-3 text-white">
+        <div className="bg-white rounded-3xl border-2 border-slate-300 shadow-sm animate-in fade-in zoom-in-95 duration-300">
+            <div className="bg-slate-900 px-6 py-5 flex items-center gap-3 text-white rounded-t-[22px]">
                 <Settings className="text-blue-400" size={24} />
                 <h3 className="text-xl font-black tracking-wide">Global System Configuration</h3>
             </div>
-            <div className="p-6 sm:p-8 space-y-8">
+            <div className="p-6 sm:p-8 space-y-8 relative z-10">
                 
                 {/* Maintenance Mode */}
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-5 bg-red-50 border-2 border-red-200 rounded-2xl">
@@ -575,7 +669,7 @@ export default function SystemAdmin() {
                 </div>
 
             </div>
-            <div className="bg-slate-50 p-6 border-t-2 border-slate-200 flex justify-end">
+            <div className="bg-slate-50 p-6 border-t-2 border-slate-200 flex justify-end rounded-b-[22px]">
                 <button onClick={saveGlobalSettings} className="w-full sm:w-auto px-8 py-4 bg-slate-900 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 text-base border-2 border-slate-900 hover:border-blue-700 shadow-md">
                     <Save size={20} /> Apply Global Settings
                 </button>
@@ -636,7 +730,7 @@ export default function SystemAdmin() {
         </div>
       )}
 
-      {/* DELETE CONFIRMATION MODAL */}
+      {/* DELETE CONFIRMATION MODAL - OFFICES */}
       {deleteConfirm && (
         <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosingDelete ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
           <div className={`bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden ${isClosingDelete ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
@@ -665,16 +759,75 @@ export default function SystemAdmin() {
               <h3 className="font-black text-xl">Add Document Category</h3>
               <button onClick={closeCatModal} className="p-2 bg-white/10 hover:bg-white/20 rounded-full"><X size={20} /></button>
             </div>
-            <form onSubmit={handleAddCategory} className="p-6 space-y-4">
-              <div>
-                <label className="block text-base font-bold text-slate-900 mb-2">Category Name *</label>
-                <input type="text" value={newCat} onChange={(e) => setNewCat(e.target.value)} placeholder="e.g. Purchase Request" className="w-full p-4 bg-slate-50 border-2 border-slate-400 rounded-xl focus:border-slate-900 outline-none font-bold text-slate-900" autoFocus />
+            <form onSubmit={handleAddCategory} className="p-6 space-y-5">
+              
+              <div className="bg-blue-50 border-2 border-blue-200 p-4 rounded-xl flex items-center justify-between">
+                 <div>
+                    <p className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-0.5">Auto-Generated Category ID</p>
+                    <p className="font-mono text-lg font-black text-slate-900 tracking-widest">{newCat.category_id}</p>
+                 </div>
+                 <FolderTree className="text-blue-500" size={24} />
               </div>
-              <div className="pt-4 flex gap-3">
-                <button type="button" onClick={closeCatModal} className="flex-1 py-3.5 bg-white border-2 border-slate-300 text-slate-700 font-bold rounded-xl active:scale-95 transition-transform">Cancel</button>
-                <button type="submit" className="flex-1 py-3.5 bg-slate-900 text-white font-bold rounded-xl border-2 border-slate-900 active:scale-95 transition-transform">Save Category</button>
+
+              <div>
+                <label className="block text-sm font-bold text-slate-900 mb-1.5">Category Name *</label>
+                <input 
+                  type="text" 
+                  value={newCat.name} 
+                  onChange={(e) => setNewCat({...newCat, name: e.target.value})} 
+                  placeholder="e.g. Purchase Request" 
+                  className="w-full p-3.5 bg-slate-50 border-2 border-slate-400 rounded-xl focus:border-slate-900 outline-none font-bold text-slate-900 text-base" 
+                  autoFocus 
+                />
+              </div>
+
+              <div className="pt-4 flex gap-3 shrink-0">
+                <button type="button" onClick={closeCatModal} className="flex-1 py-3.5 bg-white border-2 border-slate-300 text-slate-700 font-bold rounded-xl active:scale-95 transition-transform text-base">Cancel</button>
+                <button type="submit" className="flex-[1.5] py-3.5 bg-slate-900 text-white font-bold rounded-xl border-2 border-slate-900 active:scale-95 transition-transform text-base">Save Category</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL - CATEGORIES */}
+      {deleteCatConfirm && (
+        <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosingCatDelete ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
+          <div className={`bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden ${isClosingCatDelete ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
+            <div className="bg-red-700 text-white p-5 flex items-center justify-between">
+              <h3 className="font-black text-xl flex items-center gap-2"><AlertCircle size={22} /> Confirm Deletion</h3>
+              <button onClick={closeCatDeleteModal} className="p-2 bg-white/10 hover:bg-white/20 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-base text-slate-700 font-medium">
+                Are you sure you want to delete <strong className="text-slate-900">{deleteCatConfirm.name}</strong>? This action cannot be undone.
+              </p>
+              <div className="pt-4 flex gap-3">
+                <button type="button" onClick={closeCatDeleteModal} className="flex-1 py-3.5 bg-white border-2 border-slate-300 text-slate-700 font-bold rounded-xl active:scale-95 transition-transform text-base">Cancel</button>
+                <button type="button" onClick={confirmDeleteCategory} className="flex-1 py-3.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl border-2 border-red-700 active:scale-95 transition-transform text-base shadow-md">Yes, Delete</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* DELETE CONFIRMATION MODAL - EMPLOYEES */}
+      {deleteEmpConfirm && (
+        <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosingEmpDelete ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
+          <div className={`bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden ${isClosingEmpDelete ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
+            <div className="bg-red-700 text-white p-5 flex items-center justify-between">
+              <h3 className="font-black text-xl flex items-center gap-2"><AlertCircle size={22} /> Confirm Deletion</h3>
+              <button onClick={closeEmpDeleteModal} className="p-2 bg-white/10 hover:bg-white/20 rounded-full"><X size={20} /></button>
+            </div>
+            <div className="p-6 space-y-4">
+              <p className="text-base text-slate-700 font-medium">
+                Are you sure you want to permanently delete <strong className="text-slate-900">{deleteEmpConfirm.name}</strong>? This action cannot be undone.
+              </p>
+              <div className="pt-4 flex gap-3">
+                <button type="button" onClick={closeEmpDeleteModal} className="flex-1 py-3.5 bg-white border-2 border-slate-300 text-slate-700 font-bold rounded-xl active:scale-95 transition-transform text-base">Cancel</button>
+                <button type="button" onClick={confirmDeleteEmployee} className="flex-1 py-3.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl border-2 border-red-700 active:scale-95 transition-transform text-base shadow-md">Yes, Delete</button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -697,6 +850,12 @@ export default function SystemAdmin() {
               <div>
                 <label className="block text-sm font-bold text-slate-900 mb-1.5">Full Name *</label>
                 <input type="text" value={newEmp.name} onChange={(e) => setNewEmp({...newEmp, name: e.target.value})} placeholder="Juan Dela Cruz" className="w-full p-3.5 bg-slate-50 border-2 border-slate-400 rounded-xl focus:border-slate-900 outline-none font-bold text-slate-900 text-base" />
+              </div>
+
+              {/* NEW EMAIL FIELD */}
+              <div>
+                <label className="block text-sm font-bold text-slate-900 mb-1.5 flex items-center gap-1.5"><Mail size={16} /> Email Address *</label>
+                <input type="email" value={newEmp.email} onChange={(e) => setNewEmp({...newEmp, email: e.target.value})} placeholder="employee@abrapho.gov.ph" className="w-full p-3.5 bg-slate-50 border-2 border-slate-400 rounded-xl focus:border-slate-900 outline-none font-bold text-slate-900 text-base" />
               </div>
 
               <div>
