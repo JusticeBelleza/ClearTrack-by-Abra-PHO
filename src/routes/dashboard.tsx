@@ -1,105 +1,378 @@
-import React from 'react';
-import { Plus, Activity, Briefcase, CheckCircle, FileText, AlertCircle, MapPin, User } from 'lucide-react';
-import { Link } from 'react-router-dom';
-
-// Import the Zustand store
+import React, { useState } from 'react';
+import { 
+  FileText, Activity, AlertCircle, MapPin, 
+  Clock, CheckCircle, XCircle, BarChart3, ArrowRight, ArrowLeft, Check, X
+} from 'lucide-react';
 import { useUiStore } from '../store/uiStore';
 
-const mockActiveDocs = [
-  { 
-    id: 'DOC-2026-084', 
-    subject: 'Budget Request for Q3 Medical Supplies', 
-    isUrgent: true,
-    originator: 'Sarah Lee', 
-    currentLocation: 'Provincial Budget Office', 
-    status: 'In Transit', 
-  },
-  { 
-    id: 'DOC-2026-085', 
-    subject: 'PhilHealth Accreditation Renewal',
-    isUrgent: false,
-    originator: 'Dr. Santos', 
-    currentLocation: 'Governor\'s Office', 
-    status: 'Awaiting Signature', 
-  }
-];
+// --- Shared Animation Styles ---
+const modalAnimationStyles = `
+    @keyframes customFadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes iosSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    @keyframes desktopZoomIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    @keyframes customFadeOut { from { opacity: 1; } to { opacity: 0; } }
+    @keyframes iosSlideDown { from { transform: translateY(0); } to { transform: translateY(100%); } }
+    @keyframes desktopZoomOut { from { transform: scale(1); opacity: 1; } to { transform: scale(0.95); opacity: 0; } }
+    
+    .animate-overlay-fade { animation: customFadeIn 0.5s ease-out forwards; }
+    .animate-overlay-fade-out { animation: customFadeOut 0.4s ease-in forwards; }
+    .animate-responsive-modal { animation: iosSlideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    .animate-responsive-modal-close { animation: iosSlideDown 0.4s cubic-bezier(0.3, 0, 0.8, 0.15) forwards; }
+    
+    /* Hide scrollbar for tabs on mobile */
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+    @media (min-width: 640px) {
+        .animate-responsive-modal { animation: desktopZoomIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .animate-responsive-modal-close { animation: desktopZoomOut 0.3s cubic-bezier(0.3, 0, 0.8, 0.15) forwards; }
+    }
+`;
+
+// --- Mock Data for "My Documents" ---
+const myDocuments = {
+  processing: [
+    { 
+      id: 'DOC-2026-084', 
+      subject: 'Budget Request for Q3 Medical Supplies', 
+      currentLocation: 'Provincial Budget Office',
+      assignedTo: 'Maria Santos',
+      isUrgent: true,
+      aging: '2 days',
+      step: 2,
+      totalSteps: 4,
+      status: 'In Transit'
+    },
+    { 
+      id: 'DOC-2026-088', 
+      subject: 'PhilHealth Accreditation Renewal', 
+      currentLocation: 'In Transit',
+      assignedTo: 'Juan Dela Cruz',
+      isUrgent: false,
+      aging: '4 hours',
+      step: 1,
+      totalSteps: 3,
+      status: 'In Transit'
+    }
+  ],
+  rejected: [
+    { 
+      id: 'DOC-2026-071', 
+      subject: 'Leave Application - July 2026', 
+      returnedBy: 'HRMO',
+      date: 'Aug 5, 2026',
+      reason: 'Missing department head signature. Please sign and re-route.',
+      step: 2,
+      totalSteps: 4,
+      status: 'Returned'
+    }
+  ],
+  completed: [
+    { 
+      id: 'DOC-2026-042', 
+      subject: 'Annual Procurement Plan 2026', 
+      finalDestination: "Provincial Administrator's Office",
+      completedDate: 'Aug 2, 2026',
+      step: 4,
+      totalSteps: 4,
+      status: 'Completed'
+    }
+  ]
+};
 
 export default function Dashboard() {
-  // Grab the open function from the store
   const openCreateModal = useUiStore((state) => state.openCreateModal);
+  const [activeTab, setActiveTab] = useState<'processing' | 'rejected' | 'completed'>('processing');
+  const [trailDoc, setTrailDoc] = useState<any>(null);
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto animate-in fade-in duration-500">
-      
-      <div className="flex flex-col md:flex-row justify-between md:items-end gap-4 mb-8">
+    <div className="space-y-8 max-w-6xl mx-auto animate-in fade-in duration-500">
+      <style>{modalAnimationStyles}</style>
+
+      {/* Greeting & Top Stats */}
+      <div className="flex flex-col md:flex-row justify-between md:items-end gap-6 mb-2">
         <div>
-          <h2 className="text-3xl font-bold text-slate-900">Good Morning, Maria</h2>
-          <p className="text-slate-500 mt-1">Here is the status of your assigned documents.</p>
+          <h2 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight">Welcome back, Sarah</h2>
+          <p className="text-base sm:text-lg text-slate-600 mt-1 font-medium">Here is what is happening with your documents today.</p>
         </div>
         <button 
-            className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold shadow-lg shadow-blue-200 transition-all active:scale-95"
-            onClick={openCreateModal} // Wired to Zustand instead of alert
+          onClick={openCreateModal}
+          className="w-full md:w-auto px-6 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-600/20 transition-all active:scale-95 text-base flex items-center justify-center gap-2 border-2 border-blue-700"
         >
-          <Plus size={20} />
-          Create New Document
+          <FileText size={20} /> Route New Document
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard title="Total In Transit" value="12" icon={<Activity className="text-blue-500" />} color="bg-blue-50 border-blue-100" />
-        <StatCard title="Assigned to Me" value="4" icon={<Briefcase className="text-purple-500" />} color="bg-purple-50 border-purple-100" />
-        <StatCard title="Completed Today" value="7" icon={<CheckCircle className="text-emerald-500" />} color="bg-emerald-50 border-emerald-100" />
+      {/* Quick Stats Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-5">
+        <StatCard title="Active Routing" value="12" icon={<Activity className="text-blue-600" />} color="bg-blue-50 border-blue-200" />
+        <StatCard title="Priority / RUSH" value="3" icon={<AlertCircle className="text-red-600" />} color="bg-red-50 border-red-200" />
+        <StatCard title="Needs Action" value="1" icon={<XCircle className="text-orange-600" />} color="bg-orange-50 border-orange-200" />
+        <StatCard title="Completed (30d)" value="45" icon={<CheckCircle className="text-emerald-600" />} color="bg-emerald-50 border-emerald-200" />
       </div>
 
+      {/* My Documents Section */}
       <div className="mt-10">
-        <div className="flex justify-between items-center mb-4">
-            <h3 className="text-xl font-bold text-slate-800">My Priority Tasks</h3>
-            <Link to="/processing" className="text-blue-600 font-medium text-sm hover:underline">View All Active</Link>
+        <div className="flex items-center justify-between mb-6">
+            <h3 className="text-2xl font-black text-slate-900 flex items-center gap-2">
+                <BarChart3 className="text-slate-500" /> My Documents
+            </h3>
         </div>
-        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-          {mockActiveDocs.map((doc, idx) => (
-            <div key={doc.id} className={`p-4 flex items-center justify-between ${idx !== mockActiveDocs.length -1 ? 'border-b border-slate-100' : ''} hover:bg-slate-50 transition-colors cursor-pointer ${doc.isUrgent ? 'border-l-4 border-l-red-500 bg-red-50/30' : ''}`}>
-              <div className="flex items-start gap-4">
-                  <div className={`p-2 rounded-md mt-1 hidden sm:block ${doc.isUrgent ? 'bg-red-100' : 'bg-amber-100'}`}>
-                      <FileText size={20} className={doc.isUrgent ? 'text-red-600' : 'text-amber-600'} />
-                  </div>
-                  <div>
-                      <div className="flex items-center gap-2">
-                          {doc.isUrgent && <span className="bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded uppercase flex items-center gap-1 animate-pulse"><AlertCircle size={10}/> Rush</span>}
-                          <p className="font-bold text-slate-900">{doc.subject}</p>
-                      </div>
-                      <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3 text-sm text-slate-500 mt-1">
-                          <span className="flex items-center gap-1 font-medium text-slate-700"><MapPin size={14} className="text-slate-400"/> {doc.currentLocation}</span>
-                          <span className="hidden sm:inline text-slate-300">|</span>
-                          <span className="flex items-center gap-1 mt-1 sm:mt-0"><User size={14} className="text-slate-400"/> Assigned by: <span className="font-medium text-slate-700">{doc.originator}</span></span>
-                          <span className="hidden sm:inline text-slate-300">|</span>
-                          <span className="mt-1 sm:mt-0 font-mono text-xs">{doc.id}</span>
-                      </div>
-                  </div>
-              </div>
-              <div className="hidden md:flex">
-                  <span className="px-3 py-1 bg-amber-50 text-amber-700 text-xs font-bold uppercase rounded-full border border-amber-200">
-                      {doc.status}
-                  </span>
-              </div>
-            </div>
-          ))}
+
+        {/* High-Contrast Tabs (Fixed for Mobile) */}
+        <div className="flex flex-nowrap overflow-x-auto scrollbar-hide gap-2 sm:gap-3 mb-6 bg-white p-2 rounded-2xl border-2 border-slate-300 shadow-sm w-full sm:inline-flex sm:w-auto">
+            <TabButton label="Processing" count={myDocuments.processing.length} isActive={activeTab === 'processing'} onClick={() => setActiveTab('processing')} />
+            <TabButton label="Rejected" count={myDocuments.rejected.length} isActive={activeTab === 'rejected'} onClick={() => setActiveTab('rejected')} />
+            <TabButton label="Completed" count={myDocuments.completed.length} isActive={activeTab === 'completed'} onClick={() => setActiveTab('completed')} />
+        </div>
+
+        {/* Tab Content (Cards Grid) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            
+            {/* Processing Cards */}
+            {activeTab === 'processing' && myDocuments.processing.map(doc => (
+                <div key={doc.id} className={`bg-white rounded-2xl border-2 ${doc.isUrgent ? 'border-red-400 shadow-md shadow-red-100' : 'border-slate-300'} p-5 flex flex-col hover:border-slate-500 transition-all animate-in fade-in zoom-in-95 relative overflow-hidden`}>
+                    {doc.isUrgent && <div className="absolute top-0 left-0 w-full h-1.5 bg-red-500"></div>}
+                    
+                    <div className="flex justify-between items-start mb-3 mt-1">
+                        <span className="text-sm font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md font-mono border border-slate-200">{doc.id}</span>
+                        {doc.isUrgent && <span className="flex items-center gap-1 text-xs font-black text-red-700 bg-red-50 px-2 py-1 rounded-full border-2 border-red-200 uppercase tracking-wider animate-pulse"><AlertCircle size={14}/> RUSH</span>}
+                    </div>
+                    
+                    <h4 className="font-black text-xl text-slate-900 mb-4 leading-tight">{doc.subject}</h4>
+                    
+                    <div className="bg-slate-50 p-4 rounded-xl border-2 border-slate-200 mb-5 flex-1 space-y-3">
+                        <div className="flex items-start gap-3">
+                            <MapPin size={18} className="text-slate-500 mt-0.5 shrink-0" />
+                            <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Currently At</span>{doc.currentLocation}</p>
+                        </div>
+                        <div className="flex items-start gap-3">
+                            <Clock size={18} className="text-slate-500 mt-0.5 shrink-0" />
+                            <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Pending For</span>{doc.aging}</p>
+                        </div>
+                    </div>
+                    
+                    <div className="mt-auto mb-4">
+                        <div className="flex justify-between text-xs font-bold text-slate-600 mb-2 uppercase tracking-wider">
+                            <span>Routing Progress</span>
+                            <span>Step {doc.step} of {doc.totalSteps}</span>
+                        </div>
+                        <div className="w-full bg-slate-200 rounded-full h-2 border border-slate-300 overflow-hidden">
+                            <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${(doc.step / doc.totalSteps) * 100}%` }}></div>
+                        </div>
+                    </div>
+
+                    <button onClick={() => setTrailDoc(doc)} className="w-full py-2.5 bg-white border-2 border-slate-400 hover:bg-slate-100 text-slate-800 font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-sm">
+                        Track Document <ArrowRight size={16} />
+                    </button>
+                </div>
+            ))}
+
+            {/* Rejected Cards */}
+            {activeTab === 'rejected' && myDocuments.rejected.map(doc => (
+                <div key={doc.id} className="bg-white rounded-2xl border-2 border-red-300 p-5 flex flex-col relative overflow-hidden animate-in fade-in zoom-in-95">
+                    <div className="absolute top-0 left-0 w-full h-1.5 bg-red-500"></div>
+                    
+                    <div className="flex justify-between items-start mb-3 mt-1">
+                        <span className="text-sm font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md font-mono border border-slate-200">{doc.id}</span>
+                        <span className="text-xs font-black text-red-700 bg-red-50 px-2 py-1 rounded-full border-2 border-red-200 uppercase tracking-wider">Returned</span>
+                    </div>
+                    
+                    <h4 className="font-black text-xl text-slate-900 mb-4 leading-tight">{doc.subject}</h4>
+                    
+                    <div className="bg-red-50 p-4 rounded-xl border-2 border-red-200 mb-5 flex-1">
+                        <div className="flex items-start gap-2 mb-2">
+                            <XCircle size={20} className="text-red-600 shrink-0" />
+                            <p className="text-sm text-red-900 font-bold">Returned by {doc.returnedBy}</p>
+                        </div>
+                        <p className="text-sm font-medium text-red-800 leading-snug pl-7">{doc.reason}</p>
+                    </div>
+
+                    <div className="mt-auto mb-4">
+                        <div className="flex justify-between text-xs font-bold text-slate-600 mb-2 uppercase tracking-wider">
+                            <span>Stopped At</span>
+                            <span>Step {doc.step} of {doc.totalSteps}</span>
+                        </div>
+                        <div className="w-full bg-slate-200 rounded-full h-2 border border-slate-300 overflow-hidden">
+                            <div className="bg-red-500 h-2 rounded-full" style={{ width: `${(doc.step / doc.totalSteps) * 100}%` }}></div>
+                        </div>
+                    </div>
+                    
+                    <button onClick={() => setTrailDoc(doc)} className="w-full py-2.5 bg-red-600 border-2 border-red-700 hover:bg-red-700 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-sm">
+                        View Details & Edit
+                    </button>
+                </div>
+            ))}
+
+            {/* Completed Cards */}
+            {activeTab === 'completed' && myDocuments.completed.map(doc => (
+                <div key={doc.id} className="bg-white rounded-2xl border-2 border-emerald-300 p-5 flex flex-col relative overflow-hidden animate-in fade-in zoom-in-95">
+                    <div className="absolute top-0 left-0 w-full h-1.5 bg-emerald-500"></div>
+                    
+                    <div className="flex justify-between items-start mb-3 mt-1">
+                        <span className="text-sm font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md font-mono border border-slate-200">{doc.id}</span>
+                        <span className="text-xs font-black text-emerald-700 bg-emerald-50 px-2 py-1 rounded-full border-2 border-emerald-200 uppercase tracking-wider">Completed</span>
+                    </div>
+                    
+                    <h4 className="font-black text-xl text-slate-900 mb-4 leading-tight">{doc.subject}</h4>
+                    
+                    <div className="bg-slate-50 p-4 rounded-xl border-2 border-slate-200 mb-5 flex-1 space-y-3">
+                        <div className="flex items-start gap-3">
+                            <MapPin size={18} className="text-slate-500 mt-0.5 shrink-0" />
+                            <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Final Location</span>{doc.finalDestination}</p>
+                        </div>
+                        <div className="flex items-start gap-3">
+                            <CheckCircle size={18} className="text-emerald-500 mt-0.5 shrink-0" />
+                            <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Completed On</span>{doc.completedDate}</p>
+                        </div>
+                    </div>
+
+                    <div className="mt-auto mb-4">
+                        <div className="flex justify-between text-xs font-bold text-slate-600 mb-2 uppercase tracking-wider">
+                            <span>Routing Progress</span>
+                            <span>100% Complete</span>
+                        </div>
+                        <div className="w-full bg-slate-200 rounded-full h-2 border border-slate-300 overflow-hidden">
+                            <div className="bg-emerald-500 h-2 rounded-full w-full"></div>
+                        </div>
+                    </div>
+                    
+                    <button onClick={() => setTrailDoc(doc)} className="w-full py-2.5 bg-white border-2 border-slate-400 hover:bg-slate-100 text-slate-800 font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-sm">
+                        View Record <ArrowRight size={16} />
+                    </button>
+                </div>
+            ))}
+
+            {/* Empty State Handle */}
+            {myDocuments[activeTab].length === 0 && (
+                <div className="col-span-full bg-white border-2 border-dashed border-slate-300 rounded-2xl p-10 flex flex-col items-center justify-center text-center animate-in zoom-in-95">
+                    <FileText size={32} className="text-slate-400 mb-3" />
+                    <h3 className="text-xl font-black text-slate-900 mb-1">No documents here</h3>
+                    <p className="text-base font-medium text-slate-600">You currently have no {activeTab} documents.</p>
+                </div>
+            )}
+
         </div>
       </div>
+
+      {trailDoc && <DigitalTrailModal doc={trailDoc} onBack={() => setTrailDoc(null)} />}
     </div>
   );
 }
 
+// --- Helper Components --- //
 function StatCard({ title, value, icon, color }: any) {
-  return (
-    <div className={`p-6 rounded-2xl border ${color} shadow-sm flex items-center justify-between`}>
-      <div>
-        <p className="text-sm font-medium text-slate-500 mb-1">{title}</p>
-        <p className="text-4xl font-bold text-slate-900">{value}</p>
-      </div>
-      <div className="p-3 bg-white rounded-xl shadow-sm">
-        {React.cloneElement(icon, { size: 28 })}
-      </div>
-    </div>
-  );
+    return (
+        <div className={`p-4 sm:p-5 rounded-2xl border-2 flex flex-col justify-between ${color} transition-transform hover:scale-[1.02]`}>
+            <div className="flex justify-between items-start mb-2">
+                <div className="bg-white p-2 rounded-xl shadow-sm border border-slate-100">
+                    {icon}
+                </div>
+            </div>
+            <div>
+                <h4 className="text-2xl sm:text-3xl font-black text-slate-900 leading-none mb-1">{value}</h4>
+                <p className="text-xs sm:text-sm font-bold text-slate-600 uppercase tracking-wide">{title}</p>
+            </div>
+        </div>
+    );
+}
+
+function TabButton({ label, count, isActive, onClick }: any) {
+    return (
+        <button 
+            onClick={onClick}
+            className={`flex-1 sm:flex-none shrink-0 flex items-center justify-center gap-1.5 sm:gap-2 px-4 sm:px-6 py-2.5 rounded-xl font-bold transition-all active:scale-95 text-xs sm:text-sm whitespace-nowrap ${
+                isActive 
+                ? 'bg-slate-900 text-white shadow-md' 
+                : 'bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+            }`}
+        >
+            {label} 
+            <span className={`px-2 py-0.5 rounded-full text-[10px] sm:text-xs border ${
+                isActive ? 'bg-slate-700 border-slate-600 text-white' : 'bg-slate-200 border-slate-300 text-slate-700'
+            }`}>
+                {count}
+            </span>
+        </button>
+    )
+}
+
+function DigitalTrailModal({ doc, onBack }: any) {
+    const [isClosing, setIsClosing] = useState(false);
+    const isCompleted = doc.status === 'Completed';
+
+    const handleClose = () => {
+        setIsClosing(true);
+        setTimeout(() => {
+            onBack();
+        }, 400); 
+    };
+
+    const timeline = isCompleted ? [
+        { id: 1, date: "Aug 6", time: "02:30 PM", title: "Process Completed", description: `Document finalized at ${doc.finalDestination || doc.currentLocation}.`, color: "bg-emerald-500" },
+        { id: 2, date: "Aug 5", time: "09:00 AM", title: "In Transit", description: `Routed via System.`, color: "bg-slate-300" }
+    ] : doc.status === 'Returned' ? [
+        { id: 1, date: "Aug 6", time: "10:05 AM", title: "Returned to Originator", description: `Document rejected. Reason: ${doc.reason}`, color: "bg-red-500", icon: <X size={14} className="text-white" strokeWidth={4} /> },
+        { id: 2, date: "Aug 5", time: "11:00 AM", title: "Document Created", description: `Initiated and logged into the system.`, color: "bg-slate-300" }
+    ] : [
+        { id: 1, date: "Aug 6", time: "11:50 AM", title: "Received at Destination", description: `Document has arrived and was received.`, color: "bg-blue-500" },
+        { id: 2, date: "Aug 6", time: "08:27 AM", title: "In Transit", description: `Handed over to Liaison heading to location.`, color: "bg-slate-300" },
+    ];
+
+    return (
+        <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosing ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
+            <div className={`bg-white w-full max-w-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden shadow-2xl rounded-t-2xl sm:rounded-2xl ${isClosing ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
+                
+                <div className="bg-slate-900 text-white relative flex flex-col shrink-0">
+                    <div className="w-16 h-1.5 bg-white/30 rounded-full mx-auto mt-3 sm:hidden shrink-0"></div>
+                    <div className="p-5 pt-3 sm:pt-6 flex items-center justify-between">
+                        <button onClick={handleClose} className="p-2 -ml-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors active:scale-90">
+                            <ArrowLeft size={24} />
+                        </button>
+                        <h3 className="font-black text-xl">Track Document</h3>
+                        <div className="w-10"></div>
+                    </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-white">
+                    <div className="mb-8 border-b-2 border-slate-100 pb-6">
+                        <p className="text-sm font-bold text-slate-500 mb-1 font-mono">{doc.id}</p>
+                        <p className="font-black text-xl text-slate-900 leading-tight flex items-start gap-2">
+                            {doc.status === 'Returned' && <XCircle size={24} className="text-red-600 shrink-0 mt-0.5" />}
+                            {doc.subject}
+                        </p>
+                    </div>
+
+                    <div className="flex flex-col">
+                        {timeline.map((step, idx) => {
+                            const isLast = idx === timeline.length - 1;
+                            return (
+                                <div key={step.id} className="flex group">
+                                    <div className="w-20 sm:w-24 shrink-0 text-left pt-1">
+                                        <p className="text-sm sm:text-base font-bold text-slate-700">{step.date}</p>
+                                        <p className="text-xs sm:text-sm font-bold text-slate-500">{step.time}</p>
+                                    </div>
+                                    <div className="relative flex flex-col items-center px-3 sm:px-5">
+                                        <div className={`z-10 w-6 h-6 rounded-full ${step.color} flex items-center justify-center shrink-0 border-2 border-white shadow-sm mt-0.5`}>
+                                            {step.icon ? step.icon : <Check size={14} className="text-white" strokeWidth={4} />}
+                                        </div>
+                                        {!isLast && <div className="absolute top-6 bottom-[-0.5rem] w-[2px] bg-slate-200"></div>}
+                                    </div>
+                                    <div className="flex-1 pb-10">
+                                        <h4 className="text-base sm:text-lg font-black text-slate-900">{step.title}</h4>
+                                        <p className="text-sm sm:text-base font-medium text-slate-700 mt-1 leading-snug">{step.description}</p>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+                <div className="bg-slate-50 p-4 sm:p-6 pb-8 sm:pb-6 border-t-2 border-slate-200 flex shrink-0">
+                    <button onClick={handleClose} className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl shadow-lg transition-all active:scale-95 text-base border-2 border-slate-900">
+                        Close Tracker
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
 }
