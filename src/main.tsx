@@ -9,8 +9,9 @@ import AppLayout from './components/layout/AppLayout';
 import Dashboard from './routes/dashboard';
 import Processing from './routes/processing';
 import History from './routes/history';
+import Admin from './routes/admin'; // <-- Imported Admin Route
 import Settings from './routes/settings';
-import Login from './routes/login'; // <-- Import the new Login route
+import Login from './routes/login';
 import './index.css';
 
 // Initialize React Query
@@ -39,6 +40,7 @@ const router = createBrowserRouter([
       { path: 'dashboard', element: <Dashboard /> },
       { path: 'processing', element: <Processing /> },
       { path: 'history', element: <History /> },
+      { path: 'admin', element: <Admin /> }, // <-- Wired up Admin Route
       { path: 'settings', element: <Settings /> },
     ],
   },

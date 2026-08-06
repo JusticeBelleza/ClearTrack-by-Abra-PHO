@@ -38,7 +38,7 @@ const mockActiveDocs = [
     currentLocation: 'Provincial Budget Office',
     assignedTo: 'Maria Santos', 
     status: 'In Transit',
-    aging: '2 days', // Added Pending time
+    aging: '2 days', 
     step: 2,
     totalSteps: 4
   },
@@ -50,7 +50,7 @@ const mockActiveDocs = [
     currentLocation: 'Governor\'s Office', 
     assignedTo: 'Juan Dela Cruz',
     status: 'Awaiting Signature', 
-    aging: '4 hours', // Added Pending time
+    aging: '4 hours', 
     step: 3,
     totalSteps: 5
   }
@@ -64,6 +64,14 @@ const destinationOffices = [
   "Provincial Administrator's Office",
   "Sangguniang Panlalawigan",
   "HRMO"
+];
+
+// Mock employee list (System Admin is intentionally excluded here to simulate the .neq('role', 'admin') database filter)
+const mockClerks = [
+  "Sarah Lee (PHO)",
+  "Maria Santos (Budget Office)",
+  "Juan Dela Cruz (Governor's Office)",
+  "Dr. Santos (PHO)"
 ];
 
 // --- Custom Senior-Friendly Dropdown Component ---
@@ -409,6 +417,7 @@ function HandoverScreen({ doc, onBack }: any) {
     const [isRejecting, setIsRejecting] = useState(false);
     
     const [destination, setDestination] = useState('');
+    const [receivingClerk, setReceivingClerk] = useState('');
     const [rejectOffice, setRejectOffice] = useState('');
 
     const [isClosing, setIsClosing] = useState(false);
@@ -532,8 +541,13 @@ function HandoverScreen({ doc, onBack }: any) {
                             </div>
 
                             <div>
-                                <label className="block text-base font-bold text-slate-900 mb-2">Receiving Clerk Name *</label>
-                                <input type="text" placeholder="Print name clearly..." className="w-full p-4 bg-slate-50 border-2 border-slate-400 rounded-xl focus:border-slate-900 focus:ring-4 focus:ring-slate-900/10 outline-none text-base font-bold text-slate-900 placeholder:text-slate-500" />
+                                <label className="block text-base font-bold text-slate-900 mb-2">Receiving Clerk / Liaison *</label>
+                                <CustomSelect 
+                                    options={mockClerks} 
+                                    value={receivingClerk} 
+                                    onChange={setReceivingClerk} 
+                                    placeholder="Select receiving clerk..." 
+                                />
                             </div>
 
                             <div>
