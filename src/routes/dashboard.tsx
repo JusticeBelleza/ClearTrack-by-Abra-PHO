@@ -57,6 +57,8 @@ export default function Dashboard() {
           const firstName = currentUserName.split(' ')[0];
           setUserName(firstName);
 
+          // Thanks to the new RLS policies, this securely fetches ONLY the documents 
+          // you created, currently hold, or have handled in the past.
           const { data: docs, error } = await supabase
             .from('documents')
             .select('*')
@@ -65,31 +67,33 @@ export default function Dashboard() {
           if (error) throw error;
 
           if (docs) {
-              const myDocs = docs.filter((d: any) => 
-                  d.created_by === currentUserId || d.assigned_clerk === currentUserName
-              );
-
-              // 1. Assigned to Me (Assigned by OTHER people)
-              const assigned = myDocs.filter((d: any) => 
-                  d.assigned_clerk === currentUserName && d.created_by !== currentUserId && d.status !== 'sealed'
+              // 1. Inbox (Assigned to Me): Documents currently sitting on YOUR desk
+              const assigned = docs.filter((d: any) => 
+                  d.custodian_id === currentUserId && d.status !== 'sealed'
               );
               
-              // 2. My Documents (Active documents created by YOU)
-              const myDocuments = myDocs.filter((d: any) => 
+              // 2. My Documents: Active documents originally created by you
+              const myDocuments = docs.filter((d: any) => 
                   d.created_by === currentUserId && d.status !== 'sealed'
               );
 
-              // 3. General Status Filters
-              const completed = myDocs.filter((d: any) => d.status === 'sealed');
-              const rejected = myDocs.filter((d: any) => d.status === 'pending' && d.remarks);
-              const processing = myDocs.filter((d: any) => d.status === 'routing' || (d.status === 'pending' && !d.remarks));
+              // 3. Processing (Tracked/Outbox): Documents you routed forward that are now on someone else's desk
+              const processing = docs.filter((d: any) => 
+                  d.custodian_id !== currentUserId && d.status !== 'sealed' && d.status !== 'pending'
+              );
+
+              // 4. Returned: Documents that have been kicked back with remarks
+              const rejected = docs.filter((d: any) => d.status === 'pending' && d.remarks);
+
+              // 5. Completed: Sealed documents
+              const completed = docs.filter((d: any) => d.status === 'sealed');
 
               setDocuments({ assigned, myDocuments, processing, rejected, completed });
               
               setStats({
-                  active: processing.length + rejected.length,
-                  urgent: myDocs.filter((d: any) => d.is_urgent && d.status !== 'sealed').length, 
-                  actionNeeded: rejected.length,
+                  active: processing.length, // Docs out in the wild
+                  urgent: docs.filter((d: any) => d.is_urgent && d.status !== 'sealed').length, 
+                  actionNeeded: assigned.length, // Docs waiting for you to route them
                   completed: completed.length
               });
           }
