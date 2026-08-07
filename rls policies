@@ -1,0 +1,202 @@
+[
+  {
+    "tablename": "profiles",
+    "policyname": "Select all profiles",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "true",
+    "with_check": null
+  },
+  {
+    "tablename": "profiles",
+    "policyname": "Update own profile or admin",
+    "roles": "{public}",
+    "cmd": "UPDATE",
+    "qual": "((auth.uid() = id) OR is_admin())",
+    "with_check": null
+  },
+  {
+    "tablename": "profiles",
+    "policyname": "Users can update own profile",
+    "roles": "{public}",
+    "cmd": "UPDATE",
+    "qual": "(auth.uid() = id)",
+    "with_check": null
+  },
+  {
+    "tablename": "destination_offices",
+    "policyname": "Admins manage offices",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "is_admin()",
+    "with_check": null
+  },
+  {
+    "tablename": "destination_offices",
+    "policyname": "Select active offices",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "true",
+    "with_check": null
+  },
+  {
+    "tablename": "routing_logs",
+    "policyname": "Insert logs",
+    "roles": "{public}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "((handled_by = auth.uid()) AND (EXISTS ( SELECT 1\n   FROM documents\n  WHERE ((documents.id = routing_logs.document_id) AND (documents.custodian_id = auth.uid())))))"
+  },
+  {
+    "tablename": "routing_logs",
+    "policyname": "Read logs",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "(EXISTS ( SELECT 1\n   FROM documents\n  WHERE ((documents.id = routing_logs.document_id) AND (is_admin() OR (documents.created_by = auth.uid()) OR (documents.custodian_id = auth.uid())))))",
+    "with_check": null
+  },
+  {
+    "tablename": "documents",
+    "policyname": "Employees can insert documents",
+    "roles": "{authenticated}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "(auth.uid() = created_by)"
+  },
+  {
+    "tablename": "documents",
+    "policyname": "Employees can update documents",
+    "roles": "{authenticated}",
+    "cmd": "UPDATE",
+    "qual": "true",
+    "with_check": null
+  },
+  {
+    "tablename": "documents",
+    "policyname": "Employees can view documents",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "true",
+    "with_check": null
+  },
+  {
+    "tablename": "documents",
+    "policyname": "Insert documents",
+    "roles": "{public}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "((created_by = auth.uid()) AND (custodian_id = auth.uid()))"
+  },
+  {
+    "tablename": "documents",
+    "policyname": "Read documents",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "(is_admin() OR (created_by = auth.uid()) OR (custodian_id = auth.uid()))",
+    "with_check": null
+  },
+  {
+    "tablename": "documents",
+    "policyname": "Update active documents",
+    "roles": "{public}",
+    "cmd": "UPDATE",
+    "qual": "((custodian_id = auth.uid()) AND (status <> 'sealed'::doc_status))",
+    "with_check": null
+  },
+  {
+    "tablename": "departments",
+    "policyname": "Allow admins to manage departments",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::user_role))))",
+    "with_check": null
+  },
+  {
+    "tablename": "departments",
+    "policyname": "Allow read access to departments",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "(auth.role() = 'authenticated'::text)",
+    "with_check": null
+  },
+  {
+    "tablename": "audit_logs",
+    "policyname": "Allow insert audit logs",
+    "roles": "{public}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "(auth.role() = 'authenticated'::text)"
+  },
+  {
+    "tablename": "audit_logs",
+    "policyname": "Allow read audit logs",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::user_role))))",
+    "with_check": null
+  },
+  {
+    "tablename": "categories",
+    "policyname": "Allow admins to manage categories",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::user_role))))",
+    "with_check": null
+  },
+  {
+    "tablename": "categories",
+    "policyname": "Allow read access to categories",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "(auth.role() = 'authenticated'::text)",
+    "with_check": null
+  },
+  {
+    "tablename": "employees",
+    "policyname": "Allow admins to manage employees",
+    "roles": "{public}",
+    "cmd": "ALL",
+    "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::user_role))))",
+    "with_check": null
+  },
+  {
+    "tablename": "employees",
+    "policyname": "Allow read access to employees",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "(auth.role() = 'authenticated'::text)",
+    "with_check": null
+  },
+  {
+    "tablename": "global_settings",
+    "policyname": "Allow admins to update settings",
+    "roles": "{public}",
+    "cmd": "UPDATE",
+    "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::user_role))))",
+    "with_check": null
+  },
+  {
+    "tablename": "global_settings",
+    "policyname": "Allow read access to settings",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "(auth.role() = 'authenticated'::text)",
+    "with_check": null
+  },
+  {
+    "tablename": "document_logs",
+    "policyname": "Allow authenticated users to insert logs",
+    "roles": "{authenticated}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "true"
+  },
+  {
+    "tablename": "document_logs",
+    "policyname": "Allow authenticated users to read logs",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "true",
+    "with_check": null
+  }
+]

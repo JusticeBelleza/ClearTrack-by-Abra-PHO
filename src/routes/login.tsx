@@ -51,6 +51,12 @@ export default function Login() {
     }
   };
 
+  const handleForgotPassword = () => {
+    toast.info("Password Reset", { 
+      description: "Please contact your System Administrator to reset your password." 
+    });
+  };
+
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col justify-center items-center p-4 sm:p-6 relative overflow-hidden">
       
@@ -59,8 +65,8 @@ export default function Login() {
 
       <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border-2 border-slate-100 p-8 sm:p-10 relative z-10 animate-in fade-in zoom-in-95 duration-500">
         
-        {/* LOGOS CONTAINER */}
-        <div className="flex items-center justify-center gap-4 mb-6">
+        {/* LOGOS CONTAINER - Reduced gap to pull them closer */}
+        <div className="flex items-center justify-center gap-2 mb-6">
           {/* ClearTrack Logo */}
           <div className="w-16 h-16 flex items-center justify-center">
             <img 
@@ -70,7 +76,8 @@ export default function Login() {
             />
           </div>
 
-          <div className="w-px h-10 bg-slate-200"></div>
+          {/* Divider */}
+          <div className="w-px h-10 bg-slate-200 mx-1"></div>
 
           {/* PHO Logo */}
           <div className="w-14 h-14 flex items-center justify-center">
@@ -107,7 +114,16 @@ export default function Login() {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Password</label>
+            <div className="flex justify-between items-end mb-2">
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">Password</label>
+              <button 
+                type="button" 
+                onClick={handleForgotPassword}
+                className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors hover:underline active:scale-95"
+              >
+                Forgot Password?
+              </button>
+            </div>
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
               <input 
