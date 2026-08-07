@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
-  FileText, Activity, History, Settings, LogOut, FileCheck, Shield, AlertCircle, X 
+  FileText, Activity, History, Settings, LogOut, Shield, AlertCircle, X 
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUiStore } from '../../store/uiStore';
 import CreateDocumentModal from '../system/CreateDocumentModal';
 import { supabase } from '../../lib/supabase';
+
+// --- IMPORT THE LOGO CORRECTLY HERE ---
+import clearTrackLogo from '../../assets/clear_track_logo.png';
 
 // --- Shared Modal Animation Styles ---
 const modalAnimationStyles = `
@@ -126,13 +129,20 @@ export default function AppLayout() {
 
       {/* Sidebar Navigation (Desktop) */}
       <nav className="hidden md:flex flex-col w-64 bg-slate-900 text-slate-300 shadow-xl z-20">
+        
+        {/* BRANDING: Desktop Sidebar */}
         <div className="p-6 flex items-center gap-3 border-b border-slate-800">
-          <div className="bg-blue-600 p-2 rounded-lg text-white">
-            <FileCheck size={24} />
+          {/* Replaced the box with a pure image container so the transparent logo pops */}
+          <div className="flex items-center justify-center w-11 h-11 shrink-0">
+            <img 
+              src={clearTrackLogo} 
+              alt="ClearTrack Logo" 
+              className="w-full h-full object-contain drop-shadow-md"
+            />
           </div>
-          <div>
-            <h1 className="text-xl font-bold text-white tracking-wide">ClearTrack</h1>
-            <p className="text-xs text-slate-400">
+          <div className="flex flex-col">
+            <h1 className="text-xl font-black text-white tracking-wide leading-none">ClearTrack</h1>
+            <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mt-1">
               {currentUserRole === 'admin' ? 'Admin Portal' : 'by Abra PHO'}
             </p>
           </div>
@@ -168,13 +178,22 @@ export default function AppLayout() {
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
         
-        {/* Mobile Header (Branding only - Logout moved to bottom) */}
+        {/* BRANDING: Mobile Header */}
         <header className="md:hidden flex items-center justify-between p-4 bg-slate-900 text-white shadow-md z-20 relative shrink-0">
-          <div className="flex items-center gap-2">
-            <FileCheck size={20} className="text-blue-400" />
-            <h1 className="text-lg font-bold">
-              {currentUserRole === 'admin' ? 'ClearTrack Admin' : 'ClearTrack PHO'}
-            </h1>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center justify-center w-10 h-10 shrink-0">
+              <img 
+                src={clearTrackLogo} 
+                alt="ClearTrack Logo" 
+                className="w-full h-full object-contain drop-shadow-md"
+              />
+            </div>
+            <div className="flex flex-col">
+              <h1 className="text-lg font-black leading-none text-white">ClearTrack</h1>
+              <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mt-0.5">
+                {currentUserRole === 'admin' ? 'Admin Portal' : 'by Abra PHO'}
+              </span>
+            </div>
           </div>
         </header>
 

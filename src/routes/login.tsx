@@ -1,207 +1,146 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FileCheck, Lock, User, Eye, EyeOff, ArrowRight, ShieldCheck, Check } from 'lucide-react';
-import { toast } from 'sonner';
+import { Lock, Mail, ArrowRight, AlertCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { toast } from 'sonner';
+
+// Import both logos from your assets folder
+import clearTrackLogo from '../assets/clear_track_logo.png';
+import phoLogo from '../assets/pho_logo.png';
 
 export default function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!email || !password) {
-      toast.error('Missing Information', { description: 'Please enter both Email and Password.' });
+    if (!email.trim() || !password.trim()) {
+      toast.error("Validation Error", { description: "Please enter both email and password." });
       return;
     }
 
     setIsLoading(true);
-
     try {
-      // 1. Authenticate with Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
-        password: password,
+        password: password.trim(),
       });
 
-      if (authError) {
-        toast.error('Authentication Failed', { description: authError.message });
-        setIsLoading(false);
-        return;
-      }
+      if (error) throw error;
 
-      if (!authData.user) {
-        toast.error('Authentication Failed', { description: 'User account not found.' });
-        setIsLoading(false);
-        return;
-      }
-
-      // 2. Fetch User Profile to check role and active status
-      const { data: profile, error: profileError } = await supabase
+      // Check user role to redirect appropriately
+      const { data: profile } = await supabase
         .from('profiles')
-        .select('*')
-        .eq('id', authData.user.id)
+        .select('role')
+        .eq('id', data.user.id)
         .single();
 
-      if (profileError || !profile) {
-        toast.error('Profile Error', { description: 'User profile record is missing.' });
-        await supabase.auth.signOut();
-        setIsLoading(false);
-        return;
-      }
+      toast.success("Welcome Back!");
 
-      if (!profile.is_active) {
-        toast.error('Account Deactivated', { description: 'Your account has been disabled. Contact System Admin.' });
-        await supabase.auth.signOut();
-        setIsLoading(false);
-        return;
-      }
-
-      toast.success('Login Successful', { description: `Welcome back, ${profile.full_name || 'User'}.` });
-
-      // 3. Role-Based Redirect
-      if (profile.role === 'admin') {
+      if (profile?.role === 'admin') {
         navigate('/admin', { replace: true });
       } else {
         navigate('/dashboard', { replace: true });
       }
-
     } catch (err: any) {
-      toast.error('Login Error', { description: err.message || 'An unexpected error occurred.' });
+      toast.error("Login Failed", { description: err.message || "Invalid credentials." });
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4 sm:p-8 font-sans animate-in fade-in duration-500">
+    <div className="min-h-screen bg-slate-900 flex flex-col justify-center items-center p-4 sm:p-6 relative overflow-hidden">
       
-      {/* Main Login Card */}
-      <div className="w-full max-w-md bg-white rounded-3xl border-2 border-slate-300 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-500">
+      {/* Background glow effects */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-600/20 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border-2 border-slate-100 p-8 sm:p-10 relative z-10 animate-in fade-in zoom-in-95 duration-500">
         
-        {/* Branding Header */}
-        <div className="bg-slate-900 p-8 sm:p-10 flex flex-col items-center text-center relative overflow-hidden">
-          <div className="absolute -top-12 -right-12 text-slate-800 opacity-50">
-            <ShieldCheck size={120} />
+        {/* LOGOS CONTAINER */}
+        <div className="flex items-center justify-center gap-4 mb-6">
+          {/* ClearTrack Logo */}
+          <div className="w-16 h-16 flex items-center justify-center">
+            <img 
+              src={clearTrackLogo} 
+              alt="ClearTrack Logo" 
+              className="w-full h-full object-contain drop-shadow-md" 
+            />
           </div>
-          
-          <div className="relative z-10 bg-blue-600 p-4 rounded-2xl text-white mb-4 shadow-lg shadow-blue-600/30">
-            <FileCheck size={40} strokeWidth={2.5} />
+
+          <div className="w-px h-10 bg-slate-200"></div>
+
+          {/* PHO Logo */}
+          <div className="w-14 h-14 flex items-center justify-center">
+            <img 
+              src={phoLogo} 
+              alt="Abra PHO Logo" 
+              className="w-full h-full object-contain drop-shadow-md" 
+            />
           </div>
-          <h1 className="relative z-10 text-3xl sm:text-4xl font-black text-white tracking-wide mb-1">ClearTrack</h1>
-          <p className="relative z-10 text-sm sm:text-base text-blue-200 font-bold uppercase tracking-widest">Abra Provincial Health Office</p>
+        </div>
+
+        {/* Title & Subtitle */}
+        <div className="text-center mb-8">
+          <h2 className="text-3xl font-black text-slate-900 tracking-tight">ClearTrack</h2>
+          <p className="text-sm font-bold text-blue-600 uppercase tracking-widest mt-1">Provincial Health Office of Abra</p>
+          <p className="text-xs text-slate-500 font-medium mt-1">Sign in to manage and route documents</p>
         </div>
 
         {/* Login Form */}
-        <div className="p-6 sm:p-10">
-          <form onSubmit={handleLogin} className="space-y-6">
-            
-            {/* Email Input */}
-            <div>
-              <label className="block text-base font-bold text-slate-900 mb-2">Email Address</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <User size={20} className="text-slate-400" />
-                </div>
-                <input 
-                  type="email" 
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="e.g. user@abrapho.gov.ph" 
-                  className="w-full pl-12 pr-4 py-4 bg-slate-50 border-2 border-slate-400 rounded-xl focus:border-slate-900 focus:ring-4 focus:ring-slate-900/10 outline-none text-base font-bold text-slate-900 placeholder:text-slate-500 transition-all font-mono"
-                  disabled={isLoading}
-                  required
-                />
-              </div>
+        <form onSubmit={handleLogin} className="space-y-5">
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Email Address</label>
+            <div className="relative">
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+              <input 
+                type="email" 
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="name@abra.gov.ph"
+                required
+                className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border-2 border-slate-200 focus:border-blue-600 focus:bg-white rounded-2xl outline-none font-bold text-slate-900 transition-all text-base"
+              />
             </div>
+          </div>
 
-            {/* Password Input */}
-            <div>
-              <label className="block text-base font-bold text-slate-900 mb-2">Password</label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Lock size={20} className="text-slate-400" />
-                </div>
-                <input 
-                  type={showPassword ? "text" : "password"} 
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password" 
-                  className="w-full pl-12 pr-12 py-4 bg-slate-50 border-2 border-slate-400 rounded-xl focus:border-slate-900 focus:ring-4 focus:ring-slate-900/10 outline-none text-base font-bold text-slate-900 placeholder:text-slate-500 transition-all"
-                  disabled={isLoading}
-                  required
-                />
-                <button 
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-800 transition-colors"
-                  tabIndex={-1}
-                >
-                  {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
-              </div>
+          <div>
+            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Password</label>
+            <div className="relative">
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+              <input 
+                type="password" 
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                required
+                className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border-2 border-slate-200 focus:border-blue-600 focus:bg-white rounded-2xl outline-none font-bold text-slate-900 transition-all text-base"
+              />
             </div>
+          </div>
 
-            {/* Remember Me & Forgot Password */}
-            <div className="flex items-center justify-between mt-2">
-              <label className="flex items-center gap-3 cursor-pointer group">
-                <div className="relative flex items-center justify-center">
-                  <input 
-                    type="checkbox" 
-                    checked={rememberMe}
-                    onChange={(e) => setRememberMe(e.target.checked)}
-                    className="peer appearance-none w-6 h-6 border-2 border-slate-400 rounded-md checked:bg-blue-600 checked:border-blue-600 transition-all cursor-pointer"
-                  />
-                  <Check size={16} strokeWidth={4} className="text-white absolute opacity-0 peer-checked:opacity-100 pointer-events-none" />
-                </div>
-                <span className="text-sm font-bold text-slate-700 group-hover:text-slate-900 transition-colors">Remember me</span>
-              </label>
+          <button 
+            type="submit" 
+            disabled={isLoading}
+            className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl shadow-lg shadow-blue-600/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-base border-2 border-blue-500 disabled:opacity-50 mt-2"
+          >
+            {isLoading ? (
+              <span className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+            ) : (
+              <>Sign In <ArrowRight size={20} strokeWidth={2.5} /></>
+            )}
+          </button>
+        </form>
 
-              <button 
-                type="button" 
-                onClick={() => toast.info('Contact System Administrator to reset your password.')}
-                className="text-sm font-bold text-blue-600 hover:text-blue-800 transition-colors"
-              >
-                Forgot Password?
-              </button>
-            </div>
-
-            {/* Submit Button */}
-            <button 
-              type="submit"
-              disabled={isLoading}
-              className="w-full py-4 mt-4 bg-slate-900 hover:bg-blue-700 text-white font-black rounded-xl shadow-lg transition-all active:scale-95 text-lg flex items-center justify-center gap-2 border-2 border-slate-900 hover:border-blue-700 disabled:opacity-70 disabled:cursor-not-allowed"
-            >
-              {isLoading ? (
-                <div className="w-6 h-6 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
-              ) : (
-                <>Secure Login <ArrowRight size={20} strokeWidth={3} /></>
-              )}
-            </button>
-          </form>
-        </div>
-
-        {/* System Admin Notice */}
-        <div className="bg-slate-100 p-6 text-center border-t-2 border-slate-200">
-          <p className="text-sm font-medium text-slate-600">
-            Need an account or lost access? <br className="sm:hidden" />
-            <span className="font-bold text-slate-900">Contact your System Administrator.</span>
+        <div className="mt-8 text-center border-t border-slate-100 pt-6">
+          <p className="text-xs text-slate-400 font-medium">
+            Authorized personnel only. All access attempts are monitored and logged.
           </p>
         </div>
 
       </div>
-
-      {/* Footer Branding */}
-      <div className="mt-8 text-center opacity-60">
-        <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">ClearTrack Document Management</p>
-        <p className="text-xs font-medium text-slate-400 mt-1">© 2026 Abra Provincial Health Office</p>
-      </div>
-
     </div>
   );
 }
