@@ -41,25 +41,19 @@ export default function History() {
       try {
           const { data: { session } } = await supabase.auth.getSession();
           if (!session) return;
-          const currentUserId = session.user.id;
 
-          const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', currentUserId).single();
-          const currentUserName = profile?.full_name || '';
-
+          // FETCH LOGIC UPDATED:
+          // ascending: true -> Sorts from the 1st completed (oldest) down to the last completed (newest)
           const { data: docs, error } = await supabase
             .from('documents')
             .select('*')
-            .order('created_at', { ascending: false });
+            .order('created_at', { ascending: true });
 
           if (error) throw error;
 
           if (docs) {
-              const myDocs = docs.filter((d: any) => 
-                  d.created_by === currentUserId || d.assigned_clerk === currentUserName
-              );
-
-              const completed = myDocs.filter((d: any) => d.status === 'sealed');
-              const returned = myDocs.filter((d: any) => d.status === 'pending' && d.remarks);
+              const completed = docs.filter((d: any) => d.status === 'sealed');
+              const returned = docs.filter((d: any) => d.status === 'pending' && d.remarks);
               
               setDocuments({ completed, returned });
           }

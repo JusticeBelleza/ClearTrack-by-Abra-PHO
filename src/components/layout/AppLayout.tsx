@@ -131,18 +131,22 @@ export default function AppLayout() {
       <nav className="hidden md:flex flex-col w-64 bg-slate-900 text-slate-300 shadow-xl z-20">
         
         {/* BRANDING: Desktop Sidebar */}
-        <div className="p-6 flex items-center gap-3 border-b border-slate-800">
-          {/* Replaced the box with a pure image container so the transparent logo pops */}
-          <div className="flex items-center justify-center w-11 h-11 shrink-0">
+        <div className="p-6 flex items-center gap-4 border-b border-slate-800 bg-gradient-to-b from-slate-800/50 to-slate-900 relative overflow-hidden">
+          {/* Subtle Ambient Glow */}
+          <div className="absolute top-0 left-0 -ml-8 -mt-8 w-32 h-32 bg-blue-500 rounded-full mix-blend-screen filter blur-[40px] opacity-20 animate-pulse"></div>
+          
+          {/* Glassmorphism Logo Box */}
+          <div className="flex items-center justify-center w-12 h-12 shrink-0 bg-white/5 backdrop-blur-md rounded-xl p-2 border border-white/10 shadow-inner relative z-10">
             <img 
               src={clearTrackLogo} 
               alt="ClearTrack Logo" 
-              className="w-full h-full object-contain drop-shadow-md"
+              className="w-full h-full object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]"
             />
           </div>
-          <div className="flex flex-col">
-            <h1 className="text-xl font-black text-white tracking-wide leading-none">ClearTrack</h1>
-            <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mt-1">
+          
+          <div className="flex flex-col relative z-10">
+            <h1 className="text-2xl font-black text-white tracking-wide leading-none">ClearTrack</h1>
+            <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mt-1.5">
               {currentUserRole === 'admin' ? 'Admin Portal' : 'by Abra PHO'}
             </p>
           </div>
@@ -179,9 +183,13 @@ export default function AppLayout() {
       <main className="flex-1 flex flex-col overflow-hidden relative">
         
         {/* BRANDING: Mobile Header */}
-        <header className="md:hidden flex items-center justify-between p-4 bg-slate-900 text-white shadow-md z-20 relative shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="flex items-center justify-center w-10 h-10 shrink-0">
+        <header className="md:hidden flex items-center justify-between p-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-lg z-20 relative shrink-0 overflow-hidden border-b border-white/5">
+          {/* Decorative background glow */}
+          <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-blue-500 rounded-full mix-blend-screen filter blur-3xl opacity-30 animate-pulse"></div>
+
+          <div className="flex items-center gap-3 relative z-10">
+            {/* Glassmorphism Logo Container */}
+            <div className="flex items-center justify-center w-11 h-11 shrink-0 bg-white/10 backdrop-blur-sm rounded-xl p-1.5 border border-white/20 shadow-inner">
               <img 
                 src={clearTrackLogo} 
                 alt="ClearTrack Logo" 
@@ -189,8 +197,8 @@ export default function AppLayout() {
               />
             </div>
             <div className="flex flex-col">
-              <h1 className="text-lg font-black leading-none text-white">ClearTrack</h1>
-              <span className="text-[10px] font-bold text-blue-400 uppercase tracking-wider mt-0.5">
+              <h1 className="text-xl font-black leading-none text-white tracking-wide">ClearTrack</h1>
+              <span className="text-[10px] font-black text-blue-300 uppercase tracking-widest mt-1">
                 {currentUserRole === 'admin' ? 'Admin Portal' : 'by Abra PHO'}
               </span>
             </div>

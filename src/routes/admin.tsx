@@ -912,13 +912,15 @@ function MainNavButton({ label, icon, isActive, onClick }: any) {
     return (
       <button 
         onClick={onClick}
-        className={`flex-1 shrink-0 flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-black transition-all active:scale-95 text-sm whitespace-nowrap ${
+        title={label}
+        className={`flex-none shrink-0 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-black transition-all active:scale-95 text-sm whitespace-nowrap overflow-hidden border-2 ${
           isActive 
-          ? 'bg-blue-600 text-white shadow-md border-2 border-blue-500' 
-          : 'bg-transparent text-slate-400 hover:bg-slate-800 hover:text-white border-2 border-transparent'
+          ? 'bg-blue-600 text-white shadow-md border-blue-500' 
+          : 'bg-transparent text-slate-400 hover:bg-slate-800 hover:text-white border-transparent'
         }`}
       >
-        {icon} {label}
+        {icon}
+        {isActive && <span className="animate-in fade-in slide-in-from-left-2 duration-200">{label}</span>}
       </button>
     );
 }
@@ -927,13 +929,15 @@ function SubTabButton({ label, icon, isActive, onClick }: any) {
   return (
     <button 
       onClick={onClick}
-      className={`flex-1 shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all active:scale-95 text-sm whitespace-nowrap ${
+      title={label}
+      className={`flex-none shrink-0 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold transition-all active:scale-95 text-sm whitespace-nowrap overflow-hidden border-2 ${
         isActive 
-        ? 'bg-slate-900 text-white shadow-md' 
-        : 'bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+        ? 'bg-slate-900 text-white shadow-md border-slate-800' 
+        : 'bg-transparent text-slate-500 border-transparent hover:border-slate-200 hover:bg-slate-50'
       }`}
     >
-      {icon} {label}
+      {icon}
+      {isActive && <span className="animate-in fade-in slide-in-from-left-2 duration-200">{label}</span>}
     </button>
   );
 }

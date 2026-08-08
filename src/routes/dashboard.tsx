@@ -51,14 +51,13 @@ export default function Dashboard() {
           if (!session) return;
           const currentUserId = session.user.id;
 
+          // Fetch the user's full name so we can match it against assigned_clerk
           const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', currentUserId).single();
           const currentUserName = profile?.full_name || '';
           
           const firstName = currentUserName.split(' ')[0];
           setUserName(firstName);
 
-          // Thanks to the new RLS policies, this securely fetches ONLY the documents 
-          // you created, currently hold, or have handled in the past.
           const { data: docs, error } = await supabase
             .from('documents')
             .select('*')
@@ -67,23 +66,31 @@ export default function Dashboard() {
           if (error) throw error;
 
           if (docs) {
-              // 1. Inbox (Assigned to Me): Documents currently sitting on YOUR desk
+              // 1. Inbox: Documents explicitly assigned to your name OR where you are the custodian
               const assigned = docs.filter((d: any) => 
-                  d.custodian_id === currentUserId && d.status !== 'sealed'
+                  (d.assigned_clerk === currentUserName || d.custodian_id === currentUserId) && 
+                  d.status !== 'sealed' &&
+                  !d.remarks // <-- Prevents returned docs from cluttering the Inbox
               );
               
-              // 2. My Documents: Active documents originally created by you
+              // 2. My Documents: Active documents you originally created
               const myDocuments = docs.filter((d: any) => 
                   d.created_by === currentUserId && d.status !== 'sealed'
               );
 
-              // 3. Processing (Tracked/Outbox): Documents you routed forward that are now on someone else's desk
+              // 3. Processing (Outbox): Documents you created or routed, but are now assigned to someone else
               const processing = docs.filter((d: any) => 
-                  d.custodian_id !== currentUserId && d.status !== 'sealed' && d.status !== 'pending'
+                  d.assigned_clerk !== currentUserName && 
+                  d.custodian_id !== currentUserId && 
+                  (d.status === 'routing' || (d.status === 'pending' && !d.remarks)) &&
+                  d.status !== 'sealed'
               );
 
               // 4. Returned: Documents that have been kicked back with remarks
-              const rejected = docs.filter((d: any) => d.status === 'pending' && d.remarks);
+              const rejected = docs.filter((d: any) => 
+                  d.status === 'pending' && !!d.remarks && 
+                  (d.assigned_clerk === currentUserName || d.created_by === currentUserId)
+              );
 
               // 5. Completed: Sealed documents
               const completed = docs.filter((d: any) => d.status === 'sealed');
@@ -91,9 +98,9 @@ export default function Dashboard() {
               setDocuments({ assigned, myDocuments, processing, rejected, completed });
               
               setStats({
-                  active: processing.length, // Docs out in the wild
+                  active: processing.length + assigned.length, 
                   urgent: docs.filter((d: any) => d.is_urgent && d.status !== 'sealed').length, 
-                  actionNeeded: assigned.length, // Docs waiting for you to route them
+                  actionNeeded: assigned.length, 
                   completed: completed.length
               });
           }
@@ -232,7 +239,6 @@ export default function Dashboard() {
           </div>
       </div>
 
-      {/* Tab Content Area wrapped in an animation key - USING OPTION 1: Smooth iOS Zoom */}
       <div key={activeTab} className="animate-in fade-in zoom-in-[0.97] duration-300 ease-out fill-mode-both">
           {/* Empty State */}
           {filteredDocs.length === 0 && (
@@ -352,8 +358,8 @@ function TabButton({ label, icon, count, isActive, onClick, colorClass, badgeCla
         <button 
             onClick={onClick}
             title={label}
-            className={`flex-none shrink-0 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold transition-all active:scale-95 text-sm whitespace-nowrap overflow-hidden ${
-                isActive ? colorClass : 'bg-transparent text-slate-500 border-2 border-transparent hover:border-slate-200 hover:bg-slate-50'
+            className={`flex-none shrink-0 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold transition-all active:scale-95 text-sm whitespace-nowrap overflow-hidden border-2 ${
+                isActive ? `${colorClass} border-transparent` : 'bg-transparent text-slate-500 border-transparent hover:border-slate-200 hover:bg-slate-50'
             }`}
         >
             {icon}

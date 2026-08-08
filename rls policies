@@ -1,14 +1,6 @@
 [
   {
     "tablename": "profiles",
-    "policyname": "Prof_Update",
-    "roles": "{public}",
-    "cmd": "UPDATE",
-    "qual": "((id = ( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1\n   FROM profiles profiles_1\n  WHERE ((profiles_1.id = ( SELECT auth.uid() AS uid)) AND (profiles_1.role = 'admin'::user_role)))))",
-    "with_check": null
-  },
-  {
-    "tablename": "profiles",
     "policyname": "Select all profiles",
     "roles": "{public}",
     "cmd": "SELECT",
@@ -16,35 +8,19 @@
     "with_check": null
   },
   {
-    "tablename": "destination_offices",
-    "policyname": "Office_Delete",
-    "roles": "{public}",
-    "cmd": "DELETE",
-    "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))",
+    "tablename": "document_logs",
+    "policyname": "Allow authenticated users to read logs",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "true",
     "with_check": null
   },
   {
-    "tablename": "destination_offices",
-    "policyname": "Office_Insert",
-    "roles": "{public}",
-    "cmd": "INSERT",
-    "qual": null,
-    "with_check": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))"
-  },
-  {
-    "tablename": "destination_offices",
-    "policyname": "Office_Select",
+    "tablename": "routing_logs",
+    "policyname": "Read logs",
     "roles": "{public}",
     "cmd": "SELECT",
-    "qual": "(( SELECT auth.role() AS role) = 'authenticated'::text)",
-    "with_check": null
-  },
-  {
-    "tablename": "destination_offices",
-    "policyname": "Office_Update",
-    "roles": "{public}",
-    "cmd": "UPDATE",
-    "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))",
+    "qual": "(EXISTS ( SELECT 1\n   FROM documents\n  WHERE ((documents.id = routing_logs.document_id) AND (is_admin() OR (documents.created_by = ( SELECT auth.uid() AS uid)) OR (documents.custodian_id = ( SELECT auth.uid() AS uid))))))",
     "with_check": null
   },
   {
@@ -56,91 +32,19 @@
     "with_check": "((handled_by = ( SELECT auth.uid() AS uid)) AND (EXISTS ( SELECT 1\n   FROM documents\n  WHERE ((documents.id = routing_logs.document_id) AND (documents.custodian_id = ( SELECT auth.uid() AS uid))))))"
   },
   {
-    "tablename": "routing_logs",
-    "policyname": "Read logs",
-    "roles": "{public}",
-    "cmd": "SELECT",
-    "qual": "(EXISTS ( SELECT 1\n   FROM documents\n  WHERE ((documents.id = routing_logs.document_id) AND (is_admin() OR (documents.created_by = ( SELECT auth.uid() AS uid)) OR (documents.custodian_id = ( SELECT auth.uid() AS uid))))))",
-    "with_check": null
-  },
-  {
-    "tablename": "documents",
-    "policyname": "Doc_Insert",
-    "roles": "{public}",
+    "tablename": "document_logs",
+    "policyname": "Allow authenticated users to insert logs",
+    "roles": "{authenticated}",
     "cmd": "INSERT",
     "qual": null,
-    "with_check": "(created_by = ( SELECT auth.uid() AS uid))"
-  },
-  {
-    "tablename": "documents",
-    "policyname": "Doc_Select",
-    "roles": "{public}",
-    "cmd": "SELECT",
-    "qual": "((created_by = ( SELECT auth.uid() AS uid)) OR (custodian_id = ( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role)))))",
-    "with_check": null
-  },
-  {
-    "tablename": "documents",
-    "policyname": "Doc_Update",
-    "roles": "{public}",
-    "cmd": "UPDATE",
-    "qual": "((custodian_id = ( SELECT auth.uid() AS uid)) AND (status <> 'sealed'::doc_status))",
-    "with_check": null
-  },
-  {
-    "tablename": "departments",
-    "policyname": "Dept_Delete",
-    "roles": "{public}",
-    "cmd": "DELETE",
-    "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))",
-    "with_check": null
-  },
-  {
-    "tablename": "departments",
-    "policyname": "Dept_Insert",
-    "roles": "{public}",
-    "cmd": "INSERT",
-    "qual": null,
-    "with_check": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))"
-  },
-  {
-    "tablename": "departments",
-    "policyname": "Dept_Select",
-    "roles": "{public}",
-    "cmd": "SELECT",
-    "qual": "(( SELECT auth.role() AS role) = 'authenticated'::text)",
-    "with_check": null
-  },
-  {
-    "tablename": "departments",
-    "policyname": "Dept_Update",
-    "roles": "{public}",
-    "cmd": "UPDATE",
-    "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))",
-    "with_check": null
-  },
-  {
-    "tablename": "audit_logs",
-    "policyname": "Audit_Insert",
-    "roles": "{public}",
-    "cmd": "INSERT",
-    "qual": null,
-    "with_check": "(( SELECT auth.role() AS role) = 'authenticated'::text)"
-  },
-  {
-    "tablename": "audit_logs",
-    "policyname": "Audit_Select",
-    "roles": "{public}",
-    "cmd": "SELECT",
-    "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))",
-    "with_check": null
+    "with_check": "(( SELECT auth.uid() AS uid) = created_by)"
   },
   {
     "tablename": "categories",
-    "policyname": "Cat_Delete",
+    "policyname": "Cat_Select",
     "roles": "{public}",
-    "cmd": "DELETE",
-    "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))",
+    "cmd": "SELECT",
+    "qual": "(( SELECT auth.role() AS role) = 'authenticated'::text)",
     "with_check": null
   },
   {
@@ -153,15 +57,71 @@
   },
   {
     "tablename": "categories",
-    "policyname": "Cat_Select",
+    "policyname": "Cat_Update",
+    "roles": "{public}",
+    "cmd": "UPDATE",
+    "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))",
+    "with_check": null
+  },
+  {
+    "tablename": "categories",
+    "policyname": "Cat_Delete",
+    "roles": "{public}",
+    "cmd": "DELETE",
+    "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))",
+    "with_check": null
+  },
+  {
+    "tablename": "departments",
+    "policyname": "Dept_Select",
     "roles": "{public}",
     "cmd": "SELECT",
     "qual": "(( SELECT auth.role() AS role) = 'authenticated'::text)",
     "with_check": null
   },
   {
-    "tablename": "categories",
-    "policyname": "Cat_Update",
+    "tablename": "departments",
+    "policyname": "Dept_Insert",
+    "roles": "{public}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))"
+  },
+  {
+    "tablename": "departments",
+    "policyname": "Dept_Update",
+    "roles": "{public}",
+    "cmd": "UPDATE",
+    "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))",
+    "with_check": null
+  },
+  {
+    "tablename": "departments",
+    "policyname": "Dept_Delete",
+    "roles": "{public}",
+    "cmd": "DELETE",
+    "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))",
+    "with_check": null
+  },
+  {
+    "tablename": "employees",
+    "policyname": "Emp_Select",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "(( SELECT auth.role() AS role) = 'authenticated'::text)",
+    "with_check": null
+  },
+  {
+    "tablename": "employees",
+    "policyname": "Emp_Insert",
+    "roles": "{public}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))"
+  },
+  {
+    "tablename": "employees",
+    "policyname": "Emp_Update",
     "roles": "{public}",
     "cmd": "UPDATE",
     "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))",
@@ -176,28 +136,52 @@
     "with_check": null
   },
   {
-    "tablename": "employees",
-    "policyname": "Emp_Insert",
-    "roles": "{public}",
-    "cmd": "INSERT",
-    "qual": null,
-    "with_check": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))"
-  },
-  {
-    "tablename": "employees",
-    "policyname": "Emp_Select",
+    "tablename": "destination_offices",
+    "policyname": "Office_Select",
     "roles": "{public}",
     "cmd": "SELECT",
     "qual": "(( SELECT auth.role() AS role) = 'authenticated'::text)",
     "with_check": null
   },
   {
-    "tablename": "employees",
-    "policyname": "Emp_Update",
+    "tablename": "destination_offices",
+    "policyname": "Office_Insert",
+    "roles": "{public}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))"
+  },
+  {
+    "tablename": "destination_offices",
+    "policyname": "Office_Update",
     "roles": "{public}",
     "cmd": "UPDATE",
     "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))",
     "with_check": null
+  },
+  {
+    "tablename": "destination_offices",
+    "policyname": "Office_Delete",
+    "roles": "{public}",
+    "cmd": "DELETE",
+    "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))",
+    "with_check": null
+  },
+  {
+    "tablename": "profiles",
+    "policyname": "Prof_Update",
+    "roles": "{public}",
+    "cmd": "UPDATE",
+    "qual": "((id = ( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1\n   FROM profiles profiles_1\n  WHERE ((profiles_1.id = ( SELECT auth.uid() AS uid)) AND (profiles_1.role = 'admin'::user_role)))))",
+    "with_check": null
+  },
+  {
+    "tablename": "documents",
+    "policyname": "Doc_Insert",
+    "roles": "{public}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "(created_by = ( SELECT auth.uid() AS uid))"
   },
   {
     "tablename": "global_settings",
@@ -216,19 +200,35 @@
     "with_check": null
   },
   {
-    "tablename": "document_logs",
-    "policyname": "Allow authenticated users to insert logs",
-    "roles": "{authenticated}",
-    "cmd": "INSERT",
-    "qual": null,
-    "with_check": "(( SELECT auth.uid() AS uid) = created_by)"
+    "tablename": "audit_logs",
+    "policyname": "Audit_Select",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))",
+    "with_check": null
   },
   {
-    "tablename": "document_logs",
-    "policyname": "Allow authenticated users to read logs",
-    "roles": "{authenticated}",
+    "tablename": "audit_logs",
+    "policyname": "Audit_Insert",
+    "roles": "{public}",
+    "cmd": "INSERT",
+    "qual": null,
+    "with_check": "(( SELECT auth.role() AS role) = 'authenticated'::text)"
+  },
+  {
+    "tablename": "documents",
+    "policyname": "Doc_Select",
+    "roles": "{public}",
     "cmd": "SELECT",
-    "qual": "true",
+    "qual": "((created_by = ( SELECT auth.uid() AS uid)) OR (custodian_id = ( SELECT auth.uid() AS uid)) OR (assigned_clerk = ( SELECT profiles.full_name\n   FROM profiles\n  WHERE (profiles.id = ( SELECT auth.uid() AS uid)))) OR check_user_routed_doc(id) OR (EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role)))))",
     "with_check": null
+  },
+  {
+    "tablename": "documents",
+    "policyname": "Doc_Update",
+    "roles": "{public}",
+    "cmd": "UPDATE",
+    "qual": "((custodian_id = ( SELECT auth.uid() AS uid)) OR (assigned_clerk = ( SELECT profiles.full_name\n   FROM profiles\n  WHERE (profiles.id = ( SELECT auth.uid() AS uid)))) OR (EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role)))))",
+    "with_check": "true"
   }
 ]

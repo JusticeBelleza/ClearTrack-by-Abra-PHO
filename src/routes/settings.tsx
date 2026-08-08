@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  User, Shield, Lock, Eye, EyeOff, Save, X, Check, AlertCircle, Mail, Briefcase, Phone, Settings as SettingsIcon, Building2, Edit3, ChevronDown 
+  User, Shield, Lock, Eye, EyeOff, Save, X, Check, AlertCircle, Mail, Briefcase, Phone, Settings as SettingsIcon, Building2, Edit3, ChevronDown, Hash
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
@@ -49,7 +49,7 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false 
           className={`w-full px-4 py-3.5 border-2 rounded-xl flex justify-between items-center transition-all text-base outline-none ${
             disabled ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed' :
             isOpen
-              ? 'border-slate-900 ring-4 ring-slate-900/10 bg-white'
+              ? 'border-blue-600 ring-4 ring-blue-600/10 bg-white'
               : 'bg-slate-50 border-slate-300 hover:bg-slate-100 hover:border-slate-600 active:scale-[0.99]'
           } ${!value && !disabled ? 'text-slate-500' : 'text-slate-900 font-bold'}`}
         >
@@ -81,7 +81,7 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false 
                     }}
                     className={`px-4 py-3 text-base rounded-lg cursor-pointer transition-colors flex items-center active:scale-95 ${
                       isSelected
-                        ? 'bg-slate-900 text-white font-bold'
+                        ? 'bg-blue-600 text-white font-bold'
                         : 'text-slate-800 hover:bg-slate-100 font-medium'
                     }`}
                   >
@@ -179,7 +179,6 @@ export default function Settings() {
           if (error) throw error;
 
           // Also update the employee directory table for redundancy if you want full sync
-          // We wrap this in a try-catch to not block the main profile update if it fails
           try {
              await supabase.from('employees').update({
                  name: formData.full_name.trim(),
@@ -200,6 +199,16 @@ export default function Settings() {
       }
   };
 
+  // Helper function to get initials for the Avatar
+  const getInitials = (name: string) => {
+      if (!name) return "U";
+      const parts = name.split(' ');
+      if (parts.length > 1) {
+          return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
+      }
+      return name[0].toUpperCase();
+  };
+
   if (isLoading) {
     return (
         <div className="flex flex-col items-center justify-center min-h-[50vh]">
@@ -210,25 +219,124 @@ export default function Settings() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in duration-500 pb-12">
+    <div className="max-w-5xl mx-auto space-y-6 animate-in fade-in duration-500 pb-12">
       <style>{modalAnimationStyles}</style>
 
       {/* Header */}
-      <div className="mb-6">
-        <h2 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-          <SettingsIcon className="text-slate-600" size={32} /> Account Settings
-        </h2>
-        <p className="text-base text-slate-600 mt-1">Manage your personal profile and security preferences.</p>
+      <div className="mb-6 flex flex-col md:flex-row justify-between md:items-end gap-4">
+        <div>
+          <h2 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+            <SettingsIcon className="text-blue-600" size={32} /> Account Settings
+          </h2>
+          <p className="text-base text-slate-600 mt-1">Manage your personal profile and security preferences.</p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
+        {/* Right Column: Profile Information (Now primary focus) */}
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-white rounded-3xl border-2 border-slate-300 shadow-sm overflow-hidden relative">
+            
+            {/* Beautiful Gradient Header */}
+            <div className="h-32 bg-gradient-to-r from-blue-600 to-indigo-700 relative overflow-hidden">
+                <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 bg-white rounded-full mix-blend-overlay filter blur-3xl opacity-20"></div>
+                {!isEditing && (
+                    <button 
+                        onClick={handleEditClick} 
+                        className="absolute top-4 right-4 px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-md text-white font-bold rounded-xl flex items-center gap-2 transition-all active:scale-95 border border-white/20"
+                    >
+                        <Edit3 size={16} /> Edit Profile
+                    </button>
+                )}
+            </div>
+
+            <div className="p-6 sm:p-8 pt-0 relative">
+                {/* Overlapping Avatar */}
+                <div className="flex justify-between items-end mb-6 -mt-12">
+                    <div className="w-24 h-24 bg-white rounded-2xl border-4 border-white shadow-md flex items-center justify-center relative overflow-hidden group">
+                        <div className="absolute inset-0 bg-gradient-to-br from-slate-100 to-slate-200"></div>
+                        <span className="relative z-10 text-3xl font-black text-slate-400 select-none group-hover:scale-110 transition-transform">{getInitials(profile?.full_name)}</span>
+                    </div>
+                </div>
+
+                {!isEditing ? (
+                    // DISPLAY MODE
+                    <div className="space-y-6">
+                        <div>
+                            <h3 className="text-2xl font-black text-slate-900">{profile?.full_name || 'Not provided'}</h3>
+                            <p className="text-slate-500 font-bold">{profile?.designation || 'No Designation'} <span className="mx-2 text-slate-300">|</span> <span className="text-blue-600">{profile?.department || 'No Department'}</span></p>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <InfoCard icon={<Hash size={18}/>} label="Employee ID" value={profile?.emp_id || 'N/A'} />
+                            <InfoCard icon={<Mail size={18}/>} label="Login Email" value={profile?.email || 'N/A'} />
+                            <InfoCard icon={<Phone size={18}/>} label="Contact Number" value={profile?.contact_number || 'Not Provided'} />
+                        </div>
+                    </div>
+                ) : (
+                    // EDIT MODE
+                    <div className="space-y-6 mt-6 animate-in slide-in-from-bottom-4 fade-in duration-300">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                            <div>
+                                <label className="block text-sm font-bold text-slate-900 mb-1.5 uppercase tracking-wider">Full Name *</label>
+                                <input type="text" value={formData.full_name} onChange={(e) => setFormData({...formData, full_name: e.target.value})} className="w-full p-3.5 bg-white border-2 border-slate-300 rounded-xl focus:border-blue-600 outline-none font-bold text-slate-900 transition-colors shadow-sm" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-slate-900 mb-1.5 uppercase tracking-wider">Employee ID *</label>
+                                <input type="text" value={formData.emp_id} onChange={(e) => setFormData({...formData, emp_id: e.target.value})} className="w-full p-3.5 bg-white border-2 border-slate-300 rounded-xl focus:border-blue-600 outline-none font-bold text-slate-900 font-mono transition-colors shadow-sm" />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2 border-t-2 border-slate-100">
+                            <div>
+                                <label className="block text-sm font-bold text-slate-500 mb-1.5 uppercase tracking-wider flex items-center gap-1.5"><Mail size={16}/> Login Email</label>
+                                <input type="text" value={profile?.email || ''} disabled className="w-full p-3.5 bg-slate-100 border-2 border-slate-200 rounded-xl text-slate-500 font-bold cursor-not-allowed shadow-sm" />
+                                <p className="text-[11px] font-bold text-slate-400 mt-1">Email cannot be changed directly.</p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-slate-900 mb-1.5 uppercase tracking-wider flex items-center gap-1.5"><Phone size={16}/> Contact Number</label>
+                                <input type="tel" value={formData.contact_number} onChange={(e) => setFormData({...formData, contact_number: e.target.value})} className="w-full p-3.5 bg-white border-2 border-slate-300 rounded-xl focus:border-blue-600 outline-none font-bold text-slate-900 transition-colors shadow-sm" />
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2 border-t-2 border-slate-100">
+                            <div>
+                                <label className="block text-sm font-bold text-slate-900 mb-1.5 uppercase tracking-wider flex items-center gap-1.5"><Briefcase size={16}/> Designation</label>
+                                <input type="text" value={formData.designation} onChange={(e) => setFormData({...formData, designation: e.target.value})} className="w-full p-3.5 bg-white border-2 border-slate-300 rounded-xl focus:border-blue-600 outline-none font-bold text-slate-900 transition-colors shadow-sm" />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-bold text-slate-900 mb-1.5 uppercase tracking-wider flex items-center gap-1.5"><Building2 size={16}/> Department *</label>
+                                <CustomSelect 
+                                    options={departments.map(d => ({ value: d.name, label: d.name }))} 
+                                    value={formData.department} 
+                                    onChange={(val: string) => setFormData({...formData, department: val})} 
+                                    placeholder="Select Department..." 
+                                />
+                            </div>
+                        </div>
+
+                        {/* Action Buttons for Edit Mode */}
+                        <div className="flex gap-3 pt-6 border-t-2 border-slate-100 mt-6">
+                            <button onClick={() => setIsEditing(false)} disabled={isSaving} className="flex-1 py-3.5 bg-white border-2 border-slate-300 text-slate-700 font-bold rounded-xl active:scale-95 transition-transform text-base disabled:opacity-50">
+                                Cancel
+                            </button>
+                            <button onClick={handleSaveProfile} disabled={isSaving} className="flex-[1.5] py-3.5 bg-blue-600 text-white font-bold rounded-xl border-2 border-blue-600 hover:bg-blue-700 hover:border-blue-700 active:scale-95 transition-all text-base flex justify-center items-center gap-2 disabled:opacity-50 shadow-md">
+                                {isSaving ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : <><Save size={18} /> Save Changes</>}
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+          </div>
+        </div>
+
         {/* Left Column: Security Card */}
-        <div className="md:col-span-1 space-y-6">
+        <div className="lg:col-span-1 space-y-6">
           <div className="bg-white rounded-3xl border-2 border-slate-300 shadow-sm overflow-hidden p-6 relative">
-            <div className="absolute top-0 left-0 w-full h-1.5 bg-blue-600"></div>
-            <div className="flex items-center gap-3 mb-4">
-              <Shield size={24} className="text-blue-600" />
+            <div className="absolute top-0 left-0 w-full h-1.5 bg-slate-900"></div>
+            <div className="flex items-center gap-3 mb-4 mt-2">
+              <Shield size={24} className="text-slate-900" />
               <h3 className="text-xl font-black text-slate-900">Security</h3>
             </div>
             <p className="text-sm text-slate-600 font-medium mb-6">Keep your account secure by regularly updating your password.</p>
@@ -239,101 +347,6 @@ export default function Settings() {
             >
               <Lock size={18} /> Change Password
             </button>
-          </div>
-        </div>
-
-        {/* Right Column: Profile Information */}
-        <div className="md:col-span-2">
-          <div className="bg-white rounded-3xl border-2 border-slate-300 shadow-sm overflow-hidden p-6 sm:p-8">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-                <div className="flex items-center gap-3">
-                    <User size={24} className="text-slate-500" />
-                    <h3 className="text-xl font-black text-slate-900">Profile Information</h3>
-                </div>
-                {!isEditing && (
-                    <button onClick={handleEditClick} className="px-4 py-2 bg-blue-50 text-blue-700 hover:bg-blue-100 hover:text-blue-800 font-bold rounded-xl flex items-center justify-center gap-2 transition-colors border border-blue-200 active:scale-95">
-                        <Edit3 size={16} /> Edit Profile
-                    </button>
-                )}
-            </div>
-
-            <div className="space-y-6">
-              
-              {/* Row 1: Name and Emp ID */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Full Name *</label>
-                  {isEditing ? (
-                      <input type="text" value={formData.full_name} onChange={(e) => setFormData({...formData, full_name: e.target.value})} className="w-full p-3 bg-slate-50 border-2 border-slate-300 rounded-xl focus:border-blue-500 outline-none font-bold text-slate-900" />
-                  ) : (
-                      <p className="text-lg font-black text-slate-900">{profile?.full_name || 'Not provided'}</p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Employee ID *</label>
-                  {isEditing ? (
-                      <input type="text" value={formData.emp_id} onChange={(e) => setFormData({...formData, emp_id: e.target.value})} className="w-full p-3 bg-slate-50 border-2 border-slate-300 rounded-xl focus:border-blue-500 outline-none font-bold text-slate-900 font-mono" />
-                  ) : (
-                      <p className="text-lg font-bold font-mono text-slate-700 bg-slate-100 px-3 py-1 rounded inline-block border border-slate-200">{profile?.emp_id || 'N/A'}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Row 2: Email and Contact */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t-2 border-slate-100">
-                <div>
-                  <label className="block text-sm font-bold text-slate-500 mb-1.5 uppercase tracking-wider flex items-center gap-1.5"><Mail size={16}/> Login Email</label>
-                  <input type="text" value={profile?.email || ''} disabled className="w-full p-3 bg-slate-100 border-2 border-slate-200 rounded-xl text-slate-500 font-bold cursor-not-allowed" />
-                  {isEditing && <p className="text-[11px] font-bold text-slate-400 mt-1">Email cannot be changed directly.</p>}
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-500 mb-1.5 uppercase tracking-wider flex items-center gap-1.5"><Phone size={16}/> Contact Number</label>
-                  {isEditing ? (
-                      <input type="tel" value={formData.contact_number} onChange={(e) => setFormData({...formData, contact_number: e.target.value})} className="w-full p-3 bg-slate-50 border-2 border-slate-300 rounded-xl focus:border-blue-500 outline-none font-bold text-slate-900" />
-                  ) : (
-                      <p className="text-base font-bold text-slate-900 mt-2">{profile?.contact_number || 'Not provided'}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Row 3: Designation and Department */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4 border-t-2 border-slate-100">
-                <div>
-                  <label className="block text-sm font-bold text-slate-500 mb-1.5 uppercase tracking-wider flex items-center gap-1.5"><Briefcase size={16}/> Designation</label>
-                  {isEditing ? (
-                      <input type="text" value={formData.designation} onChange={(e) => setFormData({...formData, designation: e.target.value})} className="w-full p-3 bg-slate-50 border-2 border-slate-300 rounded-xl focus:border-blue-500 outline-none font-bold text-slate-900" />
-                  ) : (
-                      <p className="text-base font-bold text-slate-900 mt-2">{profile?.designation || 'Not provided'}</p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-500 mb-1.5 uppercase tracking-wider flex items-center gap-1.5"><Building2 size={16}/> Department *</label>
-                  {isEditing ? (
-                      <CustomSelect 
-                        options={departments.map(d => ({ value: d.name, label: d.name }))} 
-                        value={formData.department} 
-                        onChange={(val: string) => setFormData({...formData, department: val})} 
-                        placeholder="Select Department..." 
-                      />
-                  ) : (
-                      <p className="text-base font-bold text-slate-900 mt-2">{profile?.department || 'Not provided'}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Action Buttons for Edit Mode */}
-              {isEditing && (
-                  <div className="flex gap-3 pt-6 border-t-2 border-slate-100 mt-6">
-                      <button onClick={() => setIsEditing(false)} disabled={isSaving} className="flex-1 py-3 bg-white border-2 border-slate-300 text-slate-700 font-bold rounded-xl active:scale-95 transition-transform text-base disabled:opacity-50">
-                          Cancel
-                      </button>
-                      <button onClick={handleSaveProfile} disabled={isSaving} className="flex-[1.5] py-3 bg-blue-600 text-white font-bold rounded-xl border-2 border-blue-600 hover:bg-blue-700 hover:border-blue-700 active:scale-95 transition-all text-base flex justify-center items-center gap-2 disabled:opacity-50 disabled:bg-slate-400 disabled:border-slate-400 shadow-md">
-                          {isSaving ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : <><Save size={18} /> Save Changes</>}
-                      </button>
-                  </div>
-              )}
-
-            </div>
           </div>
         </div>
 
@@ -348,6 +361,19 @@ export default function Settings() {
       )}
     </div>
   );
+}
+
+// --- Helper Info Card Component ---
+function InfoCard({ icon, label, value }: { icon: React.ReactNode, label: string, value: string }) {
+    return (
+        <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-start gap-3">
+            <div className="mt-0.5 text-blue-600 bg-blue-100 p-1.5 rounded-lg">{icon}</div>
+            <div>
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-0.5">{label}</p>
+                <p className="text-base font-black text-slate-900 leading-tight">{value}</p>
+            </div>
+        </div>
+    );
 }
 
 // --- SECURE CHANGE PASSWORD MODAL COMPONENT --- //
@@ -453,7 +479,7 @@ function ChangePasswordModal({ userEmail, onClose }: { userEmail: string, onClos
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
                 placeholder="Enter current password" 
-                className="w-full pl-4 pr-12 py-3.5 bg-slate-50 border-2 border-slate-300 focus:border-slate-900 rounded-xl outline-none font-bold text-slate-900 transition-colors" 
+                className="w-full pl-4 pr-12 py-3.5 bg-white border-2 border-slate-300 focus:border-slate-900 rounded-xl outline-none font-bold text-slate-900 transition-colors" 
               />
               <button type="button" onClick={() => setShowCurrent(!showCurrent)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700">
                 {showCurrent ? <EyeOff size={20} /> : <Eye size={20} />}
@@ -472,7 +498,7 @@ function ChangePasswordModal({ userEmail, onClose }: { userEmail: string, onClos
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 placeholder="Create new password" 
-                className="w-full pl-4 pr-12 py-3.5 bg-slate-50 border-2 border-slate-300 focus:border-slate-900 rounded-xl outline-none font-bold text-slate-900 transition-colors" 
+                className="w-full pl-4 pr-12 py-3.5 bg-white border-2 border-slate-300 focus:border-slate-900 rounded-xl outline-none font-bold text-slate-900 transition-colors" 
               />
               <button type="button" onClick={() => setShowNew(!showNew)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700">
                 {showNew ? <EyeOff size={20} /> : <Eye size={20} />}
@@ -510,7 +536,7 @@ function ChangePasswordModal({ userEmail, onClose }: { userEmail: string, onClos
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Re-enter new password" 
-                className={`w-full pl-4 pr-12 py-3.5 bg-slate-50 border-2 outline-none font-bold text-slate-900 transition-colors rounded-xl ${
+                className={`w-full pl-4 pr-12 py-3.5 bg-white border-2 outline-none font-bold text-slate-900 transition-colors rounded-xl ${
                     confirmPassword && newPassword !== confirmPassword ? 'border-red-400 focus:border-red-600 bg-red-50/50' : 'border-slate-300 focus:border-slate-900'
                 }`} 
               />
@@ -525,7 +551,7 @@ function ChangePasswordModal({ userEmail, onClose }: { userEmail: string, onClos
 
           <div className="pt-4 flex gap-3 shrink-0 border-t-2 border-slate-100">
             <button type="button" disabled={isSubmitting} onClick={handleClose} className="flex-1 py-3.5 bg-white border-2 border-slate-300 text-slate-700 font-bold rounded-xl active:scale-95 transition-transform text-base disabled:opacity-50">Cancel</button>
-            <button type="submit" disabled={isSubmitting} className="flex-[1.5] py-3.5 bg-slate-900 text-white font-bold rounded-xl border-2 border-slate-900 active:scale-95 transition-transform text-base flex justify-center items-center gap-2 disabled:opacity-50 disabled:bg-slate-700">
+            <button type="submit" disabled={isSubmitting} className="flex-[1.5] py-3.5 bg-slate-900 text-white font-bold rounded-xl border-2 border-slate-900 active:scale-95 transition-transform text-base flex justify-center items-center gap-2 disabled:opacity-50 disabled:bg-slate-700 shadow-md">
               {isSubmitting ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : <><Save size={18} /> Update Password</>}
             </button>
           </div>
