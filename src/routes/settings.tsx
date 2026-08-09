@@ -14,13 +14,13 @@ const modalAnimationStyles = `
     @keyframes iosSlideDown { from { transform: translateY(0); } to { transform: translateY(100%); } }
     @keyframes desktopZoomOut { from { transform: scale(1); opacity: 1; } to { transform: scale(0.95); opacity: 0; } }
     
-    .animate-overlay-fade { animation: customFadeIn 0.5s ease-out forwards; }
-    .animate-overlay-fade-out { animation: customFadeOut 0.4s ease-in forwards; }
-    .animate-responsive-modal { animation: iosSlideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    .animate-overlay-fade { animation: customFadeIn 0.3s ease-out forwards; }
+    .animate-overlay-fade-out { animation: customFadeOut 0.3s ease-in forwards; }
+    .animate-responsive-modal { animation: iosSlideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
     .animate-responsive-modal-close { animation: iosSlideDown 0.4s cubic-bezier(0.3, 0, 0.8, 0.15) forwards; }
     
     @media (min-width: 640px) {
-        .animate-responsive-modal { animation: desktopZoomIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .animate-responsive-modal { animation: desktopZoomIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .animate-responsive-modal-close { animation: desktopZoomOut 0.3s cubic-bezier(0.3, 0, 0.8, 0.15) forwards; }
     }
 `;
@@ -104,6 +104,7 @@ export default function Settings() {
   
   // Edit Mode States
   const [isEditing, setIsEditing] = useState(false);
+  const [isClosingEdit, setIsClosingEdit] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
       full_name: '',
@@ -119,11 +120,9 @@ export default function Settings() {
 
   const fetchData = async () => {
     try {
-      // 1. Get current session
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) return;
 
-      // 2. Fetch Profile & Departments simultaneously
       const [profileRes, deptRes] = await Promise.all([
           supabase.from('profiles').select('*').eq('id', session.user.id).single(),
           supabase.from('departments').select('name').order('name')
@@ -149,7 +148,6 @@ export default function Settings() {
   };
 
   const handleEditClick = () => {
-      // Reset form data to current profile to discard any unsaved changes
       setFormData({
         full_name: profile?.full_name || '',
         emp_id: profile?.emp_id || '',
@@ -158,6 +156,15 @@ export default function Settings() {
         department: profile?.department || ''
       });
       setIsEditing(true);
+  };
+
+  // Triggers the slide-down animation
+  const handleCloseEdit = () => {
+      setIsClosingEdit(true);
+      setTimeout(() => {
+          setIsEditing(false);
+          setIsClosingEdit(false);
+      }, 400); 
   };
 
   const handleSaveProfile = async () => {
@@ -178,7 +185,6 @@ export default function Settings() {
 
           if (error) throw error;
 
-          // Also update the employee directory table for redundancy if you want full sync
           try {
              await supabase.from('employees').update({
                  name: formData.full_name.trim(),
@@ -189,7 +195,7 @@ export default function Settings() {
           } catch(e) { console.warn("Failed to sync to employees directory", e); }
 
           setProfile({ ...profile, ...formData });
-          setIsEditing(false);
+          handleCloseEdit(); // Closes the drawer with animation
           toast.success("Profile updated successfully!");
       } catch (err: any) {
           console.error(err);
@@ -199,7 +205,6 @@ export default function Settings() {
       }
   };
 
-  // Helper function to get initials for the Avatar
   const getInitials = (name: string) => {
       if (!name) return "U";
       const parts = name.split(' ');
@@ -234,7 +239,7 @@ export default function Settings() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Right Column: Profile Information (Now primary focus) */}
+        {/* Right Column: Profile Information */}
         <div className="lg:col-span-2 space-y-6">
           <div className="bg-white rounded-3xl border-2 border-slate-300 shadow-sm overflow-hidden relative">
             
@@ -244,9 +249,9 @@ export default function Settings() {
                 {!isEditing && (
                     <button 
                         onClick={handleEditClick} 
-                        className="absolute top-4 right-4 px-4 py-2 bg-white/20 hover:bg-white/30 backdrop-blur-md text-white font-bold rounded-xl flex items-center gap-2 transition-all active:scale-95 border border-white/20"
+                        className="absolute top-4 right-4 px-4 py-2.5 bg-white text-blue-700 hover:bg-slate-50 font-black rounded-xl flex items-center gap-2 transition-all active:scale-95 shadow-md border border-slate-100"
                     >
-                        <Edit3 size={16} /> Edit Profile
+                        <Edit3 size={18} strokeWidth={2.5} /> Edit Profile
                     </button>
                 )}
             </div>
@@ -260,72 +265,91 @@ export default function Settings() {
                     </div>
                 </div>
 
-                {!isEditing ? (
-                    // DISPLAY MODE
-                    <div className="space-y-6">
-                        <div>
-                            <h3 className="text-2xl font-black text-slate-900">{profile?.full_name || 'Not provided'}</h3>
-                            <p className="text-slate-500 font-bold">{profile?.designation || 'No Designation'} <span className="mx-2 text-slate-300">|</span> <span className="text-blue-600">{profile?.department || 'No Department'}</span></p>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <InfoCard icon={<Hash size={18}/>} label="Employee ID" value={profile?.emp_id || 'N/A'} />
-                            <InfoCard icon={<Mail size={18}/>} label="Login Email" value={profile?.email || 'N/A'} />
-                            <InfoCard icon={<Phone size={18}/>} label="Contact Number" value={profile?.contact_number || 'Not Provided'} />
-                        </div>
+                {/* DISPLAY MODE - Always rendered on mobile (blurred behind overlay), hidden on desktop during edit */}
+                <div className={`space-y-6 transition-all duration-300 ${isEditing ? 'opacity-30 md:hidden pointer-events-none' : 'opacity-100 block'}`}>
+                    <div>
+                        <h3 className="text-2xl font-black text-slate-900">{profile?.full_name || 'Not provided'}</h3>
+                        <p className="text-slate-500 font-bold">{profile?.designation || 'No Designation'} <span className="mx-2 text-slate-300">|</span> <span className="text-blue-600">{profile?.department || 'No Department'}</span></p>
                     </div>
-                ) : (
-                    // EDIT MODE
-                    <div className="space-y-6 mt-6 animate-in slide-in-from-bottom-4 fade-in duration-300">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                            <div>
-                                <label className="block text-sm font-bold text-slate-900 mb-1.5 uppercase tracking-wider">Full Name *</label>
-                                <input type="text" value={formData.full_name} onChange={(e) => setFormData({...formData, full_name: e.target.value})} className="w-full p-3.5 bg-white border-2 border-slate-300 rounded-xl focus:border-blue-600 outline-none font-bold text-slate-900 transition-colors shadow-sm" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-bold text-slate-900 mb-1.5 uppercase tracking-wider">Employee ID *</label>
-                                <input type="text" value={formData.emp_id} onChange={(e) => setFormData({...formData, emp_id: e.target.value})} className="w-full p-3.5 bg-white border-2 border-slate-300 rounded-xl focus:border-blue-600 outline-none font-bold text-slate-900 font-mono transition-colors shadow-sm" />
-                            </div>
-                        </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2 border-t-2 border-slate-100">
-                            <div>
-                                <label className="block text-sm font-bold text-slate-500 mb-1.5 uppercase tracking-wider flex items-center gap-1.5"><Mail size={16}/> Login Email</label>
-                                <input type="text" value={profile?.email || ''} disabled className="w-full p-3.5 bg-slate-100 border-2 border-slate-200 rounded-xl text-slate-500 font-bold cursor-not-allowed shadow-sm" />
-                                <p className="text-[11px] font-bold text-slate-400 mt-1">Email cannot be changed directly.</p>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-bold text-slate-900 mb-1.5 uppercase tracking-wider flex items-center gap-1.5"><Phone size={16}/> Contact Number</label>
-                                <input type="tel" value={formData.contact_number} onChange={(e) => setFormData({...formData, contact_number: e.target.value})} className="w-full p-3.5 bg-white border-2 border-slate-300 rounded-xl focus:border-blue-600 outline-none font-bold text-slate-900 transition-colors shadow-sm" />
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2 border-t-2 border-slate-100">
-                            <div>
-                                <label className="block text-sm font-bold text-slate-900 mb-1.5 uppercase tracking-wider flex items-center gap-1.5"><Briefcase size={16}/> Designation</label>
-                                <input type="text" value={formData.designation} onChange={(e) => setFormData({...formData, designation: e.target.value})} className="w-full p-3.5 bg-white border-2 border-slate-300 rounded-xl focus:border-blue-600 outline-none font-bold text-slate-900 transition-colors shadow-sm" />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-bold text-slate-900 mb-1.5 uppercase tracking-wider flex items-center gap-1.5"><Building2 size={16}/> Department *</label>
-                                <CustomSelect 
-                                    options={departments.map(d => ({ value: d.name, label: d.name }))} 
-                                    value={formData.department} 
-                                    onChange={(val: string) => setFormData({...formData, department: val})} 
-                                    placeholder="Select Department..." 
-                                />
-                            </div>
-                        </div>
-
-                        {/* Action Buttons for Edit Mode */}
-                        <div className="flex gap-3 pt-6 border-t-2 border-slate-100 mt-6">
-                            <button onClick={() => setIsEditing(false)} disabled={isSaving} className="flex-1 py-3.5 bg-white border-2 border-slate-300 text-slate-700 font-bold rounded-xl active:scale-95 transition-transform text-base disabled:opacity-50">
-                                Cancel
-                            </button>
-                            <button onClick={handleSaveProfile} disabled={isSaving} className="flex-[1.5] py-3.5 bg-blue-600 text-white font-bold rounded-xl border-2 border-blue-600 hover:bg-blue-700 hover:border-blue-700 active:scale-95 transition-all text-base flex justify-center items-center gap-2 disabled:opacity-50 shadow-md">
-                                {isSaving ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : <><Save size={18} /> Save Changes</>}
-                            </button>
-                        </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <InfoCard icon={<Hash size={18}/>} label="Employee ID" value={profile?.emp_id || 'N/A'} />
+                        <InfoCard icon={<Mail size={18}/>} label="Login Email" value={profile?.email || 'N/A'} />
+                        <InfoCard icon={<Phone size={18}/>} label="Contact Number" value={profile?.contact_number || 'Not Provided'} />
                     </div>
+                </div>
+
+                {/* EDIT MODE (Slide Up Bottom-Sheet on Mobile, Inline Form on Desktop) */}
+                {isEditing && (
+                    <>
+                        {/* Mobile Backdrop */}
+                        <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 md:hidden ${isClosingEdit ? 'animate-overlay-fade-out pointer-events-none' : 'animate-overlay-fade'}`} onClick={handleCloseEdit}></div>
+                        
+                        {/* Container - Bottom Sheet on Mobile, Static Inline on Desktop */}
+                        <div className={`fixed inset-x-0 bottom-0 z-50 w-full max-h-[90vh] bg-white rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.1)] flex flex-col overflow-hidden md:static md:w-auto md:max-h-none md:bg-transparent md:shadow-none md:mt-6 md:rounded-none md:overflow-visible ${isClosingEdit ? 'animate-responsive-modal-close md:hidden' : 'animate-responsive-modal md:block md:animate-in md:slide-in-from-bottom-4 md:fade-in'}`}>
+                            
+                            {/* Sticky Colored Mobile Drawer Header */}
+                            <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-5 sm:p-6 flex items-center justify-between shrink-0 relative md:hidden">
+                                <div className="w-16 h-1.5 bg-white/30 rounded-full absolute top-2 left-1/2 -translate-x-1/2"></div>
+                                <h3 className="text-xl font-black flex items-center gap-2 mt-2"><Edit3 size={20} /> Edit Profile</h3>
+                                <button onClick={handleCloseEdit} className="p-2 bg-white/20 hover:bg-white/30 text-white rounded-full active:scale-95 transition-all mt-2">
+                                    <X size={20} />
+                                </button>
+                            </div>
+
+                            {/* Scrollable Form Content */}
+                            <div className="flex-1 space-y-6 overflow-y-auto p-6 pb-8 md:p-0 md:overflow-visible custom-scrollbar">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-900 mb-1.5 uppercase tracking-wider">Full Name *</label>
+                                        <input type="text" value={formData.full_name} onChange={(e) => setFormData({...formData, full_name: e.target.value})} className="w-full p-3.5 bg-white border-2 border-slate-300 rounded-xl focus:border-blue-600 outline-none font-bold text-slate-900 transition-colors shadow-sm" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-900 mb-1.5 uppercase tracking-wider">Employee ID *</label>
+                                        <input type="text" value={formData.emp_id} onChange={(e) => setFormData({...formData, emp_id: e.target.value})} className="w-full p-3.5 bg-white border-2 border-slate-300 rounded-xl focus:border-blue-600 outline-none font-bold text-slate-900 font-mono transition-colors shadow-sm" />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2 md:border-t-2 border-slate-100">
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-500 mb-1.5 uppercase tracking-wider flex items-center gap-1.5"><Mail size={16}/> Login Email</label>
+                                        <input type="text" value={profile?.email || ''} disabled className="w-full p-3.5 bg-slate-100 border-2 border-slate-200 rounded-xl text-slate-500 font-bold cursor-not-allowed shadow-sm" />
+                                        <p className="text-[11px] font-bold text-slate-400 mt-1">Email cannot be changed directly.</p>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-900 mb-1.5 uppercase tracking-wider flex items-center gap-1.5"><Phone size={16}/> Contact Number</label>
+                                        <input type="tel" value={formData.contact_number} onChange={(e) => setFormData({...formData, contact_number: e.target.value})} className="w-full p-3.5 bg-white border-2 border-slate-300 rounded-xl focus:border-blue-600 outline-none font-bold text-slate-900 transition-colors shadow-sm" />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2 md:border-t-2 border-slate-100">
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-900 mb-1.5 uppercase tracking-wider flex items-center gap-1.5"><Briefcase size={16}/> Designation</label>
+                                        <input type="text" value={formData.designation} onChange={(e) => setFormData({...formData, designation: e.target.value})} className="w-full p-3.5 bg-white border-2 border-slate-300 rounded-xl focus:border-blue-600 outline-none font-bold text-slate-900 transition-colors shadow-sm" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-900 mb-1.5 uppercase tracking-wider flex items-center gap-1.5"><Building2 size={16}/> Department *</label>
+                                        <CustomSelect 
+                                            options={departments.map(d => ({ value: d.name, label: d.name }))} 
+                                            value={formData.department} 
+                                            onChange={(val: string) => setFormData({...formData, department: val})} 
+                                            placeholder="Select Department..." 
+                                        />
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex gap-3 pt-6 border-t-2 border-slate-100 mt-6 shrink-0 pb-safe md:pb-0 px-6 md:px-0">
+                                <button onClick={handleCloseEdit} disabled={isSaving} className="flex-1 py-3.5 bg-white border-2 border-slate-300 text-slate-700 font-bold rounded-xl active:scale-95 transition-transform text-base disabled:opacity-50">
+                                    Cancel
+                                </button>
+                                <button onClick={handleSaveProfile} disabled={isSaving} className="flex-[1.5] py-3.5 bg-blue-600 text-white font-bold rounded-xl border-2 border-blue-600 hover:bg-blue-700 hover:border-blue-700 active:scale-95 transition-all text-base flex justify-center items-center gap-2 disabled:opacity-50 shadow-md">
+                                    {isSaving ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : <><Save size={18} /> Save</>}
+                                </button>
+                            </div>
+                        </div>
+                    </>
                 )}
             </div>
           </div>
@@ -417,7 +441,6 @@ function ChangePasswordModal({ userEmail, onClose }: { userEmail: string, onClos
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // 1. Client-Side Validation
     if (!currentPassword) { toast.error("Please enter your current password."); return; }
     if (strength.score < 3) { toast.error("Please choose a stronger new password."); return; }
     if (newPassword !== confirmPassword) { toast.error("New passwords do not match."); return; }
@@ -425,7 +448,6 @@ function ChangePasswordModal({ userEmail, onClose }: { userEmail: string, onClos
     setIsSubmitting(true);
 
     try {
-      // 2. Verify Current Password by attempting a silent sign-in
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: userEmail,
         password: currentPassword,
@@ -437,7 +459,6 @@ function ChangePasswordModal({ userEmail, onClose }: { userEmail: string, onClos
         return;
       }
 
-      // 3. Update to New Password
       const { error: updateError } = await supabase.auth.updateUser({
         password: newPassword
       });
@@ -457,7 +478,7 @@ function ChangePasswordModal({ userEmail, onClose }: { userEmail: string, onClos
   };
 
   return (
-    <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/60 backdrop-blur-sm ${isClosing ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
+    <div className={`fixed inset-0 z-[60] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/60 backdrop-blur-sm ${isClosing ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
       <div className={`bg-white w-full max-w-md rounded-t-2xl sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col ${isClosing ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
         
         <div className="bg-slate-900 text-white p-5 sm:p-6 flex items-center justify-between shrink-0 relative">
@@ -552,7 +573,7 @@ function ChangePasswordModal({ userEmail, onClose }: { userEmail: string, onClos
           <div className="pt-4 flex gap-3 shrink-0 border-t-2 border-slate-100">
             <button type="button" disabled={isSubmitting} onClick={handleClose} className="flex-1 py-3.5 bg-white border-2 border-slate-300 text-slate-700 font-bold rounded-xl active:scale-95 transition-transform text-base disabled:opacity-50">Cancel</button>
             <button type="submit" disabled={isSubmitting} className="flex-[1.5] py-3.5 bg-slate-900 text-white font-bold rounded-xl border-2 border-slate-900 active:scale-95 transition-transform text-base flex justify-center items-center gap-2 disabled:opacity-50 disabled:bg-slate-700 shadow-md">
-              {isSubmitting ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : <><Save size={18} /> Update Password</>}
+              {isSubmitting ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : <><Save size={18} /> Update</>}
             </button>
           </div>
         </form>
@@ -561,7 +582,6 @@ function ChangePasswordModal({ userEmail, onClose }: { userEmail: string, onClos
   );
 }
 
-// Mini-component for checklist items
 function RequirementItem({ met, label }: { met: boolean, label: string }) {
     return (
         <div className={`flex items-center gap-1.5 text-xs font-bold ${met ? 'text-emerald-600' : 'text-slate-400'}`}>

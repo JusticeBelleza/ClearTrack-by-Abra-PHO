@@ -135,6 +135,9 @@ export default function Processing() {
   const [selectedDoc, setSelectedDoc] = useState<any>(null);
   const [trailDoc, setTrailDoc] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // State for handling the main card's file preview
+  const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
 
   useEffect(() => {
       fetchData();
@@ -329,15 +332,13 @@ export default function Processing() {
                         
                         <div className="flex gap-2 mt-auto">
                             {doc.attachment_url && (
-                                <a 
-                                    href={doc.attachment_url} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
+                                <button 
+                                    onClick={() => setPreviewDocUrl(doc.attachment_url)} 
                                     className="shrink-0 py-2.5 px-3 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl flex items-center justify-center transition-all active:scale-95 border-2 border-slate-300"
                                     title="View Attached File"
                                 >
                                     <Eye size={18} />
-                                </a>
+                                </button>
                             )}
                             <button 
                                 onClick={() => setTrailDoc(doc)}
@@ -358,8 +359,12 @@ export default function Processing() {
           )}
       </div>
 
+      {/* Global Modals for this view */}
       {selectedDoc && <HandoverScreen doc={selectedDoc} departments={departments} onBack={() => setSelectedDoc(null)} onSuccess={fetchData} />}
       {trailDoc && <DigitalTrailModal doc={trailDoc} onBack={() => setTrailDoc(null)} />}
+      
+      {/* Shared Global File Preview Modal (For the main cards) */}
+      {previewDocUrl && <FilePreviewModal url={previewDocUrl} onClose={() => setPreviewDocUrl(null)} />}
     </div>
   );
 }
@@ -387,12 +392,19 @@ export function DigitalTrailModal({ doc, onBack }: any) {
     const [isClosing, setIsClosing] = useState(false);
     const [events, setEvents] = useState<any[]>([]);
     const [isLoadingLogs, setIsLoadingLogs] = useState(true);
+    
+    // State to handle in-app file preview specifically for the tracking modal
+    const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
     const isCompleted = doc.status === 'sealed';
     const isReturned = doc.status === 'pending' && doc.remarks;
     const headerClass = isCompleted ? 'bg-emerald-700' : isReturned ? 'bg-red-700' : 'bg-slate-900';
 
-    const handleClose = () => {
+    // BULLETPROOF MOBILE CLOSE FUNCTION
+    const handleClose = (e?: any) => {
+        if (e && e.preventDefault) e.preventDefault(); // Stop iOS double-trigger
+        if (isClosing) return; // Prevent spam clicks
+        
         setIsClosing(true);
         setTimeout(() => { onBack(); }, 400); 
     };
@@ -415,17 +427,23 @@ export function DigitalTrailModal({ doc, onBack }: any) {
     }, [doc.id]);
 
     return (
+        <>
         <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/60 backdrop-blur-sm ${isClosing ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
             <div className={`bg-white w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl rounded-t-3xl sm:rounded-3xl overflow-hidden ${isClosing ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
                 
                 <div className={`text-white relative flex flex-col shrink-0 ${headerClass}`}>
                     <div className="w-12 h-1.5 bg-white/30 rounded-full mx-auto mt-3 sm:hidden shrink-0"></div>
                     <div className="p-4 flex items-center justify-between">
-                        <button onClick={handleClose} className="p-2 -ml-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors active:scale-90">
-                            <ArrowLeft size={24} strokeWidth={2.5} />
-                        </button>
-                        <h3 className="font-bold text-lg tracking-tight">Track Document</h3>
                         <div className="w-10"></div>
+                        <h3 className="font-bold text-lg tracking-tight">Track Document</h3>
+                        {/* FIXED DOUBLE TAP: Uses onTouchEnd bypass */}
+                        <button 
+                            onClick={handleClose} 
+                            onTouchEnd={handleClose}
+                            className="p-2 -mr-2 bg-white/10 md:hover:bg-white/20 active:bg-white/30 rounded-full transition-colors"
+                        >
+                            <X size={24} strokeWidth={2.5} />
+                        </button>
                     </div>
                 </div>
 
@@ -511,11 +529,16 @@ export function DigitalTrailModal({ doc, onBack }: any) {
                                             {formatDescription(desc)}
                                         </div>
                                         
+                                        {/* IN-APP PREVIEW BUTTON */}
                                         {log.attachment_url && (
-                                            <div className="mt-3 flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
-                                                <a href={log.attachment_url} target="_blank" rel="noopener noreferrer" className="w-[100px] h-[100px] rounded-lg overflow-hidden border border-slate-200 block shrink-0 bg-slate-50 relative group">
-                                                    <FileText size={32} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-slate-300 group-hover:scale-110 transition-transform" />
-                                                </a>
+                                            <div className="mt-3">
+                                                <button 
+                                                    onClick={() => setPreviewUrl(log.attachment_url)}
+                                                    className="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-lg border border-blue-200 transition-colors active:scale-95 shadow-sm"
+                                                >
+                                                    <FileText size={16} strokeWidth={2.5} />
+                                                    Click to view file
+                                                </button>
                                             </div>
                                         )}
                                     </div>
@@ -524,6 +547,70 @@ export function DigitalTrailModal({ doc, onBack }: any) {
                         })}
                     </div>
                 </div>
+            </div>
+        </div>
+        
+        {/* Render the preview modal ON TOP of the tracking modal if a file is clicked */}
+        {previewUrl && <FilePreviewModal url={previewUrl} onClose={() => setPreviewUrl(null)} />}
+        </>
+    );
+}
+
+// --- SHARED FILE PREVIEW OVERLAY ---
+export function FilePreviewModal({ url, onClose }: { url: string, onClose: () => void }) {
+    const [isClosing, setIsClosing] = useState(false);
+    const [showContent, setShowContent] = useState(true);
+    const isImage = url.toLowerCase().match(/\.(jpeg|jpg|gif|png|webp)$/i) !== null;
+
+    // BULLETPROOF MOBILE CLOSE FUNCTION
+    const handleClose = (e?: any) => {
+        if (e && e.preventDefault) e.preventDefault(); // Stop iOS double-trigger
+        if (isClosing) return; // Prevent spam clicks
+        
+        setShowContent(false); // Kill iframe instantly to drop focus
+        setIsClosing(true);
+        if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+        
+        setTimeout(() => { onClose(); }, 300); 
+    };
+
+    return (
+        <div className={`fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-slate-900/80 backdrop-blur-sm ${isClosing ? 'animate-overlay-fade-out pointer-events-none' : 'animate-overlay-fade'}`}>
+            <div className={`bg-white w-full max-w-4xl h-[85vh] sm:h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden ${isClosing ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
+                
+                {/* Header */}
+                <div className="bg-slate-900 text-white p-4 flex justify-between items-center shrink-0">
+                    <h3 className="font-bold flex items-center gap-2"><FileText size={20} /> Document Preview</h3>
+                    {/* FIXED DOUBLE TAP: Uses onTouchEnd bypass */}
+                    <button 
+                        onClick={handleClose} 
+                        onTouchEnd={handleClose}
+                        className="p-1.5 bg-white/10 md:hover:bg-white/20 active:bg-white/30 rounded-full transition-colors"
+                    >
+                        <X size={20} />
+                    </button>
+                </div>
+                
+                {/* Scrollable Body - Fixed for Mobile Devices */}
+                <div 
+                    className="flex-1 bg-slate-100 w-full h-full overflow-y-auto" 
+                    style={{ WebkitOverflowScrolling: 'touch' }} 
+                >
+                    {showContent && (
+                        isImage ? (
+                            <div className="w-full h-full p-4 flex items-center justify-center">
+                                <img src={url} alt="Document Preview" className="max-w-full h-auto object-contain rounded-lg shadow-sm" />
+                            </div>
+                        ) : (
+                            <iframe 
+                                src={url} 
+                                className="w-full h-full min-h-[120vh] sm:min-h-full border-none bg-slate-100" 
+                                title="Document Preview" 
+                            />
+                        )
+                    )}
+                </div>
+                
             </div>
         </div>
     );
@@ -552,9 +639,19 @@ function HandoverScreen({ doc, departments, onBack, onSuccess }: any) {
     const [completionRemarks, setCompletionRemarks] = useState('');
     const [retentionFate, setRetentionFate] = useState<'originator' | 'destination' | null>(null);
 
-    const handleClose = () => {
-      setIsClosing(true);
-      setTimeout(() => { onBack(); }, 400); 
+    // BULLETPROOF MOBILE CLOSE FUNCTION
+    const handleClose = (e?: any) => {
+        if (e && e.preventDefault) e.preventDefault(); 
+        if (isClosing) return; 
+        
+        setIsClosing(true);
+        setTimeout(() => { onBack(); }, 400); 
+    };
+    
+    const handleBackBtn = (e?: any) => {
+        if (e && e.preventDefault) e.preventDefault();
+        if (isSubmitting) return;
+        setActiveAction(null);
     };
 
     useEffect(() => {
@@ -701,7 +798,6 @@ function HandoverScreen({ doc, departments, onBack, onSuccess }: any) {
             if (logError) throw logError;
 
             // 2. NOW update the document safely
-            // WE REMOVED 'assigned_clerk: receivingClerk.trim()' so the document stays with YOU
             const { error } = await supabase.from('documents').update({
                 current_location: destination,
                 status: 'routing', 
@@ -795,7 +891,6 @@ function HandoverScreen({ doc, departments, onBack, onSuccess }: any) {
                 status: 'pending', 
                 current_location: rejectOffice,
                 remarks: rejectReason.trim()
-                // Keeping assigned_clerk as-is so you don't lose the document
             }).eq('id', doc.id);
             if (error) throw error;
 
@@ -818,7 +913,7 @@ function HandoverScreen({ doc, departments, onBack, onSuccess }: any) {
                     <div className="w-16 h-1.5 bg-white/30 rounded-full mx-auto mt-3 sm:hidden shrink-0"></div>
                     <div className="p-5 pt-3 sm:pt-6 flex items-center justify-between">
                         {activeAction ? (
-                             <button onClick={() => setActiveAction(null)} disabled={isSubmitting} className="p-2 -ml-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors active:scale-90 disabled:opacity-50">
+                             <button onClick={handleBackBtn} onTouchEnd={handleBackBtn} disabled={isSubmitting} className="p-2 -ml-2 bg-white/10 md:hover:bg-white/20 active:bg-white/30 rounded-full transition-colors disabled:opacity-50">
                                  <ArrowLeft size={24} />
                              </button>
                         ) : (
@@ -827,7 +922,8 @@ function HandoverScreen({ doc, departments, onBack, onSuccess }: any) {
                         <h3 className="font-black text-xl">
                             {!activeAction ? 'Action Required' : activeAction === 'reject' ? 'Reject & Return' : activeAction === 'complete' ? 'Finalize Document' : 'Route Document'}
                         </h3>
-                        <button onClick={handleClose} disabled={isSubmitting} className="p-2 -mr-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors active:scale-90 disabled:opacity-50">
+                        {/* FIXED DOUBLE TAP: Uses onTouchEnd bypass */}
+                        <button onClick={handleClose} onTouchEnd={handleClose} disabled={isSubmitting} className="p-2 -mr-2 bg-white/10 md:hover:bg-white/20 active:bg-white/30 rounded-full transition-colors disabled:opacity-50">
                             <X size={24} />
                         </button>
                     </div>

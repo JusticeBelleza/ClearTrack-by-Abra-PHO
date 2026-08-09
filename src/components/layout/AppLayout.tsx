@@ -229,7 +229,6 @@ export default function AppLayout() {
         </header>
 
         {/* Scrollable Content Routing Outlet */}
-        {/* Added extra padding bottom (pb-28) to ensure content doesn't hide behind the floating nav */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-28 md:pb-8">
           <Outlet />
         </div>
@@ -237,16 +236,16 @@ export default function AppLayout() {
 
       {/* 
         NEW CATCHY MOBILE NAVIGATION 
-        Floating Pill + Glassmorphism + Expanding Active States
+        Floating Pill + Glassmorphism + Expanding Active States + Pronounced Outline & Shadow
       */}
       <div className="md:hidden fixed bottom-5 left-0 right-0 z-40 flex justify-center px-4 pointer-events-none pb-safe">
-          <nav className="flex items-center justify-between w-full max-w-md bg-white/80 backdrop-blur-xl border border-white/60 shadow-[0_8px_30px_rgb(0,0,0,0.12)] p-2 rounded-[2rem] pointer-events-auto">
+          <nav className="flex items-center justify-between w-full max-w-md bg-white/95 backdrop-blur-2xl border-[1.5px] border-slate-300 shadow-[0_15px_40px_-10px_rgba(0,0,0,0.3)] p-2 rounded-[2rem] pointer-events-auto">
             
             {/* STAFF NAVIGATION */}
             {currentUserRole === 'pho_staff' && (
               <>
-                <MobileBottomNavItem icon={<Activity />} label="Dash" to="/dashboard" isActive={activeTab === 'dashboard'} />
-                <MobileBottomNavItem icon={<FileText />} label="Process" to="/processing" isActive={activeTab === 'processing'} />
+                <MobileBottomNavItem icon={<Activity />} label="Dashboard" to="/dashboard" isActive={activeTab === 'dashboard'} />
+                <MobileBottomNavItem icon={<FileText />} label="Processing" to="/processing" isActive={activeTab === 'processing'} />
                 <MobileBottomNavItem icon={<History />} label="History" to="/history" isActive={activeTab === 'history'} />
               </>
             )}
@@ -260,7 +259,7 @@ export default function AppLayout() {
             <MobileBottomNavItem icon={<Settings />} label="Settings" to="/settings" isActive={activeTab === 'settings'} />
             
             {/* Divider Dot */}
-            <div className="w-1 h-1 rounded-full bg-slate-300 mx-1"></div>
+            <div className="w-1.5 h-1.5 rounded-full bg-slate-300 mx-1"></div>
 
             {/* Logout Button */}
             <button 
@@ -319,7 +318,7 @@ function MobileBottomNavItem({ icon, label, to, isActive }: any) {
     return (
       <Link 
         to={to} 
-        className={`relative flex items-center justify-center transition-all duration-500 ease-out overflow-hidden ${
+        className={`relative flex items-center justify-center transition-all duration-500 ease-out overflow-hidden pointer-events-auto ${
           isActive 
             ? 'w-auto px-4 py-2.5 bg-blue-600 text-white rounded-[1.25rem] shadow-[0_0_20px_rgba(37,99,235,0.4)]' 
             : 'w-12 h-12 bg-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full'
