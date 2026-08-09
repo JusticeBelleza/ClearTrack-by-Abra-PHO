@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, Activity, AlertCircle, MapPin, Clock, 
   ChevronRight, CheckCircle, FileText, XCircle, Eye, X, Plus,
-  Inbox, CornerUpLeft, Folder 
+  Inbox, CornerUpLeft, Folder, User
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
@@ -25,6 +25,20 @@ const modalAnimationStyles = `
         .animate-responsive-modal { animation: desktopZoomIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
     }
 `;
+
+// --- PH Time Formatter ---
+const formatPHDateTime = (isoString: string) => {
+    if (!isoString) return 'Unknown Time';
+    return new Date(isoString).toLocaleString('en-US', {
+        timeZone: 'Asia/Manila',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+    });
+};
 
 export default function Dashboard() {
   const openCreateModal = useUiStore((state) => state.openCreateModal);
@@ -61,7 +75,7 @@ export default function Dashboard() {
           const { data: docs, error } = await supabase
             .from('documents')
             .select('*')
-            .order('created_at', { ascending: false });
+            .order('updated_at', { ascending: false }); // Sort by newest updates
 
           if (error) throw error;
 
@@ -121,7 +135,8 @@ export default function Dashboard() {
     return sourceList.filter((doc: any) => 
         (doc.title || '').toLowerCase().includes(query) ||
         (doc.reference_no || '').toLowerCase().includes(query) ||
-        (doc.current_location || '').toLowerCase().includes(query)
+        (doc.current_location || '').toLowerCase().includes(query) ||
+        (doc.assigned_clerk || '').toLowerCase().includes(query)
     );
   }, [searchQuery, documents, activeTab]);
 
@@ -273,7 +288,13 @@ export default function Dashboard() {
                             ) : null}
                         </div>
                         
-                        <h4 className="font-black text-xl text-slate-900 mb-4 leading-tight">{doc.title}</h4>
+                        <h4 className="font-black text-xl text-slate-900 mb-2 leading-tight">{doc.title}</h4>
+                        
+                        {/* ASSIGNED EMPLOYEE TAG */}
+                        <div className="flex items-center gap-1.5 mb-4 px-0.5">
+                            <User size={14} className="text-slate-400" />
+                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Managed by: <span className="text-blue-600">{doc.assigned_clerk || 'Unassigned'}</span></p>
+                        </div>
                         
                         <div className={`p-4 rounded-xl border-2 mb-5 flex-1 space-y-3 ${activeTab === 'completed' ? 'bg-emerald-50/50 border-emerald-100' : (activeTab === 'rejected' ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200')}`}>
                             {activeTab === 'rejected' ? (
@@ -281,6 +302,10 @@ export default function Dashboard() {
                                     <div className="flex items-start gap-3">
                                         <MapPin size={18} className="text-red-600 mt-0.5 shrink-0" />
                                         <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-red-700/70 text-xs block font-bold uppercase tracking-wider mb-0.5">Returned By</span>{doc.current_location}</p>
+                                    </div>
+                                    <div className="flex items-start gap-3">
+                                        <Clock size={18} className="text-red-600 mt-0.5 shrink-0" />
+                                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-red-700/70 text-xs block font-bold uppercase tracking-wider mb-0.5">Returned On</span>{formatPHDateTime(doc.updated_at || doc.created_at)}</p>
                                     </div>
                                     <div className="flex items-start gap-3">
                                         <AlertCircle size={18} className="text-red-600 mt-0.5 shrink-0" />
@@ -295,7 +320,7 @@ export default function Dashboard() {
                                     </div>
                                     <div className="flex items-start gap-3">
                                         <Clock size={18} className={activeTab === 'completed' ? "text-emerald-600 mt-0.5 shrink-0" : "text-slate-500 mt-0.5 shrink-0"} />
-                                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Logged Date</span>{new Date(doc.created_at).toLocaleDateString()}</p>
+                                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Last Update</span>{formatPHDateTime(doc.updated_at || doc.created_at)}</p>
                                     </div>
                                 </>
                             )}
@@ -315,7 +340,7 @@ export default function Dashboard() {
                             )}
                             <button 
                                 onClick={() => setTrailDoc(doc)}
-                                className="flex-1 py-2.5 px-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-sm border-2 border-blue-700"
+                                className="flex-1 py-2.5 px-2 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-sm border-2 border-blue-700"
                             >
                                 Track Progress <ChevronRight size={16} />
                             </button>

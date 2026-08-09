@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, MapPin, Clock, CheckCircle, XCircle, AlertCircle, 
-  ArrowRight, Archive, FileText, X, Eye, CornerUpLeft
+  ArrowRight, Archive, FileText, X, Eye, CornerUpLeft, User
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
@@ -24,6 +24,20 @@ const modalAnimationStyles = `
     }
 `;
 
+// --- PH Time Formatter ---
+const formatPHDateTime = (isoString: string) => {
+    if (!isoString) return 'Unknown Time';
+    return new Date(isoString).toLocaleString('en-US', {
+        timeZone: 'Asia/Manila',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+    });
+};
+
 export default function History() {
   const [isLoading, setIsLoading] = useState(true);
   const [documents, setDocuments] = useState<{completed: any[], returned: any[]}>({ completed: [], returned: [] });
@@ -42,18 +56,46 @@ export default function History() {
           const { data: { session } } = await supabase.auth.getSession();
           if (!session) return;
 
-          // FETCH LOGIC UPDATED:
-          // ascending: true -> Sorts from the 1st completed (oldest) down to the last completed (newest)
+          // Pull the documents AND their tracking logs simultaneously!
           const { data: docs, error } = await supabase
             .from('documents')
-            .select('*')
-            .order('created_at', { ascending: true });
+            .select(`
+                *,
+                document_logs (
+                    action,
+                    created_at
+                )
+            `);
 
           if (error) throw error;
 
           if (docs) {
-              const completed = docs.filter((d: any) => d.status === 'sealed');
-              const returned = docs.filter((d: any) => d.status === 'pending' && d.remarks);
+              // 1. Process documents to find their TRUE action time from the logs
+              const processedDocs = docs.map((doc: any) => {
+                  const logs = doc.document_logs || [];
+                  
+                  if (doc.status === 'sealed') {
+                      // Find the "Delivered" log to get the exact completion time
+                      const deliveryLog = logs.filter((l: any) => l.action === 'Delivered')
+                                              .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+                      doc.action_time = deliveryLog ? deliveryLog.created_at : doc.created_at;
+                  } else {
+                      // Find the "Returned" log to get the exact rejection time
+                      const returnLog = logs.filter((l: any) => l.action === 'Returned')
+                                            .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+                      doc.action_time = returnLog ? returnLog.created_at : doc.created_at;
+                  }
+                  return doc;
+              });
+
+              // 2. Filter and SORT by the true action_time (Latest to Oldest)
+              const completed = processedDocs
+                .filter((d: any) => d.status === 'sealed')
+                .sort((a, b) => new Date(b.action_time).getTime() - new Date(a.action_time).getTime());
+              
+              const returned = processedDocs
+                .filter((d: any) => d.status === 'pending' && d.remarks)
+                .sort((a, b) => new Date(b.action_time).getTime() - new Date(a.action_time).getTime());
               
               setDocuments({ completed, returned });
           }
@@ -75,7 +117,8 @@ export default function History() {
         (doc.title || '').toLowerCase().includes(query) ||
         (doc.reference_no || '').toLowerCase().includes(query) ||
         (doc.final_destination || '').toLowerCase().includes(query) ||
-        (doc.current_location || '').toLowerCase().includes(query)
+        (doc.current_location || '').toLowerCase().includes(query) ||
+        (doc.assigned_clerk || '').toLowerCase().includes(query)
     );
   }, [searchQuery, documents, activeTab]);
 
@@ -110,7 +153,7 @@ export default function History() {
                 type="text" 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search archives by Title, ID, or Location..." 
+                placeholder="Search archives by Title, ID, Assigned Name, or Location..." 
                 className="w-full pl-11 sm:pl-14 pr-11 sm:pr-14 py-3 sm:py-4 rounded-xl border-2 border-slate-300 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 outline-none font-bold text-slate-900 placeholder:text-slate-500 transition-all text-base sm:text-lg shadow-sm" 
               />
               {searchQuery && (
@@ -146,7 +189,7 @@ export default function History() {
           </div>
       </div>
 
-      {/* Tab Content Area wrapped in an animation key */}
+      {/* Tab Content Area */}
       <div key={activeTab} className="animate-in fade-in zoom-in-[0.97] duration-300 ease-out fill-mode-both">
           {/* Empty State */}
           {filteredDocs.length === 0 && (
@@ -180,7 +223,13 @@ export default function History() {
                             </span>
                         </div>
                         
-                        <h4 className="font-black text-xl text-slate-900 mb-4 leading-tight">{doc.title}</h4>
+                        <h4 className="font-black text-xl text-slate-900 mb-2 leading-tight">{doc.title}</h4>
+
+                        {/* ASSIGNED EMPLOYEE TAG */}
+                        <div className="flex items-center gap-1.5 mb-4 px-0.5">
+                            <User size={14} className="text-slate-400" />
+                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Managed by: <span className="text-blue-600">{doc.assigned_clerk || 'Unassigned'}</span></p>
+                        </div>
                         
                         <div className={`p-4 rounded-xl border-2 mb-5 flex-1 space-y-3 ${activeTab === 'completed' ? 'bg-emerald-50/50 border-emerald-100' : 'bg-red-50/50 border-red-100'}`}>
                             {activeTab === 'completed' ? (
@@ -191,7 +240,8 @@ export default function History() {
                                     </div>
                                     <div className="flex items-start gap-3">
                                         <Clock size={18} className="text-emerald-600 mt-0.5 shrink-0" />
-                                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Logged Date</span>{new Date(doc.created_at).toLocaleDateString()}</p>
+                                        {/* Renders the EXACT time from the tracking log */}
+                                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Completed On</span>{formatPHDateTime(doc.action_time)}</p>
                                     </div>
                                 </>
                             ) : (
@@ -199,6 +249,11 @@ export default function History() {
                                     <div className="flex items-start gap-3">
                                         <MapPin size={18} className="text-red-600 mt-0.5 shrink-0" />
                                         <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Returned By</span>{doc.current_location}</p>
+                                    </div>
+                                    <div className="flex items-start gap-3">
+                                        <Clock size={18} className="text-red-600 mt-0.5 shrink-0" />
+                                        {/* Renders the EXACT time from the tracking log */}
+                                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Returned On</span>{formatPHDateTime(doc.action_time)}</p>
                                     </div>
                                     <div className="flex items-start gap-3">
                                         <AlertCircle size={18} className="text-red-600 mt-0.5 shrink-0" />
@@ -238,13 +293,11 @@ export default function History() {
   );
 }
 
-// --- JUMPING BORDER FIX ---
 function TabButton({ label, icon, count, isActive, onClick, colorClass, badgeClass }: any) {
     return (
         <button 
             onClick={onClick}
             title={label}
-            // Add border-2 to the base class to prevent layout shifts!
             className={`flex-none shrink-0 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold transition-all active:scale-95 text-sm whitespace-nowrap overflow-hidden border-2 ${
                 isActive ? `${colorClass} border-transparent` : 'bg-transparent text-slate-500 border-transparent hover:border-slate-200 hover:bg-slate-50'
             }`}

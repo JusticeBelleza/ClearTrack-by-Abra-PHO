@@ -217,18 +217,18 @@
   },
   {
     "tablename": "documents",
-    "policyname": "Doc_Select",
-    "roles": "{public}",
-    "cmd": "SELECT",
-    "qual": "((created_by = ( SELECT auth.uid() AS uid)) OR (custodian_id = ( SELECT auth.uid() AS uid)) OR (assigned_clerk = ( SELECT profiles.full_name\n   FROM profiles\n  WHERE (profiles.id = ( SELECT auth.uid() AS uid)))) OR check_user_routed_doc(id) OR (EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role)))))",
-    "with_check": null
-  },
-  {
-    "tablename": "documents",
     "policyname": "Doc_Update",
     "roles": "{public}",
     "cmd": "UPDATE",
-    "qual": "((custodian_id = ( SELECT auth.uid() AS uid)) OR (assigned_clerk = ( SELECT profiles.full_name\n   FROM profiles\n  WHERE (profiles.id = ( SELECT auth.uid() AS uid)))) OR (EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role)))))",
+    "qual": "((created_by = auth.uid()) OR (custodian_id = auth.uid()) OR (assigned_clerk = ( SELECT profiles.full_name\n   FROM profiles\n  WHERE (profiles.id = auth.uid()))) OR (EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::user_role)))))",
     "with_check": "true"
+  },
+  {
+    "tablename": "documents",
+    "policyname": "Doc_Select",
+    "roles": "{public}",
+    "cmd": "SELECT",
+    "qual": "((created_by = auth.uid()) OR (custodian_id = auth.uid()) OR (assigned_clerk = ( SELECT profiles.full_name\n   FROM profiles\n  WHERE (profiles.id = auth.uid()))) OR check_user_routed_doc(id) OR (EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::user_role)))))",
+    "with_check": null
   }
 ]

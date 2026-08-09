@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
-  FileText, Activity, History, Settings, LogOut, Shield, AlertCircle, X 
+  FileText, Activity, History, Settings, LogOut, Shield, AlertCircle, X, Calendar
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUiStore } from '../../store/uiStore';
@@ -29,6 +29,10 @@ const modalAnimationStyles = `
         .animate-responsive-modal { animation: desktopZoomIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
         .animate-responsive-modal-close { animation: desktopZoomOut 0.3s cubic-bezier(0.3, 0, 0.8, 0.15) forwards; }
     }
+
+    /* Hide scrollbar for the scrollable areas */
+    .scrollbar-hide::-webkit-scrollbar { display: none; }
+    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 `;
 
 export default function AppLayout() {
@@ -46,6 +50,23 @@ export default function AppLayout() {
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [isClosingLogout, setIsClosingLogout] = useState(false);
 
+  // --- PHT DATE STATE ---
+  const [dateInfo, setDateInfo] = useState({ long: '', short: '' });
+
+  // Handle live date formatting for PHT
+  useEffect(() => {
+      const updateDate = () => {
+          const now = new Date();
+          setDateInfo({
+              long: now.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }),
+              short: now.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' })
+          });
+      };
+      updateDate();
+      const interval = setInterval(updateDate, 60000);
+      return () => clearInterval(interval);
+  }, []);
+
   // Fetch the real user role and Global Settings from Supabase on load
   useEffect(() => {
     const fetchUserAndSettings = async () => {
@@ -57,7 +78,6 @@ export default function AppLayout() {
           return;
         }
 
-        // Fetch both the user profile AND the global settings simultaneously
         const [profileRes, settingsRes] = await Promise.all([
             supabase.from('profiles').select('role').eq('id', session.user.id).single(),
             supabase.from('global_settings').select('maintenance_mode').eq('id', 1).single()
@@ -66,7 +86,6 @@ export default function AppLayout() {
         const role = profileRes.data?.role || 'pho_staff';
         const isMaintenance = settingsRes.data?.maintenance_mode || false;
 
-        // --- MAINTENANCE MODE ENFORCEMENT ---
         if (isMaintenance && role !== 'admin') {
             await supabase.auth.signOut(); 
             toast.error('System Maintenance', { description: 'The system is currently undergoing maintenance. Please try again later.' });
@@ -124,18 +143,16 @@ export default function AppLayout() {
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 font-sans text-slate-800">
+    <div className="flex h-screen bg-slate-50 font-sans text-slate-800 selection:bg-blue-200">
       <style>{modalAnimationStyles}</style>
 
       {/* Sidebar Navigation (Desktop) */}
       <nav className="hidden md:flex flex-col w-64 bg-slate-900 text-slate-300 shadow-xl z-20">
         
         {/* BRANDING: Desktop Sidebar */}
-        <div className="p-6 flex items-center gap-4 border-b border-slate-800 bg-gradient-to-b from-slate-800/50 to-slate-900 relative overflow-hidden">
-          {/* Subtle Ambient Glow */}
+        <div className="p-6 flex items-start gap-4 border-b border-slate-800 bg-gradient-to-b from-slate-800/50 to-slate-900 relative overflow-hidden">
           <div className="absolute top-0 left-0 -ml-8 -mt-8 w-32 h-32 bg-blue-500 rounded-full mix-blend-screen filter blur-[40px] opacity-20 animate-pulse"></div>
           
-          {/* Glassmorphism Logo Box */}
           <div className="flex items-center justify-center w-12 h-12 shrink-0 bg-white/5 backdrop-blur-md rounded-xl p-2 border border-white/10 shadow-inner relative z-10">
             <img 
               src={clearTrackLogo} 
@@ -145,15 +162,18 @@ export default function AppLayout() {
           </div>
           
           <div className="flex flex-col relative z-10">
-            <h1 className="text-2xl font-black text-white tracking-wide leading-none">ClearTrack</h1>
+            <h1 className="text-2xl font-black text-white tracking-wide leading-none mt-1">ClearTrack</h1>
             <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mt-1.5">
               {currentUserRole === 'admin' ? 'Admin Portal' : 'by Abra PHO'}
             </p>
+            <div className="flex items-center gap-1.5 mt-3 text-slate-300 bg-slate-800/50 py-1.5 px-2.5 rounded-lg border border-slate-700/50 w-fit">
+              <Calendar size={12} className="text-blue-400 shrink-0" />
+              <span className="text-[10px] font-bold leading-none">{dateInfo.long}</span>
+            </div>
           </div>
         </div>
         
         <div className="flex-1 py-6 px-4 space-y-2">
-          {/* STAFF NAVIGATION */}
           {currentUserRole === 'pho_staff' && (
             <>
               <NavItem icon={<Activity />} label="Dashboard" to="/dashboard" isActive={activeTab === 'dashboard'} />
@@ -161,13 +181,9 @@ export default function AppLayout() {
               <NavItem icon={<History />} label="History" to="/history" isActive={activeTab === 'history'} />
             </>
           )}
-
-          {/* ADMIN NAVIGATION */}
           {currentUserRole === 'admin' && (
             <NavItem icon={<Shield />} label="System Admin" to="/admin" isActive={activeTab === 'admin'} />
           )}
-
-          {/* SHARED NAVIGATION */}
           <NavItem icon={<Settings />} label="Settings" to="/settings" isActive={activeTab === 'settings'} />
         </div>
 
@@ -184,11 +200,9 @@ export default function AppLayout() {
         
         {/* BRANDING: Mobile Header */}
         <header className="md:hidden flex items-center justify-between p-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-lg z-20 relative shrink-0 overflow-hidden border-b border-white/5">
-          {/* Decorative background glow */}
           <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-blue-500 rounded-full mix-blend-screen filter blur-3xl opacity-30 animate-pulse"></div>
 
           <div className="flex items-center gap-3 relative z-10">
-            {/* Glassmorphism Logo Container */}
             <div className="flex items-center justify-center w-11 h-11 shrink-0 bg-white/10 backdrop-blur-sm rounded-xl p-1.5 border border-white/20 shadow-inner">
               <img 
                 src={clearTrackLogo} 
@@ -203,43 +217,61 @@ export default function AppLayout() {
               </span>
             </div>
           </div>
+
+          <div className="relative z-10 flex flex-col items-end text-right">
+             <span className="text-[9px] font-black text-blue-300 uppercase tracking-widest flex items-center gap-1 mb-0.5">
+                <Calendar size={10} strokeWidth={3} /> PHT
+             </span>
+             <span className="text-[11px] font-bold text-slate-200">
+                {dateInfo.short}
+             </span>
+          </div>
         </header>
 
         {/* Scrollable Content Routing Outlet */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-20 md:pb-8">
+        {/* Added extra padding bottom (pb-28) to ensure content doesn't hide behind the floating nav */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-28 md:pb-8">
           <Outlet />
         </div>
       </main>
 
-      {/* Mobile Bottom Navigation (Icons Only) */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex justify-around items-center h-16 z-30 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] pb-safe">
-        
-        {/* STAFF NAVIGATION */}
-        {currentUserRole === 'pho_staff' && (
-          <>
-            <MobileBottomNavItem icon={<Activity />} to="/dashboard" isActive={activeTab === 'dashboard'} />
-            <MobileBottomNavItem icon={<FileText />} to="/processing" isActive={activeTab === 'processing'} />
-            <MobileBottomNavItem icon={<History />} to="/history" isActive={activeTab === 'history'} />
-          </>
-        )}
+      {/* 
+        NEW CATCHY MOBILE NAVIGATION 
+        Floating Pill + Glassmorphism + Expanding Active States
+      */}
+      <div className="md:hidden fixed bottom-5 left-0 right-0 z-40 flex justify-center px-4 pointer-events-none pb-safe">
+          <nav className="flex items-center justify-between w-full max-w-md bg-white/80 backdrop-blur-xl border border-white/60 shadow-[0_8px_30px_rgb(0,0,0,0.12)] p-2 rounded-[2rem] pointer-events-auto">
+            
+            {/* STAFF NAVIGATION */}
+            {currentUserRole === 'pho_staff' && (
+              <>
+                <MobileBottomNavItem icon={<Activity />} label="Dash" to="/dashboard" isActive={activeTab === 'dashboard'} />
+                <MobileBottomNavItem icon={<FileText />} label="Process" to="/processing" isActive={activeTab === 'processing'} />
+                <MobileBottomNavItem icon={<History />} label="History" to="/history" isActive={activeTab === 'history'} />
+              </>
+            )}
 
-        {/* ADMIN NAVIGATION */}
-        {currentUserRole === 'admin' && (
-          <MobileBottomNavItem icon={<Shield />} to="/admin" isActive={activeTab === 'admin'} />
-        )}
+            {/* ADMIN NAVIGATION */}
+            {currentUserRole === 'admin' && (
+              <MobileBottomNavItem icon={<Shield />} label="Admin" to="/admin" isActive={activeTab === 'admin'} />
+            )}
 
-        {/* SHARED NAVIGATION & LOGOUT */}
-        <MobileBottomNavItem icon={<Settings />} to="/settings" isActive={activeTab === 'settings'} />
-        
-        <button 
-          onClick={openLogoutModal}
-          className="flex items-center justify-center flex-1 h-full transition-colors active:scale-90 text-slate-400 hover:text-red-500"
-        >
-          <div className="p-2 rounded-full">
-             <LogOut size={24} strokeWidth={2} />
-          </div>
-        </button>
-      </nav>
+            {/* SHARED NAVIGATION & LOGOUT */}
+            <MobileBottomNavItem icon={<Settings />} label="Settings" to="/settings" isActive={activeTab === 'settings'} />
+            
+            {/* Divider Dot */}
+            <div className="w-1 h-1 rounded-full bg-slate-300 mx-1"></div>
+
+            {/* Logout Button */}
+            <button 
+              onClick={openLogoutModal}
+              title="Logout"
+              className="relative flex items-center justify-center w-12 h-12 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-all duration-300 active:scale-90"
+            >
+              <LogOut size={22} strokeWidth={2.5} />
+            </button>
+          </nav>
+      </div>
 
       {/* GLOBAL LOGOUT CONFIRMATION MODAL */}
       {isLogoutModalOpen && (
@@ -282,19 +314,29 @@ function NavItem({ icon, label, to, isActive }: any) {
   );
 }
 
-function MobileBottomNavItem({ icon, to, isActive }: any) {
+// THE NEW CATCHY MAGIC NAV ITEM
+function MobileBottomNavItem({ icon, label, to, isActive }: any) {
     return (
       <Link 
         to={to} 
-        className={`flex items-center justify-center flex-1 h-full transition-colors active:scale-90 ${
-          isActive ? 'text-blue-600' : 'text-slate-400 hover:text-slate-600'
+        className={`relative flex items-center justify-center transition-all duration-500 ease-out overflow-hidden ${
+          isActive 
+            ? 'w-auto px-4 py-2.5 bg-blue-600 text-white rounded-[1.25rem] shadow-[0_0_20px_rgba(37,99,235,0.4)]' 
+            : 'w-12 h-12 bg-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full'
         }`}
       >
-        <div className={`p-2 rounded-full ${isActive ? 'bg-blue-50' : ''}`}>
-           {React.cloneElement(icon, { 
-             size: 24, 
-             strokeWidth: isActive ? 2.5 : 2 
-           })}
+        <div className="flex items-center gap-2 relative z-10">
+           <div className={`transition-transform duration-500 ${isActive ? 'scale-110' : 'scale-100'}`}>
+              {React.cloneElement(icon, { 
+                size: 20, 
+                strokeWidth: isActive ? 2.5 : 2 
+              })}
+           </div>
+           {isActive && (
+              <span className="text-sm font-bold tracking-wide whitespace-nowrap animate-in slide-in-from-right-2 fade-in duration-300">
+                {label}
+              </span>
+           )}
         </div>
       </Link>
     );

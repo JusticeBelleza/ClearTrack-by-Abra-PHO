@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { 
   Search, AlertCircle, MapPin, Eye, Clock, ChevronRight, ArrowLeft, 
   PenTool, X, CheckCircle, ChevronDown, Save, FileText, Camera, 
-  Paperclip, HelpCircle, Check, ArrowRight, CornerUpLeft, Building, Archive, Activity
+  Paperclip, ArrowRight, Archive, Activity, CornerUpLeft, Check, User
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
@@ -40,6 +40,19 @@ const modalAnimationStyles = `
         .animate-responsive-modal-close { animation: desktopZoomOut 0.25s cubic-bezier(0.3, 0, 0.8, 0.15) forwards; }
     }
 `;
+
+// --- PH Time Formatter ---
+const formatPHDateTime = (isoString: string) => {
+    return new Date(isoString).toLocaleString('en-US', {
+        timeZone: 'Asia/Manila',
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: true
+    });
+};
 
 // --- Custom Dropdown Component ---
 function CustomSelect({ options, value, onChange, placeholder }: any) {
@@ -138,7 +151,7 @@ export default function Processing() {
           const currentUserName = profile?.full_name || '';
 
           const [docsRes, deptRes] = await Promise.all([
-              supabase.from('documents').select('*').order('created_at', { ascending: false }),
+              supabase.from('documents').select('*'),
               supabase.from('departments').select('name').order('name')
           ]);
 
@@ -148,9 +161,14 @@ export default function Processing() {
                   const isMine = d.created_by === currentUserId || d.assigned_clerk === currentUserName;
                   return isActive && isMine;
               });
+
+              // SORT LATEST TO OLDEST based on the last time the document was updated/created
+              const sortedDocs = myActiveDocs.sort((a: any, b: any) => 
+                  new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime()
+              );
               
-              const returned = myActiveDocs.filter((d: any) => d.status === 'pending' && d.remarks);
-              const processing = myActiveDocs.filter((d: any) => d.status === 'routing' || (d.status === 'pending' && !d.remarks));
+              const returned = sortedDocs.filter((d: any) => d.status === 'pending' && d.remarks);
+              const processing = sortedDocs.filter((d: any) => d.status === 'routing' || (d.status === 'pending' && !d.remarks));
               
               setDocuments({ processing, returned });
           }
@@ -173,7 +191,8 @@ export default function Processing() {
     return sourceList.filter((doc: any) => 
         (doc.title || '').toLowerCase().includes(query) ||
         (doc.reference_no || '').toLowerCase().includes(query) ||
-        (doc.current_location || '').toLowerCase().includes(query)
+        (doc.current_location || '').toLowerCase().includes(query) ||
+        (doc.assigned_clerk || '').toLowerCase().includes(query)
     );
   }, [searchQuery, documents, activeTab]);
 
@@ -204,7 +223,7 @@ export default function Processing() {
                 type="text" 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by Title, ID, or Location..." 
+                placeholder="Search by Title, ID, Location, or Assigned Name..." 
                 className="w-full pl-11 sm:pl-14 pr-11 sm:pr-14 py-3 sm:py-4 rounded-xl border-2 border-slate-300 focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10 outline-none font-bold text-slate-900 placeholder:text-slate-500 transition-all text-base sm:text-lg shadow-sm" 
               />
               {searchQuery && (
@@ -217,7 +236,6 @@ export default function Processing() {
               )}
           </div>
 
-          {/* Expandable Icon Tabs (Matches Dashboard) */}
           <div className="flex flex-nowrap overflow-x-auto scrollbar-hide gap-2 sm:gap-3 bg-white p-2 rounded-2xl border-2 border-slate-300 shadow-sm w-full mt-2">
               <TabButton 
                 label="Active Routing" 
@@ -240,9 +258,7 @@ export default function Processing() {
           </div>
       </div>
 
-      {/* Tab Content Area wrapped in an animation key - USING OPTION 1: Smooth iOS Zoom */}
       <div key={activeTab} className="animate-in fade-in zoom-in-[0.97] duration-300 ease-out fill-mode-both">
-          {/* Empty State */}
           {filteredDocs.length === 0 && (
               <div className="bg-white border-2 border-dashed border-slate-300 rounded-3xl p-10 flex flex-col items-center justify-center text-center">
                   <div className="bg-slate-50 p-4 rounded-full mb-4">
@@ -255,7 +271,6 @@ export default function Processing() {
               </div>
           )}
 
-          {/* Document Grid */}
           {filteredDocs.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {filteredDocs.map((doc: any) => (
@@ -274,7 +289,13 @@ export default function Processing() {
                             </div>
                         </div>
                         
-                        <h4 className="font-black text-xl text-slate-900 mb-4 leading-tight">{doc.title || doc.subject}</h4>
+                        <h4 className="font-black text-xl text-slate-900 mb-2 leading-tight">{doc.title || doc.subject}</h4>
+                        
+                        {/* ASSIGNED EMPLOYEE TAG */}
+                        <div className="flex items-center gap-1.5 mb-4 px-0.5">
+                            <User size={14} className="text-slate-400" />
+                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Managed by: <span className="text-blue-600">{doc.assigned_clerk || 'Unassigned'}</span></p>
+                        </div>
                         
                         <div className={`p-4 rounded-xl border-2 mb-5 flex-1 space-y-3 ${activeTab === 'returned' ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'}`}>
                             {activeTab === 'returned' ? (
@@ -282,6 +303,10 @@ export default function Processing() {
                                     <div className="flex items-start gap-3">
                                         <MapPin size={18} className="text-red-600 mt-0.5 shrink-0" />
                                         <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-red-700/70 text-xs block font-bold uppercase tracking-wider mb-0.5">Returned By</span>{doc.current_location}</p>
+                                    </div>
+                                    <div className="flex items-start gap-3">
+                                        <Clock size={18} className="text-red-600 mt-0.5 shrink-0" />
+                                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-red-700/70 text-xs block font-bold uppercase tracking-wider mb-0.5">Returned On</span>{formatPHDateTime(doc.updated_at || doc.created_at)}</p>
                                     </div>
                                     <div className="flex items-start gap-3">
                                         <AlertCircle size={18} className="text-red-600 mt-0.5 shrink-0" />
@@ -296,7 +321,7 @@ export default function Processing() {
                                     </div>
                                     <div className="flex items-start gap-3">
                                         <Clock size={18} className="text-slate-500 mt-0.5 shrink-0" />
-                                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Logged On</span>{new Date(doc.created_at).toLocaleDateString()}</p>
+                                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Last Update</span>{formatPHDateTime(doc.updated_at || doc.created_at)}</p>
                                     </div>
                                 </>
                             )}
@@ -339,7 +364,6 @@ export default function Processing() {
   );
 }
 
-// --- Helper Components ---
 function TabButton({ label, icon, count, isActive, onClick, colorClass, badgeClass }: any) {
     return (
         <button 
@@ -358,7 +382,7 @@ function TabButton({ label, icon, count, isActive, onClick, colorClass, badgeCla
     )
 }
 
-// --- J&T EXPRESS STYLE TRACKER WITH COLORS & DYNAMIC HEIGHT ---
+// --- TRACKING MODAL ---
 export function DigitalTrailModal({ doc, onBack }: any) {
     const [isClosing, setIsClosing] = useState(false);
     const [events, setEvents] = useState<any[]>([]);
@@ -366,8 +390,6 @@ export function DigitalTrailModal({ doc, onBack }: any) {
 
     const isCompleted = doc.status === 'sealed';
     const isReturned = doc.status === 'pending' && doc.remarks;
-    
-    // Header color matches the other modals
     const headerClass = isCompleted ? 'bg-emerald-700' : isReturned ? 'bg-red-700' : 'bg-slate-900';
 
     const handleClose = () => {
@@ -396,7 +418,6 @@ export function DigitalTrailModal({ doc, onBack }: any) {
         <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/60 backdrop-blur-sm ${isClosing ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
             <div className={`bg-white w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl rounded-t-3xl sm:rounded-3xl overflow-hidden ${isClosing ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
                 
-                {/* Standard Modal Header */}
                 <div className={`text-white relative flex flex-col shrink-0 ${headerClass}`}>
                     <div className="w-12 h-1.5 bg-white/30 rounded-full mx-auto mt-3 sm:hidden shrink-0"></div>
                     <div className="p-4 flex items-center justify-between">
@@ -422,10 +443,10 @@ export function DigitalTrailModal({ doc, onBack }: any) {
 
                         {events.map((log, index) => {
                             const dateObj = new Date(log.created_at);
-                            const dateStr = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-                            const timeStr = dateObj.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+                            // Enforce PH Time formatting
+                            const dateStr = dateObj.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric' });
+                            const timeStr = dateObj.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit' });
 
-                            // Dynamic J&T Express Colors
                             let icon = <div className="w-2 h-2 bg-slate-400 rounded-full"></div>;
                             let nodeBg = 'bg-slate-200';
                             let titleColor = 'text-slate-900';
@@ -448,7 +469,6 @@ export function DigitalTrailModal({ doc, onBack }: any) {
                                 titleColor = 'text-slate-800';
                             }
 
-                            // Smart string parser to bold labels
                             const formatDescription = (text: string) => {
                                 if(!text) return null;
                                 return text.split('\n').map((line, i) => {
@@ -471,13 +491,11 @@ export function DigitalTrailModal({ doc, onBack }: any) {
 
                             return (
                                 <div key={index} className="flex gap-4 relative w-full">
-                                    {/* Left Column: Date & Time */}
                                     <div className="w-14 shrink-0 flex flex-col text-right pt-0.5">
                                         <span className="text-[11px] font-bold text-slate-600 uppercase tracking-tight">{dateStr}</span>
                                         <span className="text-[10px] font-medium text-slate-400 mt-0.5">{timeStr}</span>
                                     </div>
 
-                                    {/* Middle Column: Node and Line */}
                                     <div className="relative flex flex-col items-center">
                                         {index !== events.length - 1 && (
                                             <div className="absolute top-5 bottom-[-1.5rem] w-[2px] bg-slate-200"></div>
@@ -487,7 +505,6 @@ export function DigitalTrailModal({ doc, onBack }: any) {
                                         </div>
                                     </div>
 
-                                    {/* Right Column: Clean Content */}
                                     <div className="flex-1 pb-10">
                                         <h4 className={`text-sm font-bold leading-none mb-1.5 ${titleColor}`}>{log.action}</h4>
                                         <div className="text-sm text-slate-600 leading-relaxed pr-2">
@@ -512,17 +529,15 @@ export function DigitalTrailModal({ doc, onBack }: any) {
     );
 }
 
-// --- REVAMPED ACCORDION-STYLE ACTION MENU ---
+// --- ACTION MENU MODAL ---
 function HandoverScreen({ doc, departments, onBack, onSuccess }: any) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [isClosing, setIsClosing] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
-    // Accordion State
     const [activeAction, setActiveAction] = useState<'route' | 'reject' | 'complete' | null>(null);
     const [isDrawing, setIsDrawing] = useState(false);
     
-    // Form States
     const [destination, setDestination] = useState('');
     const [receivingClerk, setReceivingClerk] = useState('');
     
@@ -533,7 +548,6 @@ function HandoverScreen({ doc, departments, onBack, onSuccess }: any) {
     const [attachment, setAttachment] = useState<File | Blob | null>(null);
     const [attachmentName, setAttachmentName] = useState<string>('');
     
-    // New Completion Fields
     const [releasedBy, setReleasedBy] = useState('');
     const [completionRemarks, setCompletionRemarks] = useState('');
     const [retentionFate, setRetentionFate] = useState<'originator' | 'destination' | null>(null);
@@ -543,7 +557,6 @@ function HandoverScreen({ doc, departments, onBack, onSuccess }: any) {
       setTimeout(() => { onBack(); }, 400); 
     };
 
-    // Canvas init only runs when the route form is visible
     useEffect(() => {
         if (activeAction !== 'route') return;
 
@@ -677,22 +690,24 @@ function HandoverScreen({ doc, departments, onBack, onSuccess }: any) {
         try {
             const { data: { session } } = await supabase.auth.getSession();
 
-            const { error } = await supabase.from('documents').update({
-                current_location: destination,
-                assigned_clerk: receivingClerk.trim(), 
-                status: 'routing', 
-                remarks: null 
-            }).eq('id', doc.id);
-
-            if (error) throw error;
-
-            await supabase.from('document_logs').insert([{
+            // 1. Leave the footprint in the logs FIRST
+            const { error: logError } = await supabase.from('document_logs').insert([{
                 document_id: doc.id,
                 action: 'In transit',
                 location: destination,
                 assigned_to: receivingClerk.trim(),
                 created_by: session?.user?.id || null
             }]);
+            if (logError) throw logError;
+
+            // 2. NOW update the document safely
+            // WE REMOVED 'assigned_clerk: receivingClerk.trim()' so the document stays with YOU
+            const { error } = await supabase.from('documents').update({
+                current_location: destination,
+                status: 'routing', 
+                remarks: null 
+            }).eq('id', doc.id);
+            if (error) throw error;
 
             toast.success("Document Routed Successfully!", { description: `Forwarded to ${destination}.`});
             onSuccess();
@@ -726,17 +741,13 @@ function HandoverScreen({ doc, departments, onBack, onSuccess }: any) {
                 status: 'sealed',
                 remarks: completionRemarks.trim() || null 
             };
-            
             if (attachmentUrl) { updateData.completed_attachment_url = attachmentUrl; }
 
-            const { error } = await supabase.from('documents').update(updateData).eq('id', doc.id);
-            if (error) throw error;
-
-            // Bundle the new fields beautifully into the tracker logs
             const fateString = retentionFate === 'originator' ? 'Returned to Originator' : 'Retained at Final Destination';
             const detailedRemarks = `Released By: ${releasedBy.trim()}\nDocument Retention: ${fateString}${completionRemarks ? `\nRemarks: ${completionRemarks.trim()}` : ''}`;
 
-            await supabase.from('document_logs').insert([{
+            // 1. Leave the footprint in the logs FIRST
+            const { error: logError } = await supabase.from('document_logs').insert([{
                 document_id: doc.id,
                 action: 'Delivered',
                 location: doc.final_destination || doc.current_location,
@@ -744,6 +755,11 @@ function HandoverScreen({ doc, departments, onBack, onSuccess }: any) {
                 attachment_url: attachmentUrl,
                 created_by: session?.user?.id || null
             }]);
+            if (logError) throw logError;
+
+            // 2. NOW update the document safely
+            const { error } = await supabase.from('documents').update(updateData).eq('id', doc.id);
+            if (error) throw error;
 
             toast.success("Document Completed!", { description: "It has been moved to history." });
             onSuccess();
@@ -764,22 +780,24 @@ function HandoverScreen({ doc, departments, onBack, onSuccess }: any) {
         try {
             const { data: { session } } = await supabase.auth.getSession();
 
-            const { error } = await supabase.from('documents').update({
-                status: 'pending', 
-                current_location: rejectOffice,
-                remarks: rejectReason.trim(),
-                assigned_clerk: null
-            }).eq('id', doc.id);
-
-            if (error) throw error;
-
-            await supabase.from('document_logs').insert([{
+            // 1. Leave the footprint in the logs FIRST
+            const { error: logError } = await supabase.from('document_logs').insert([{
                 document_id: doc.id,
                 action: 'Returned',
                 location: rejectOffice,
                 remarks: rejectReason.trim(),
                 created_by: session?.user?.id || null
             }]);
+            if (logError) throw logError;
+
+            // 2. NOW update the document safely
+            const { error } = await supabase.from('documents').update({
+                status: 'pending', 
+                current_location: rejectOffice,
+                remarks: rejectReason.trim()
+                // Keeping assigned_clerk as-is so you don't lose the document
+            }).eq('id', doc.id);
+            if (error) throw error;
 
             toast.success("Document Returned");
             onSuccess();
@@ -796,7 +814,6 @@ function HandoverScreen({ doc, departments, onBack, onSuccess }: any) {
             
             <div className={`bg-white w-full max-w-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden shadow-2xl rounded-t-2xl sm:rounded-3xl ${isClosing ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
                 
-                {/* Dynamic Header */}
                 <div className={`text-white relative flex flex-col shrink-0 transition-colors duration-300 ${activeAction === 'reject' ? 'bg-red-700' : activeAction === 'complete' ? 'bg-emerald-700' : 'bg-slate-900'}`}>
                     <div className="w-16 h-1.5 bg-white/30 rounded-full mx-auto mt-3 sm:hidden shrink-0"></div>
                     <div className="p-5 pt-3 sm:pt-6 flex items-center justify-between">
@@ -826,7 +843,6 @@ function HandoverScreen({ doc, departments, onBack, onSuccess }: any) {
                         </p>
                     </div>
 
-                    {/* MAIN SELECTION MENU WITH CASCADING ANIMATIONS */}
                     {!activeAction ? (
                         <div className="flex flex-col gap-4 pt-2">
                             <button 
@@ -870,7 +886,6 @@ function HandoverScreen({ doc, departments, onBack, onSuccess }: any) {
                         </div>
                     ) : null}
 
-                    {/* ROUTE FORM */}
                     {activeAction === 'route' && (
                         <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
                             <div>
@@ -903,7 +918,6 @@ function HandoverScreen({ doc, departments, onBack, onSuccess }: any) {
                         </div>
                     )}
 
-                    {/* COMPLETE FORM */}
                     {activeAction === 'complete' && (
                         <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
                             
@@ -984,7 +998,6 @@ function HandoverScreen({ doc, departments, onBack, onSuccess }: any) {
                         </div>
                     )}
 
-                    {/* REJECT FORM */}
                     {activeAction === 'reject' && (
                         <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
                             <div>
@@ -1005,7 +1018,6 @@ function HandoverScreen({ doc, departments, onBack, onSuccess }: any) {
                     )}
                 </div>
 
-                {/* BOTTOM ACTION BUTTONS */}
                 {activeAction && (
                     <div className="bg-white p-4 sm:p-6 pb-8 sm:pb-6 border-t-2 border-slate-200 flex shrink-0">
                         {activeAction === 'route' && (
