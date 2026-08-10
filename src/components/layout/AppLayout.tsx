@@ -170,7 +170,7 @@ export default function AppLayout() {
           </div>
           
           <div className="flex flex-col relative z-10">
-            <h1 className="text-2xl font-black text-white tracking-wide leading-none mt-1">ClearTrack</h1>
+            <h1 className="text-2xl font-black text-white tracking-wide leading-none mt-1">FileTrackr</h1>
             <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mt-1.5">
               {currentUserRole === 'admin' ? 'Admin Portal' : 'by Abra PHO'}
             </p>
@@ -219,7 +219,7 @@ export default function AppLayout() {
               />
             </div>
             <div className="flex flex-col">
-              <h1 className="text-xl font-black leading-none text-white tracking-wide">ClearTrack</h1>
+              <h1 className="text-xl font-black leading-none text-white tracking-wide">FileTrackr</h1>
               <span className="text-[10px] font-black text-blue-300 uppercase tracking-widest mt-1">
                 {currentUserRole === 'admin' ? 'Admin Portal' : 'by Abra PHO'}
               </span>

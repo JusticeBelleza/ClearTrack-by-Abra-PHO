@@ -95,7 +95,7 @@ export default function Login() {
         </div>
 
         <div className="text-center mb-8">
-          <h2 className="text-3xl font-black text-slate-900 tracking-tight">ClearTrack</h2>
+          <h2 className="text-3xl font-black text-slate-900 tracking-tight">FileTrackr</h2>
           <p className="text-sm font-bold text-blue-600 uppercase tracking-widest mt-1">Abra Provincial Health Office</p>
           <p className="text-xs text-slate-500 font-medium mt-1">Sign in to manage and route documents</p>
         </div>
