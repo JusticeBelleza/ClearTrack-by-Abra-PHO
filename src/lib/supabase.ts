@@ -1,7 +1,7 @@
 // src/lib/supabase.ts
 import { createClient } from '@supabase/supabase-js';
+import { env } from './env';
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'YOUR_SUPABASE_URL';
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'YOUR_SUPABASE_ANON_KEY';
-
-export const supabase = createClient(supabaseUrl, supabaseKey);
+// The Supabase client now strictly relies on our validated env object.
+// If the variables are missing, the app will fail fast at startup before reaching this point.
+export const supabase = createClient(env.VITE_SUPABASE_URL, env.VITE_SUPABASE_ANON_KEY);
