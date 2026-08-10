@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ArrowRight } from 'lucide-react';
+import { Lock, Mail, ArrowRight, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { Turnstile } from '@marsidev/react-turnstile';
 import { env } from '../lib/env';
 
+// Both logos are back!
 import clearTrackLogo from '../assets/clear_track_logo.png';
 import phoLogo from '../assets/pho_logo.png';
 
@@ -70,97 +71,112 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col justify-center items-center p-4 sm:p-6 relative overflow-hidden">
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-blue-600/20 rounded-full blur-3xl pointer-events-none"></div>
+      {/* Background Glow */}
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[30rem] h-[30rem] bg-blue-600/20 rounded-full blur-[100px] pointer-events-none"></div>
 
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl border-2 border-slate-100 p-8 sm:p-10 relative z-10 animate-in fade-in zoom-in-95 duration-500">
+      <div className="w-full max-w-md bg-white rounded-[2rem] shadow-2xl shadow-black/50 border border-slate-100 p-8 sm:p-10 relative z-10 animate-in fade-in zoom-in-95 duration-500">
         
-        <div className="flex items-center justify-center gap-2 mb-6">
-          <div className="w-16 h-16 flex items-center justify-center">
+        {/* Logos Section */}
+        <div className="flex items-center justify-center gap-4 mb-6">
+          <div className="w-14 h-14 flex items-center justify-center bg-slate-50 rounded-2xl p-2 border border-slate-100 shadow-sm">
             <img 
               src={clearTrackLogo} 
-              alt="ClearTrack Logo" 
-              className="w-full h-full object-contain drop-shadow-md" 
+              alt="App Logo" 
+              className="w-full h-full object-contain drop-shadow-sm" 
             />
           </div>
 
-          <div className="w-px h-10 bg-slate-200 mx-1"></div>
+          <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
 
-          <div className="w-14 h-14 flex items-center justify-center">
+          <div className="w-14 h-14 flex items-center justify-center bg-slate-50 rounded-2xl p-2 border border-slate-100 shadow-sm">
             <img 
               src={phoLogo} 
               alt="Abra PHO Logo" 
-              className="w-full h-full object-contain drop-shadow-md" 
+              className="w-full h-full object-contain drop-shadow-sm" 
             />
           </div>
         </div>
 
+        {/* Header */}
         <div className="text-center mb-8">
-          <h2 className="text-3xl font-black text-slate-900 tracking-tight">FileTrackr</h2>
-          <p className="text-sm font-bold text-blue-600 uppercase tracking-widest mt-1">Abra Provincial Health Office</p>
-          <p className="text-xs text-slate-500 font-medium mt-1">Sign in to manage and route documents</p>
+          <h2 className="text-3xl font-black text-slate-900 tracking-tight">filetrackr<span className="text-blue-600">.</span></h2>
+          <p className="text-[11px] font-bold text-blue-600 uppercase tracking-widest mt-1">Abra Provincial Health Office</p>
+          <p className="text-sm text-slate-500 font-medium mt-2">Sign in to manage and route documents</p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-5">
+          {/* Email Input */}
           <div>
             <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">Email Address</label>
-            <div className="relative">
-              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+            <div className="relative group">
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5 group-focus-within:text-blue-600 transition-colors duration-200" />
               <input 
                 type="email" 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@abra.gov.ph"
                 required
-                className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border-2 border-slate-200 focus:border-blue-600 focus:bg-white rounded-2xl outline-none font-bold text-slate-900 transition-all text-base"
+                className="w-full pl-12 pr-4 py-3.5 bg-slate-50/50 border-2 border-slate-200 focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-600/10 rounded-2xl outline-none font-semibold text-slate-900 transition-all text-base placeholder:text-slate-400 placeholder:font-normal"
               />
             </div>
           </div>
 
+          {/* Password Input */}
           <div>
             <div className="flex justify-between items-end mb-2">
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">Password</label>
               <button 
                 type="button" 
                 onClick={handleForgotPassword}
-                className="text-xs font-bold text-blue-600 hover:text-blue-800 transition-colors hover:underline active:scale-95"
+                className="text-xs font-bold text-blue-600 hover:text-blue-700 transition-colors hover:underline active:scale-95"
               >
                 Forgot Password?
               </button>
             </div>
-            <div className="relative">
-              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+            <div className="relative group">
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5 group-focus-within:text-blue-600 transition-colors duration-200" />
               <input 
                 type="password" 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                className="w-full pl-12 pr-4 py-3.5 bg-slate-50 border-2 border-slate-200 focus:border-blue-600 focus:bg-white rounded-2xl outline-none font-bold text-slate-900 transition-all text-base"
+                className="w-full pl-12 pr-4 py-3.5 bg-slate-50/50 border-2 border-slate-200 focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-600/10 rounded-2xl outline-none font-semibold text-slate-900 transition-all text-base placeholder:text-slate-400 placeholder:font-normal"
               />
             </div>
           </div>
 
+          {/* Enhanced Captcha Container */}
           <div className="flex justify-center pt-2">
-            <Turnstile
-              siteKey={env.VITE_TURNSTILE_SITE_KEY}
-              onSuccess={(token) => setTurnstileToken(token)}
-              onError={() => {
-                setTurnstileToken(null);
-                toast.error("Security check failed. Please try again.");
-              }}
-              onExpire={() => setTurnstileToken(null)}
-            />
+            <div className="w-full bg-slate-50/80 border-2 border-slate-100 rounded-2xl p-1.5 flex justify-center shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]">
+              <Turnstile
+                siteKey={env.VITE_TURNSTILE_SITE_KEY}
+                theme="light" // Forces light theme to match the white card
+                onSuccess={(token) => setTurnstileToken(token)}
+                onError={() => {
+                  setTurnstileToken(null);
+                  toast.error("Security check failed. Please try again.");
+                }}
+                onExpire={() => setTurnstileToken(null)}
+              />
+            </div>
           </div>
 
+          {/* Submit Button */}
           <button 
             type="submit" 
             disabled={isLoading || !turnstileToken}
-            className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl shadow-lg shadow-blue-600/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-base border-2 border-blue-500 disabled:opacity-50 mt-2"
+            className="w-full py-4 mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl shadow-[0_8px_16px_-6px_rgba(37,99,235,0.4)] hover:shadow-[0_12px_20px_-8px_rgba(37,99,235,0.6)] transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-base border border-blue-500 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:shadow-none"
           >
             {isLoading ? (
-              <span className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+              <>
+                <Loader2 className="animate-spin h-5 w-5" />
+                Authenticating...
+              </>
             ) : (
-              <>Sign In <ArrowRight size={20} strokeWidth={2.5} /></>
+              <>
+                Sign In <ArrowRight size={20} strokeWidth={2.5} />
+              </>
             )}
           </button>
         </form>

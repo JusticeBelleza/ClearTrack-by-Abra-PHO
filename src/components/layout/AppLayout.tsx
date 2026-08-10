@@ -8,7 +8,6 @@ import { useUiStore } from '../../store/uiStore';
 import CreateDocumentModal from '../system/CreateDocumentModal';
 import { supabase } from '../../lib/supabase';
 
-// --- IMPORT THE LOGO CORRECTLY HERE ---
 import clearTrackLogo from '../../assets/clear_track_logo.png';
 
 // --- Shared Modal Animation Styles ---
@@ -161,16 +160,17 @@ export default function AppLayout() {
         <div className="p-6 flex items-start gap-4 border-b border-slate-800 bg-gradient-to-b from-slate-800/50 to-slate-900 relative overflow-hidden">
           <div className="absolute top-0 left-0 -ml-8 -mt-8 w-32 h-32 bg-blue-500 rounded-full mix-blend-screen filter blur-[40px] opacity-20 animate-pulse"></div>
           
-          <div className="flex items-center justify-center w-12 h-12 shrink-0 bg-white/5 backdrop-blur-md rounded-xl p-2 border border-white/10 shadow-inner relative z-10">
+          {/* Logo as a white button-like container */}
+          <div className="flex items-center justify-center w-12 h-12 shrink-0 bg-white rounded-xl p-1.5 border border-slate-200 shadow-[0_4px_12px_rgba(0,0,0,0.5)] relative z-10">
             <img 
               src={clearTrackLogo} 
-              alt="ClearTrack Logo" 
-              className="w-full h-full object-contain drop-shadow-[0_2px_4px_rgba(0,0,0,0.3)]"
+              alt="filetrackr logo" 
+              className="w-full h-full object-contain"
             />
           </div>
           
           <div className="flex flex-col relative z-10">
-            <h1 className="text-2xl font-black text-white tracking-wide leading-none mt-1">FileTrackr</h1>
+            <h1 className="text-2xl font-black text-white tracking-tight leading-none mt-1">filetrackr<span className="text-blue-500">.</span></h1>
             <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mt-1.5">
               {currentUserRole === 'admin' ? 'Admin Portal' : 'by Abra PHO'}
             </p>
@@ -206,20 +206,21 @@ export default function AppLayout() {
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
         
-        {/* BRANDING: Mobile Header */}
-        <header className="md:hidden flex items-center justify-between p-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-lg z-20 relative shrink-0 overflow-hidden border-b border-white/5">
+        {/* BRANDING: Mobile Header - Dark colorful gradient with white logo button */}
+        <header className="md:hidden flex items-center justify-between p-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-lg z-20 relative shrink-0 overflow-hidden border-b border-slate-800">
           <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-blue-500 rounded-full mix-blend-screen filter blur-3xl opacity-30 animate-pulse"></div>
 
           <div className="flex items-center gap-3 relative z-10">
-            <div className="flex items-center justify-center w-11 h-11 shrink-0 bg-white/10 backdrop-blur-sm rounded-xl p-1.5 border border-white/20 shadow-inner">
+            {/* Logo as a white button-like container */}
+            <div className="flex items-center justify-center w-12 h-12 shrink-0 bg-white rounded-xl p-1.5 border-2 border-slate-200 shadow-md">
               <img 
                 src={clearTrackLogo} 
-                alt="ClearTrack Logo" 
-                className="w-full h-full object-contain drop-shadow-md"
+                alt="filetrackr logo" 
+                className="w-full h-full object-contain"
               />
             </div>
             <div className="flex flex-col">
-              <h1 className="text-xl font-black leading-none text-white tracking-wide">FileTrackr</h1>
+              <h1 className="text-xl font-black leading-none text-white tracking-tight">filetrackr<span className="text-blue-400">.</span></h1>
               <span className="text-[10px] font-black text-blue-300 uppercase tracking-widest mt-1">
                 {currentUserRole === 'admin' ? 'Admin Portal' : 'by Abra PHO'}
               </span>
