@@ -151,7 +151,7 @@ export default function Login() {
             <div className="w-full bg-slate-50/80 border-2 border-slate-100 rounded-2xl p-1.5 flex justify-center shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]">
               <Turnstile
                 siteKey={env.VITE_TURNSTILE_SITE_KEY}
-                theme="light" // Forces light theme to match the white card
+                options={{ theme: 'light' }}
                 onSuccess={(token) => setTurnstileToken(token)}
                 onError={() => {
                   setTurnstileToken(null);
