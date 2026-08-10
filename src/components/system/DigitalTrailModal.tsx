@@ -1,11 +1,31 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type SyntheticEvent } from 'react';
 import { X, Archive, Check, ArrowRight, FileText } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import FilePreviewModal from './FilePreviewModal';
 
-export default function DigitalTrailModal({ doc, onBack }: any) {
+interface DocumentLog {
+    id: string;
+    document_id: string;
+    action: string;
+    location: string;
+    assigned_to?: string;
+    remarks?: string;
+    attachment_url?: string;
+    created_at: string;
+}
+
+interface DocumentTrailProps {
+    doc: {
+        id: string;
+        status: string;
+        remarks?: string;
+    };
+    onBack: () => void;
+}
+
+export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
     const [isClosing, setIsClosing] = useState(false);
-    const [events, setEvents] = useState<any[]>([]);
+    const [events, setEvents] = useState<DocumentLog[]>([]);
     const [isLoadingLogs, setIsLoadingLogs] = useState(true);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
@@ -13,8 +33,7 @@ export default function DigitalTrailModal({ doc, onBack }: any) {
     const isReturned = doc.status === 'pending' && doc.remarks;
     const headerClass = isCompleted ? 'bg-emerald-700' : isReturned ? 'bg-red-700' : 'bg-slate-900';
 
-    const handleClose = (e?: any) => {
-        // FIX: Check if the event can actually be canceled before trying to prevent default
+    const handleClose = (e?: SyntheticEvent) => {
         if (e && e.cancelable && e.preventDefault) {
             e.preventDefault(); 
         }
@@ -33,7 +52,7 @@ export default function DigitalTrailModal({ doc, onBack }: any) {
                 .eq('document_id', doc.id)
                 .order('created_at', { ascending: false }); 
             
-            if (data && !error) setEvents(data);
+            if (data && !error) setEvents(data as DocumentLog[]);
             setIsLoadingLogs(false);
         };
         fetchLogs();
@@ -112,7 +131,7 @@ export default function DigitalTrailModal({ doc, onBack }: any) {
                                         <div className="text-sm text-slate-600 leading-relaxed pr-2">{formatDescription(desc)}</div>
                                         {log.attachment_url && (
                                             <div className="mt-3">
-                                                <button onClick={() => setPreviewUrl(log.attachment_url)} className="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-lg border border-blue-200 transition-colors active:scale-95 shadow-sm">
+                                                <button onClick={() => setPreviewUrl(log.attachment_url || null)} className="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-lg border border-blue-200 transition-colors active:scale-95 shadow-sm">
                                                     <FileText size={16} strokeWidth={2.5} /> Click to view file
                                                 </button>
                                             </div>

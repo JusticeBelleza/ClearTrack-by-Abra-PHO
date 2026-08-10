@@ -17,7 +17,7 @@ export const formatPHDateTime = (isoString: string | null | undefined) => {
             minute: '2-digit',
             hour12: true
         });
-    } catch (error) {
+    } catch (_error) {
         console.error("Invalid date string provided to formatPHDateTime:", isoString);
         return 'Invalid Date';
     }

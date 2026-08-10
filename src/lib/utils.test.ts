@@ -17,7 +17,7 @@ describe('Utility Functions: formatPHDateTime', () => {
     });
 
     it('returns "Unknown Time" when provided null or undefined', () => {
-        expect(formatPHDateTime(null as any)).toBe('Unknown Time');
+        expect(formatPHDateTime(null)).toBe('Unknown Time');
         expect(formatPHDateTime(undefined)).toBe('Unknown Time');
     });
 

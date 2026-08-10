@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type SyntheticEvent } from 'react';
 import { FileText, X } from 'lucide-react';
 
 export default function FilePreviewModal({ url, onClose }: { url: string, onClose: () => void }) {
@@ -6,8 +6,10 @@ export default function FilePreviewModal({ url, onClose }: { url: string, onClos
     const [showContent, setShowContent] = useState(true);
     const isImage = url.toLowerCase().match(/\.(jpeg|jpg|gif|png|webp)$/i) !== null;
 
-    const handleClose = (e?: any) => {
-        if (e && e.preventDefault) e.preventDefault(); 
+    const handleClose = (e?: SyntheticEvent) => {
+        if (e && e.cancelable && e.preventDefault) {
+            e.preventDefault(); 
+        }
         if (isClosing) return; 
         
         setShowContent(false); 

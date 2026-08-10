@@ -26,9 +26,20 @@ serve(async (req) => {
   // 3. Generate the PDF Document natively on the server
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage();
-  page.drawText(`Audit Trail for Document ID: ${document_id}`, { x: 50, y: 800 });
+  page.drawText(`Audit Trail for Document ID: ${document_id}`, { x: 50, y: 800, size: 16 });
   
-  // (Loop through timeline to draw routing steps and fetch/embed signature images...)
+  // Loop through timeline to draw routing steps on the PDF
+  if (timeline && timeline.length > 0) {
+    let yPos = 750;
+    for (const log of timeline) {
+      if (yPos < 50) break; // Prevent text from going off the bottom of the page
+      const officeName = (log.destination_offices as { office_name?: string })?.office_name || 'Office';
+      const logText = `• [${log.action || 'Routed'}] ${officeName} - ${log.handed_over_at ? new Date(log.handed_over_at).toLocaleString() : ''}`;
+      
+      page.drawText(logText, { x: 50, y: yPos, size: 10 });
+      yPos -= 25;
+    }
+  }
 
   const pdfBytes = await pdfDoc.save();
 

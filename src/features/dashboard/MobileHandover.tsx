@@ -3,8 +3,19 @@ import { FileUp, Clock, AlertCircle, MapPin } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useUiStore } from '../../store/uiStore';
 
+// Define the shape of our document so TypeScript knows what properties exist
+interface ActiveDocument {
+    id: string;
+    reference_no?: string;
+    is_urgent?: boolean;
+    title?: string;
+    subject?: string;
+    current_location?: string;
+    status?: string;
+}
+
 export default function MobileHandoverDashboard() {
-    // Access the Zustand store function to trigger your drawer
+    // Safely access the drawer action from the UI store
     const openHandoverDrawer = useUiStore((state: any) => state.openHandoverDrawer);
 
     // 1. Fetch only documents currently assigned to this user's custody
@@ -83,7 +94,7 @@ export default function MobileHandoverDashboard() {
                         <p className="text-slate-500 font-medium text-sm">Your custody queue is empty.</p>
                     </div>
                 ) : (
-                    activeDocs.map((doc: any) => (
+                    activeDocs.map((doc: ActiveDocument) => (
                         <div key={doc.id} className="bg-white border-2 border-slate-200 rounded-2xl p-4 flex flex-col gap-2 shadow-sm">
                             <div className="flex justify-between items-start">
                                 <span className="text-xs font-bold text-slate-600 bg-slate-100 px-2 py-1 rounded font-mono border border-slate-200">
