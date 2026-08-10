@@ -15,8 +15,8 @@ interface ActiveDocument {
 }
 
 export default function MobileHandoverDashboard() {
-    // Safely access the drawer action from the UI store
-    const openHandoverDrawer = useUiStore((state: any) => state.openHandoverDrawer);
+    // Safely type-cast through unknown to satisfy strict TypeScript rules without using 'any'
+    const openHandoverDrawer = useUiStore((state: unknown) => (state as { openHandoverDrawer: () => void }).openHandoverDrawer);
 
     // 1. Fetch only documents currently assigned to this user's custody
     const { data: activeDocs = [], isLoading, isError } = useQuery({
