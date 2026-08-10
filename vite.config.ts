@@ -12,5 +12,11 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     exclude: ['**/e2e/**', '**/node_modules/**'],
+    // Injects dummy variables so Zod validation passes during CI/CD test runs
+    env: {
+      VITE_SUPABASE_URL: 'https://test-dummy.supabase.co',
+      VITE_SUPABASE_ANON_KEY: 'test-dummy-anon-key',
+      VITE_SUPABASE_SERVICE_ROLE_KEY: 'test-dummy-service-key'
+    }
   },
 });
