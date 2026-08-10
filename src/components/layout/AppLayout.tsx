@@ -35,6 +35,14 @@ const modalAnimationStyles = `
     .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 `;
 
+// --- TypeScript Interfaces ---
+interface NavItemProps {
+    icon: React.ReactElement;
+    label: string;
+    to: string;
+    isActive: boolean;
+}
+
 export default function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -301,7 +309,7 @@ export default function AppLayout() {
 
 // --- Helper Components --- //
 
-function NavItem({ icon, label, to, isActive }: any) {
+function NavItem({ icon, label, to, isActive }: NavItemProps) {
   return (
     <Link to={to} className={`flex items-center gap-3 px-4 py-3 w-full text-left rounded-lg transition-all ${
         isActive ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-800 hover:text-white'
@@ -314,7 +322,7 @@ function NavItem({ icon, label, to, isActive }: any) {
 }
 
 // THE NEW CATCHY MAGIC NAV ITEM
-function MobileBottomNavItem({ icon, label, to, isActive }: any) {
+function MobileBottomNavItem({ icon, label, to, isActive }: NavItemProps) {
     return (
       <Link 
         to={to} 

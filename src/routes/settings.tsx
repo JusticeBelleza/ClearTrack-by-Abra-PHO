@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  User, Shield, Lock, Eye, EyeOff, Save, X, Check, AlertCircle, Mail, Briefcase, Phone, Settings as SettingsIcon, Building2, Edit3, ChevronDown, Hash
+  Shield, Lock, Eye, EyeOff, Save, X, Check, AlertCircle, Mail, Briefcase, Phone, Settings as SettingsIcon, Building2, Edit3, ChevronDown, Hash
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
@@ -25,8 +25,38 @@ const modalAnimationStyles = `
     }
 `;
 
+// --- TypeScript Interfaces ---
+interface SelectOption {
+    label: string;
+    value: string;
+}
+
+type OptionType = SelectOption | string;
+
+interface CustomSelectProps {
+    options: OptionType[];
+    value: string;
+    onChange: (val: string) => void;
+    placeholder?: string;
+    disabled?: boolean;
+}
+
+interface UserProfile {
+    id: string;
+    full_name: string;
+    emp_id: string;
+    contact_number: string;
+    designation: string;
+    department: string;
+    email: string;
+}
+
+interface Department {
+    name: string;
+}
+
 // --- Custom Dropdown Component for Departments ---
-function CustomSelect({ options, value, onChange, placeholder, disabled = false }: any) {
+function CustomSelect({ options, value, onChange, placeholder, disabled = false }: CustomSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
   
@@ -54,7 +84,11 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false 
           } ${!value && !disabled ? 'text-slate-500' : 'text-slate-900 font-bold'}`}
         >
           <span className="truncate">
-            {options.find((opt: any) => (opt.value || opt) === value)?.label || value || placeholder}
+            {options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value)
+              ? (typeof options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value) === 'string' 
+                  ? options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value) as string
+                  : (options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value) as SelectOption).label)
+              : value || placeholder}
           </span>
           {!disabled && (
               <ChevronDown 
@@ -67,9 +101,9 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false 
         {isOpen && !disabled && (
           <div className="absolute z-20 w-full mt-2 bg-white border-2 border-slate-400 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
             <div className="max-h-60 overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
-              {options.map((option: any, idx: number) => {
-                const optValue = option.value || option;
-                const optLabel = option.label || option;
+              {options.map((option: OptionType, idx: number) => {
+                const optValue = typeof option === 'string' ? option : option.value;
+                const optLabel = typeof option === 'string' ? option : option.label;
                 const isSelected = optValue === value;
   
                 return (
@@ -97,8 +131,8 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false 
 }
 
 export default function Settings() {
-  const [profile, setProfile] = useState<any>(null);
-  const [departments, setDepartments] = useState<any[]>([]);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   
@@ -114,10 +148,7 @@ export default function Settings() {
       department: ''
   });
 
-  useEffect(() => {
-    fetchData();
-  }, []);
-
+  // FIX: Hoist function definition above the useEffect
   const fetchData = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -147,6 +178,10 @@ export default function Settings() {
     }
   };
 
+  useEffect(() => {
+    fetchData();
+  }, []);
+
   const handleEditClick = () => {
       setFormData({
         full_name: profile?.full_name || '',
@@ -168,6 +203,7 @@ export default function Settings() {
   };
 
   const handleSaveProfile = async () => {
+      if (!profile) return;
       if (!formData.full_name.trim() || !formData.emp_id.trim() || !formData.department.trim()) {
           toast.error("Please fill out all required fields.");
           return;
@@ -197,15 +233,16 @@ export default function Settings() {
           setProfile({ ...profile, ...formData });
           handleCloseEdit(); // Closes the drawer with animation
           toast.success("Profile updated successfully!");
-      } catch (err: any) {
+      } catch (err: unknown) {
           console.error(err);
-          toast.error("Failed to update profile", { description: err.message });
+          const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
+          toast.error("Failed to update profile", { description: errorMessage });
       } finally {
           setIsSaving(false);
       }
   };
 
-  const getInitials = (name: string) => {
+  const getInitials = (name?: string) => {
       if (!name) return "U";
       const parts = name.split(' ');
       if (parts.length > 1) {
@@ -401,7 +438,7 @@ function InfoCard({ icon, label, value }: { icon: React.ReactNode, label: string
 }
 
 // --- SECURE CHANGE PASSWORD MODAL COMPONENT --- //
-function ChangePasswordModal({ userEmail, onClose }: { userEmail: string, onClose: () => void }) {
+function ChangePasswordModal({ userEmail, onClose }: { userEmail?: string, onClose: () => void }) {
   const [isClosing, setIsClosing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -441,6 +478,7 @@ function ChangePasswordModal({ userEmail, onClose }: { userEmail: string, onClos
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!userEmail) { toast.error("User email missing."); return; }
     if (!currentPassword) { toast.error("Please enter your current password."); return; }
     if (strength.score < 3) { toast.error("Please choose a stronger new password."); return; }
     if (newPassword !== confirmPassword) { toast.error("New passwords do not match."); return; }
@@ -469,7 +507,7 @@ function ChangePasswordModal({ userEmail, onClose }: { userEmail: string, onClos
         toast.success("Password changed successfully!", { description: "Your account is secure." });
         handleClose();
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(err);
       toast.error("An unexpected error occurred.");
     } finally {

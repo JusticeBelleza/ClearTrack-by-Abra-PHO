@@ -29,8 +29,30 @@ const modalAnimationStyles = `
     }
 `;
 
+// --- TypeScript Interfaces ---
+interface SelectOption {
+    label: string;
+    value: string;
+}
+
+type OptionType = SelectOption | string;
+
+interface CustomSelectProps {
+    options: OptionType[];
+    value: string;
+    onChange: (val: string) => void;
+    placeholder?: string;
+    disabled?: boolean;
+    emptyText?: string;
+}
+
+interface Employee {
+    name: string;
+    department: string;
+}
+
 // --- Custom Dropdown Component ---
-function CustomSelect({ options, value, onChange, placeholder, disabled = false, emptyText = "Loading options..." }: any) {
+function CustomSelect({ options, value, onChange, placeholder, disabled = false, emptyText = "Loading options..." }: CustomSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
   
@@ -58,7 +80,11 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false,
           } ${!value && !disabled ? 'text-slate-500' : 'text-slate-900 font-bold'}`}
         >
           <span className="truncate">
-            {options.find((opt: any) => (opt.value || opt) === value)?.label || value || placeholder}
+            {options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value)
+              ? (typeof options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value) === 'string' 
+                  ? options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value) as string
+                  : (options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value) as SelectOption).label)
+              : value || placeholder}
           </span>
           {!disabled && (
               <ChevronDown 
@@ -74,9 +100,9 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false,
               {options.length === 0 ? (
                   <div className="px-4 py-3 text-sm text-slate-500 text-center font-medium">{emptyText}</div>
               ) : (
-                  options.map((option: any, idx: number) => {
-                    const optValue = option.value || option;
-                    const optLabel = option.label || option;
+                  options.map((option: OptionType, idx: number) => {
+                    const optValue = typeof option === 'string' ? option : option.value;
+                    const optLabel = typeof option === 'string' ? option : option.label;
                     const isSelected = optValue === value;
       
                     return (
@@ -105,22 +131,24 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false,
 }
 
 export default function CreateDocumentModal() {
-    const closeCreateModal = useUiStore((state) => state.closeCreateModal);
+    // Note: useUiStore state typing assumed to be handled at the store level or inferred
+    const closeCreateModal = useUiStore((state: { closeCreateModal: () => void }) => state.closeCreateModal);
     
     const [isClosing, setIsClosing] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isProcessingFile, setIsProcessingFile] = useState(false);
 
-    const [categories, setCategories] = useState<{label: string, value: string}[]>([]);
-    const [departments, setDepartments] = useState<{label: string, value: string}[]>([]);
+    const [categories, setCategories] = useState<SelectOption[]>([]);
+    const [departments, setDepartments] = useState<SelectOption[]>([]);
     
-    const [allEmployees, setAllEmployees] = useState<{name: string, department: string}[]>([]);
+    const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
     const [currentUserDept, setCurrentUserDept] = useState<string>("");
 
     const [attachment, setAttachment] = useState<File | Blob | null>(null);
     const [attachmentName, setAttachmentName] = useState<string>('');
 
-    const [formData, setFormData] = useState({
+    // FIX: Lazy initialization to satisfy React's purity rules
+    const [formData, setFormData] = useState(() => ({
         trackingNumber: `DOC-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
         title: '',
         category: '',
@@ -128,12 +156,9 @@ export default function CreateDocumentModal() {
         assignedClerk: '',
         isUrgent: false,
         remarks: ''
-    });
+    }));
 
-    useEffect(() => {
-        fetchDropdownOptions();
-    }, []);
-
+    // FIX: Hoist function definition above the useEffect that calls it
     const fetchDropdownOptions = async () => {
         try {
             const { data: { session } } = await supabase.auth.getSession();
@@ -151,7 +176,7 @@ export default function CreateDocumentModal() {
             if (session && empRes.data) {
                 const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', session.user.id).single();
                 if (profile?.full_name) {
-                    const matchedEmployee = empRes.data.find((e: any) => e.name === profile.full_name);
+                    const matchedEmployee = empRes.data.find((e: Employee) => e.name === profile.full_name);
                     if (matchedEmployee) {
                         setCurrentUserDept(matchedEmployee.department);
                     }
@@ -161,6 +186,10 @@ export default function CreateDocumentModal() {
             console.error("Error fetching options:", error);
         }
     };
+
+    useEffect(() => {
+        fetchDropdownOptions();
+    }, []);
 
     const availableClerks = allEmployees
         .filter(emp => currentUserDept ? emp.department === currentUserDept : true)
@@ -297,9 +326,10 @@ export default function CreateDocumentModal() {
 
             setTimeout(() => { window.location.reload(); }, 800);
 
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Submit Error:", error);
-            toast.error('Failed to route document', { description: error.message });
+            const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+            toast.error('Failed to route document', { description: errorMessage });
         } finally {
             setIsSubmitting(false);
         }
@@ -427,9 +457,9 @@ export default function CreateDocumentModal() {
                     </button>
                     <button type="submit" disabled={isSubmitting || isProcessingFile} onClick={handleSubmit} className="flex-[1.5] py-3.5 bg-blue-600 text-white font-bold rounded-xl border-2 border-blue-700 active:scale-95 transition-all text-base flex justify-center items-center gap-2 disabled:opacity-50 shadow-md hover:bg-blue-700">
                         {isSubmitting ? (
-                             <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                            <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
                         ) : (
-                             <><Send size={18} /> Route Document</>
+                            <><Send size={18} /> Route Document</>
                         )}
                     </button>
                 </div>

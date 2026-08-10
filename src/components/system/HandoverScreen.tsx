@@ -1,11 +1,43 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MapPin, PenTool, X, CheckCircle, ChevronDown, Save, FileText, Camera, Paperclip, AlertCircle, ArrowLeft } from 'lucide-react';
+import { MapPin, PenTool, X, CheckCircle, ChevronDown, Camera, Paperclip, AlertCircle, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabase';
 import { jsPDF } from 'jspdf';
 
+// --- TypeScript Interfaces ---
+interface SelectOption {
+    label: string;
+    value: string;
+}
+
+type OptionType = SelectOption | string;
+
+interface CustomSelectProps {
+    options: OptionType[];
+    value: string;
+    onChange: (val: string) => void;
+    placeholder?: string;
+}
+
+interface DocumentItem {
+    id: string;
+    reference_no?: string;
+    title?: string;
+    subject?: string;
+    is_urgent?: boolean;
+    current_location?: string;
+    final_destination?: string;
+}
+
+interface HandoverScreenProps {
+    doc: DocumentItem;
+    departments: OptionType[];
+    onBack: () => void;
+    onSuccess: () => void;
+}
+
 // --- Custom Dropdown Component ---
-function CustomSelect({ options, value, onChange, placeholder }: any) {
+function CustomSelect({ options, value, onChange, placeholder }: CustomSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
   
@@ -20,15 +52,21 @@ function CustomSelect({ options, value, onChange, placeholder }: any) {
     return (
       <div className="relative w-full" ref={dropdownRef}>
         <button type="button" onClick={() => setIsOpen(!isOpen)} className={`w-full px-4 py-3.5 bg-white border-2 rounded-xl flex justify-between items-center transition-all text-base outline-none active:scale-[0.99] ${isOpen ? 'border-blue-600 ring-4 ring-blue-600/10' : 'border-slate-300 hover:bg-slate-50 hover:border-slate-400'} ${!value ? 'text-slate-500' : 'text-slate-900 font-bold'}`}>
-          <span className="truncate">{options.find((opt: any) => (opt.value || opt) === value)?.label || value || placeholder}</span>
+          <span className="truncate">
+            {options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value)
+              ? (typeof options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value) === 'string' 
+                  ? options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value) as string
+                  : (options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value) as SelectOption).label)
+              : value || placeholder}
+          </span>
           <ChevronDown size={20} className={`text-slate-600 transition-transform duration-300 ease-in-out ${isOpen ? 'rotate-180 text-slate-900' : ''}`} />
         </button>
         {isOpen && (
           <div className="absolute z-20 w-full mt-2 bg-white border-2 border-slate-300 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
             <div className="max-h-60 overflow-y-auto p-1.5 space-y-1 scrollbar-hide">
-              {options.map((option: any, idx: number) => {
-                const optValue = option.value || option;
-                const optLabel = option.label || option;
+              {options.map((option: OptionType, idx: number) => {
+                const optValue = typeof option === 'string' ? option : option.value;
+                const optLabel = typeof option === 'string' ? option : option.label;
                 return (
                   <div key={idx} onClick={() => { onChange(optValue); setIsOpen(false); }} className={`px-4 py-3 text-base rounded-lg cursor-pointer transition-colors flex items-center active:scale-95 ${optValue === value ? 'bg-blue-600 text-white font-bold' : 'text-slate-800 hover:bg-slate-100 font-medium'}`}>
                     {optLabel}
@@ -42,7 +80,7 @@ function CustomSelect({ options, value, onChange, placeholder }: any) {
     );
 }
 
-export default function HandoverScreen({ doc, departments, onBack, onSuccess }: any) {
+export default function HandoverScreen({ doc, departments, onBack, onSuccess }: HandoverScreenProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const [isClosing, setIsClosing] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -61,14 +99,14 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
     const [completionRemarks, setCompletionRemarks] = useState('');
     const [retentionFate, setRetentionFate] = useState<'originator' | 'destination' | null>(null);
 
-    const handleClose = (e?: any) => {
+    const handleClose = (e?: React.MouseEvent | React.TouchEvent) => {
         if (e && e.preventDefault) e.preventDefault(); 
         if (isClosing) return; 
         setIsClosing(true);
         setTimeout(() => { onBack(); }, 400); 
     };
     
-    const handleBackBtn = (e?: any) => {
+    const handleBackBtn = (e?: React.MouseEvent | React.TouchEvent) => {
         if (e && e.preventDefault) e.preventDefault();
         if (isSubmitting) return;
         setActiveAction(null);
@@ -114,7 +152,7 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
                 const pdfBlob = await processImageToScannedPDF(file);
                 setAttachment(pdfBlob); setAttachmentName(`Final_Signed_${doc.reference_no}.pdf`);
             } else { toast.error("Unsupported file type."); setAttachmentName(""); }
-        } catch (err) { toast.error("Failed to process the document."); setAttachmentName(""); } 
+        } catch { toast.error("Failed to process the document."); setAttachmentName(""); } 
         finally { setIsProcessingFile(false); }
     };
 
@@ -151,7 +189,10 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
             if (error) throw error;
             toast.success("Document Routed Successfully!", { description: `Forwarded to ${destination}.`});
             onSuccess(); handleClose();
-        } catch (e: any) { toast.error("Failed to route document", { description: e.message }); } 
+        } catch (err: unknown) { 
+            const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
+            toast.error("Failed to route document", { description: errorMessage }); 
+        } 
         finally { setIsSubmitting(false); }
     };
 
@@ -169,7 +210,7 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
                 const { data } = supabase.storage.from('attachments').getPublicUrl(fileName);
                 attachmentUrl = data.publicUrl;
             }
-            const updateData: any = { status: 'sealed', remarks: completionRemarks.trim() || null };
+            const updateData: { status: string; remarks: string | null; completed_attachment_url?: string } = { status: 'sealed', remarks: completionRemarks.trim() || null };
             if (attachmentUrl) { updateData.completed_attachment_url = attachmentUrl; }
             const fateString = retentionFate === 'originator' ? 'Returned to Originator' : 'Retained at Final Destination';
             const detailedRemarks = `Released By: ${releasedBy.trim()}\nDocument Retention: ${fateString}${completionRemarks ? `\nRemarks: ${completionRemarks.trim()}` : ''}`;
@@ -180,7 +221,7 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
             if (error) throw error;
             toast.success("Document Completed!", { description: "It has been moved to history." });
             onSuccess(); handleClose();
-        } catch (e: any) { toast.error("Failed to complete document"); } 
+        } catch { toast.error("Failed to complete document"); } 
         finally { setIsSubmitting(false); }
     };
 
@@ -195,7 +236,7 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
             if (error) throw error;
             toast.success("Document Returned");
             onSuccess(); handleClose();
-        } catch (e: any) { toast.error("Failed to reject document"); } 
+        } catch { toast.error("Failed to reject document"); } 
         finally { setIsSubmitting(false); }
     };
 
@@ -214,7 +255,7 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
                 <div className="flex-1 overflow-y-auto p-5 sm:p-8 space-y-6 scrollbar-hide bg-slate-50">
                     <div className="bg-white p-5 rounded-2xl border-2 border-slate-200 shadow-sm relative z-20">
                         <p className="text-sm font-bold text-slate-500 mb-2 font-mono">{doc.reference_no}</p>
-                        <p className="font-black text-xl text-slate-900 leading-tight flex items-start gap-2">{doc.is_urgent && <AlertCircle size={24} className="text-red-600 shrink-0 mt-0.5" />} {doc.title}</p>
+                        <p className="font-black text-xl text-slate-900 leading-tight flex items-start gap-2">{doc.is_urgent && <AlertCircle size={24} className="text-red-600 shrink-0 mt-0.5" />} {doc.title || doc.subject}</p>
                     </div>
 
                     {!activeAction ? (

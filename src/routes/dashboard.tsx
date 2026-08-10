@@ -8,7 +8,6 @@ import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { useUiStore } from '../store/uiStore';
 import DigitalTrailModal from '../components/system/DigitalTrailModal';
-import FilePreviewModal from '../components/system/FilePreviewModal';
 
 // --- Shared Animation Styles ---
 const modalAnimationStyles = `
@@ -27,8 +26,52 @@ const modalAnimationStyles = `
     }
 `;
 
+// --- TypeScript Interfaces ---
+interface DocumentItem {
+    id: string;
+    reference_no?: string;
+    title?: string;
+    subject?: string;
+    status: string;
+    assigned_clerk?: string;
+    custodian_id?: string;
+    created_by?: string;
+    remarks?: string;
+    is_urgent?: boolean;
+    current_location?: string;
+    final_destination?: string;
+    attachment_url?: string;
+    created_at: string;
+    updated_at?: string;
+}
+
+interface DocumentsState {
+    assigned: DocumentItem[];
+    myDocuments: DocumentItem[];
+    processing: DocumentItem[];
+    rejected: DocumentItem[];
+    completed: DocumentItem[];
+}
+
+interface StatCardProps {
+    title: string;
+    value: number | string;
+    icon: React.ReactNode;
+    color: 'blue' | 'red' | 'emerald' | 'orange';
+}
+
+interface TabButtonProps {
+    label: string;
+    icon: React.ReactNode;
+    count: number;
+    isActive: boolean;
+    onClick: () => void;
+    colorClass: string;
+    badgeClass: string;
+}
+
 // --- PH Time Formatter ---
-const formatPHDateTime = (isoString: string) => {
+const formatPHDateTime = (isoString?: string) => {
     if (!isoString) return 'Unknown Time';
     return new Date(isoString).toLocaleString('en-US', {
         timeZone: 'Asia/Manila',
@@ -47,18 +90,15 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [userName, setUserName] = useState("");
   const [stats, setStats] = useState({ active: 0, urgent: 0, actionNeeded: 0, completed: 0 });
-  const [documents, setDocuments] = useState<{assigned: any[], myDocuments: any[], processing: any[], rejected: any[], completed: any[]}>({ 
+  const [documents, setDocuments] = useState<DocumentsState>({ 
       assigned: [], myDocuments: [], processing: [], rejected: [], completed: [] 
   });
   
   const [activeTab, setActiveTab] = useState<'assigned' | 'myDocuments' | 'processing' | 'rejected' | 'completed'>('assigned');
   const [searchQuery, setSearchQuery] = useState("");
-  const [trailDoc, setTrailDoc] = useState<any>(null);
+  const [trailDoc, setTrailDoc] = useState<DocumentItem | null>(null);
 
-  useEffect(() => {
-      fetchDashboardData();
-  }, []);
-
+  // FIX: Hoist function definition above the useEffect
   const fetchDashboardData = async () => {
       setIsLoading(true);
       try {
@@ -82,44 +122,44 @@ export default function Dashboard() {
 
           if (docs) {
               // 1. Inbox: Documents explicitly assigned to your name OR where you are the custodian
-              const assigned = docs.filter((d: any) => 
+              const assigned = docs.filter((d: DocumentItem) => 
                   (d.assigned_clerk === currentUserName || d.custodian_id === currentUserId) && 
                   d.status !== 'sealed' &&
                   !d.remarks // <-- Prevents returned docs from cluttering the Inbox
               );
               
               // 2. My Documents: Active documents you originally created
-              const myDocuments = docs.filter((d: any) => 
+              const myDocuments = docs.filter((d: DocumentItem) => 
                   d.created_by === currentUserId && d.status !== 'sealed'
               );
 
               // 3. Processing (Outbox): Documents you created or routed, but are now assigned to someone else
-              const processing = docs.filter((d: any) => 
+              const processing = docs.filter((d: DocumentItem) => 
                   d.assigned_clerk !== currentUserName && 
                   d.custodian_id !== currentUserId && 
-                  (d.status === 'routing' || (d.status === 'pending' && !d.remarks)) &&
-                  d.status !== 'sealed'
+                  (d.status === 'routing' || (d.status === 'pending' && !d.remarks))
+                  // Removed the redundant d.status !== 'sealed' check here!
               );
 
               // 4. Returned: Documents that have been kicked back with remarks
-              const rejected = docs.filter((d: any) => 
+              const rejected = docs.filter((d: DocumentItem) => 
                   d.status === 'pending' && !!d.remarks && 
                   (d.assigned_clerk === currentUserName || d.created_by === currentUserId)
               );
 
               // 5. Completed: Sealed documents
-              const completed = docs.filter((d: any) => d.status === 'sealed');
+              const completed = docs.filter((d: DocumentItem) => d.status === 'sealed');
 
               setDocuments({ assigned, myDocuments, processing, rejected, completed });
               
               setStats({
                   active: processing.length + assigned.length, 
-                  urgent: docs.filter((d: any) => d.is_urgent && d.status !== 'sealed').length, 
+                  urgent: docs.filter((d: DocumentItem) => d.is_urgent && d.status !== 'sealed').length, 
                   actionNeeded: assigned.length, 
                   completed: completed.length
               });
           }
-      } catch (err: any) {
+      } catch (err: unknown) {
           console.error("Dashboard Fetch Error:", err);
           toast.error("Failed to load dashboard data.");
       } finally {
@@ -127,13 +167,17 @@ export default function Dashboard() {
       }
   };
 
+  useEffect(() => {
+      fetchDashboardData();
+  }, []);
+
   const filteredDocs = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
     const sourceList = documents[activeTab];
     
     if (!query) return sourceList;
     
-    return sourceList.filter((doc: any) => 
+    return sourceList.filter((doc: DocumentItem) => 
         (doc.title || '').toLowerCase().includes(query) ||
         (doc.reference_no || '').toLowerCase().includes(query) ||
         (doc.current_location || '').toLowerCase().includes(query) ||
@@ -272,7 +316,7 @@ export default function Dashboard() {
           {/* Document Grid */}
           {filteredDocs.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {filteredDocs.map((doc: any) => (
+                {filteredDocs.map((doc: DocumentItem) => (
                     <div key={doc.id} className={`bg-white rounded-3xl border-2 ${activeTab === 'rejected' ? 'border-red-300 shadow-md shadow-red-100 hover:border-red-500' : (activeTab === 'completed' ? 'border-emerald-200 hover:border-emerald-400' : (doc.is_urgent ? 'border-red-400 shadow-md shadow-red-100 hover:border-red-500' : 'border-slate-300 hover:border-slate-500'))} shadow-sm p-5 flex flex-col transition-colors relative overflow-hidden`}>
                         
                         <div className={`absolute top-0 left-0 w-full h-1.5 ${activeTab === 'completed' ? 'bg-emerald-500' : (doc.is_urgent || activeTab === 'rejected' ? 'bg-red-500' : 'bg-transparent')} `}></div>
@@ -358,7 +402,7 @@ export default function Dashboard() {
 }
 
 // --- Helper Components ---
-function StatCard({ title, value, icon, color }: any) {
+function StatCard({ title, value, icon, color }: StatCardProps) {
     const colorClasses = {
         blue: "bg-blue-50 border-blue-200 text-blue-700",
         red: "bg-red-50 border-red-200 text-red-700",
@@ -368,7 +412,7 @@ function StatCard({ title, value, icon, color }: any) {
     
     return (
         <div className="bg-white p-5 rounded-3xl border-2 border-slate-200 shadow-sm flex flex-col items-start gap-4 hover:border-slate-300 transition-colors">
-            <div className={`p-3 rounded-2xl border-2 ${colorClasses[color as keyof typeof colorClasses]}`}>
+            <div className={`p-3 rounded-2xl border-2 ${colorClasses[color]}`}>
                 {icon}
             </div>
             <div>
@@ -379,7 +423,7 @@ function StatCard({ title, value, icon, color }: any) {
     );
 }
 
-function TabButton({ label, icon, count, isActive, onClick, colorClass, badgeClass }: any) {
+function TabButton({ label, icon, count, isActive, onClick, colorClass, badgeClass }: TabButtonProps) {
     return (
         <button 
             onClick={onClick}

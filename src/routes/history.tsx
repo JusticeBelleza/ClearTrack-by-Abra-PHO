@@ -28,8 +28,45 @@ const modalAnimationStyles = `
     }
 `;
 
+// --- TypeScript Interfaces ---
+interface DocumentLog {
+    action: string;
+    created_at: string;
+}
+
+interface DocumentItem {
+    id: string;
+    reference_no?: string;
+    title?: string;
+    status: string;
+    assigned_clerk?: string;
+    final_destination?: string;
+    current_location?: string;
+    remarks?: string;
+    attachment_url?: string;
+    created_at: string;
+    updated_at?: string;
+    document_logs?: DocumentLog[];
+    action_time?: string; 
+}
+
+interface HistoryData {
+    completed: DocumentItem[];
+    returned: DocumentItem[];
+}
+
+interface TabButtonProps {
+    label: string;
+    icon: React.ReactNode;
+    count: number;
+    isActive: boolean;
+    onClick: () => void;
+    colorClass: string;
+    badgeClass: string;
+}
+
 // --- DATA FETCHING FUNCTION FOR REACT QUERY ---
-const fetchHistoryData = async () => {
+const fetchHistoryData = async (): Promise<HistoryData> => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error("No authenticated session");
 
@@ -45,32 +82,32 @@ const fetchHistoryData = async () => {
 
     if (error) throw error;
 
-    let completed: any[] = [];
-    let returned: any[] = [];
+    let completed: DocumentItem[] = [];
+    let returned: DocumentItem[] = [];
 
     if (docs) {
-        const processedDocs = docs.map((doc: any) => {
+        const processedDocs = (docs as DocumentItem[]).map((doc) => {
             const logs = doc.document_logs || [];
             
             if (doc.status === 'sealed') {
-                const deliveryLog = logs.filter((l: any) => l.action === 'Delivered')
-                                        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+                const deliveryLog = logs.filter((l) => l.action === 'Delivered')
+                                        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
                 doc.action_time = deliveryLog ? deliveryLog.created_at : doc.created_at;
             } else {
-                const returnLog = logs.filter((l: any) => l.action === 'Returned')
-                                      .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+                const returnLog = logs.filter((l) => l.action === 'Returned')
+                                      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
                 doc.action_time = returnLog ? returnLog.created_at : doc.created_at;
             }
             return doc;
         });
 
         completed = processedDocs
-          .filter((d: any) => d.status === 'sealed')
-          .sort((a, b) => new Date(b.action_time).getTime() - new Date(a.action_time).getTime());
+          .filter((d) => d.status === 'sealed')
+          .sort((a, b) => new Date(b.action_time || '').getTime() - new Date(a.action_time || '').getTime());
         
         returned = processedDocs
-          .filter((d: any) => d.status === 'pending' && d.remarks)
-          .sort((a, b) => new Date(b.action_time).getTime() - new Date(a.action_time).getTime());
+          .filter((d) => d.status === 'pending' && d.remarks)
+          .sort((a, b) => new Date(b.action_time || '').getTime() - new Date(a.action_time || '').getTime());
     }
 
     return { completed, returned };
@@ -79,17 +116,19 @@ const fetchHistoryData = async () => {
 export default function History() {
   const [activeTab, setActiveTab] = useState<'completed' | 'returned'>('completed');
   const [searchQuery, setSearchQuery] = useState("");
-  const [trailDoc, setTrailDoc] = useState<any>(null);
+  const [trailDoc, setTrailDoc] = useState<DocumentItem | null>(null);
   const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
 
   // --- REACT QUERY MAGIC ---
-  const { data, isLoading } = useQuery({
+  const { data, isLoading } = useQuery<HistoryData>({
       queryKey: ['historyDocuments'],
       queryFn: fetchHistoryData
   });
 
-  // Safely extract our data or provide empty defaults
-  const documents = data ? { completed: data.completed, returned: data.returned } : { completed: [], returned: [] };
+  // FIX: Wrap the initialization of 'documents' in its own useMemo hook
+  const documents = useMemo<HistoryData>(() => {
+      return data ? { completed: data.completed, returned: data.returned } : { completed: [], returned: [] };
+  }, [data]);
 
   const filteredDocs = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
@@ -97,7 +136,7 @@ export default function History() {
     
     if (!query) return sourceList;
     
-    return sourceList.filter((doc: any) => 
+    return sourceList.filter((doc: DocumentItem) => 
         (doc.title || '').toLowerCase().includes(query) ||
         (doc.reference_no || '').toLowerCase().includes(query) ||
         (doc.final_destination || '').toLowerCase().includes(query) ||
@@ -187,7 +226,7 @@ export default function History() {
 
           {filteredDocs.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {filteredDocs.map((doc: any) => (
+                {filteredDocs.map((doc: DocumentItem) => (
                     <div key={doc.id} className={`bg-white rounded-3xl border-2 ${activeTab === 'completed' ? 'border-emerald-200 hover:border-emerald-400' : 'border-red-200 hover:border-red-400'} shadow-sm p-5 flex flex-col transition-colors relative overflow-hidden`}>
                         
                         <div className={`absolute top-0 left-0 w-full h-1.5 ${activeTab === 'completed' ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
@@ -242,7 +281,7 @@ export default function History() {
                         <div className="flex gap-2 mt-auto">
                             {doc.attachment_url && (
                                 <button 
-                                    onClick={() => setPreviewDocUrl(doc.attachment_url)}
+                                    onClick={() => setPreviewDocUrl(doc.attachment_url as string)}
                                     className="shrink-0 py-2.5 px-3 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl flex items-center justify-center transition-all active:scale-95 border-2 border-slate-300"
                                     title="View Attached File"
                                 >
@@ -269,7 +308,7 @@ export default function History() {
   );
 }
 
-function TabButton({ label, icon, count, isActive, onClick, colorClass, badgeClass }: any) {
+function TabButton({ label, icon, count, isActive, onClick, colorClass, badgeClass }: TabButtonProps) {
     return (
         <button 
             onClick={onClick}

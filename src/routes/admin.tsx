@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Building2, FolderTree, Users, Shield, Plus, 
-  Trash2, X, Activity, Database, AlertTriangle, 
-  ClipboardList, Settings, Server, Clock, Search,
-  Save, ChevronDown, Phone, Key, Zap, MapPin, Hash, AlertCircle, Mail
+  Trash2, X, Activity, AlertTriangle, 
+  ClipboardList, Settings, Clock, Search,
+  Save, ChevronDown, Phone, Zap, MapPin, Hash, AlertCircle, Mail
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase'; 
@@ -47,8 +47,68 @@ const modalAnimationStyles = `
     }
 `;
 
+// --- TypeScript Interfaces ---
+interface SelectOption {
+    label: string;
+    value: string;
+}
+
+type OptionType = SelectOption | string;
+
+interface CustomSelectProps {
+    options: OptionType[];
+    value: string;
+    onChange: (val: string) => void;
+    placeholder?: string;
+}
+
+interface Department {
+    id: string;
+    name: string;
+    office_id: string;
+    office_address: string;
+}
+
+interface Category {
+    id: string;
+    name: string;
+    category_id: string;
+}
+
+interface Employee {
+    id: string;
+    emp_id: string;
+    name: string;
+    email: string;
+    designation: string;
+    department: string;
+    contact_number: string;
+}
+
+interface AuditLog {
+    id: string;
+    created_at: string;
+    user_name: string;
+    action: string;
+    ip_address: string;
+}
+
+interface NavButtonProps {
+    label: string;
+    icon: React.ReactNode;
+    isActive: boolean;
+    onClick: () => void;
+}
+
+interface StatCardProps {
+    title: string;
+    value: string | number;
+    icon: React.ReactNode;
+    color: string;
+}
+
 // --- Custom Senior-Friendly Dropdown Component ---
-function CustomSelect({ options, value, onChange, placeholder }: any) {
+function CustomSelect({ options, value, onChange, placeholder }: CustomSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
   
@@ -74,7 +134,11 @@ function CustomSelect({ options, value, onChange, placeholder }: any) {
           } ${!value ? 'text-slate-500' : 'text-slate-900 font-bold'}`}
         >
           <span className="truncate">
-            {options.find((opt: any) => (opt.value || opt) === value)?.label || value || placeholder}
+            {options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value)
+              ? (typeof options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value) === 'string' 
+                  ? options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value) as string
+                  : (options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value) as SelectOption).label)
+              : value || placeholder}
           </span>
           <ChevronDown 
             size={20} 
@@ -85,9 +149,9 @@ function CustomSelect({ options, value, onChange, placeholder }: any) {
         {isOpen && (
           <div className="absolute z-20 w-full mt-2 bg-white border-2 border-slate-400 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
             <div className="max-h-60 overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
-              {options.map((option: any, idx: number) => {
-                const optValue = option.value || option;
-                const optLabel = option.label || option;
+              {options.map((option: OptionType, idx: number) => {
+                const optValue = typeof option === 'string' ? option : option.value;
+                const optLabel = typeof option === 'string' ? option : option.label;
                 const isSelected = optValue === value;
   
                 return (
@@ -120,10 +184,10 @@ export default function SystemAdmin() {
 
   // --- Data States ---
   const [isLoading, setIsLoading] = useState(true);
-  const [departments, setDepartments] = useState<any[]>([]);
-  const [categories, setCategories] = useState<any[]>([]);
-  const [employees, setEmployees] = useState<any[]>([]);
-  const [auditLogs, setAuditLogs] = useState<any[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [globalSettings, setGlobalSettings] = useState({ maintenanceMode: false, sessionTimeout: '30' });
 
   // --- Modal Open/Close States ---
@@ -173,10 +237,6 @@ export default function SystemAdmin() {
   });
 
   // --- Data Fetching ---
-  useEffect(() => {
-    fetchAdminData();
-  }, []);
-
   const fetchAdminData = async () => {
     setIsLoading(true);
     try {
@@ -205,6 +265,10 @@ export default function SystemAdmin() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    fetchAdminData();
+  }, []);
 
   // --- Action Handlers ---
   const openOfficeModal = () => {
@@ -908,7 +972,7 @@ export default function SystemAdmin() {
 
 // --- Helper Components --- //
 
-function MainNavButton({ label, icon, isActive, onClick }: any) {
+function MainNavButton({ label, icon, isActive, onClick }: NavButtonProps) {
     return (
       <button 
         onClick={onClick}
@@ -925,7 +989,7 @@ function MainNavButton({ label, icon, isActive, onClick }: any) {
     );
 }
 
-function SubTabButton({ label, icon, isActive, onClick }: any) {
+function SubTabButton({ label, icon, isActive, onClick }: NavButtonProps) {
   return (
     <button 
       onClick={onClick}
@@ -942,7 +1006,7 @@ function SubTabButton({ label, icon, isActive, onClick }: any) {
   );
 }
 
-function StatCard({ title, value, icon, color }: any) {
+function StatCard({ title, value, icon, color }: StatCardProps) {
     return (
         <div className={`p-4 sm:p-5 rounded-2xl border-2 flex flex-col justify-between ${color} transition-transform hover:scale-[1.02]`}>
             <div className="flex justify-between items-start mb-2">

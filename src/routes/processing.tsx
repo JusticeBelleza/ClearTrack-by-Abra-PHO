@@ -35,8 +35,46 @@ const modalAnimationStyles = `
     }
 `;
 
+// --- TypeScript Interfaces ---
+interface DocumentItem {
+    id: string;
+    reference_no?: string;
+    title?: string;
+    subject?: string;
+    status: string;
+    assigned_clerk?: string;
+    created_by?: string;
+    remarks?: string;
+    is_urgent?: boolean;
+    current_location?: string;
+    attachment_url?: string;
+    created_at: string;
+    updated_at?: string;
+}
+
+interface DepartmentOption {
+    label: string;
+    value: string;
+}
+
+interface ProcessingData {
+    processing: DocumentItem[];
+    returned: DocumentItem[];
+    departments: DepartmentOption[];
+}
+
+interface TabButtonProps {
+    label: string;
+    icon: React.ReactNode;
+    count: number;
+    isActive: boolean;
+    onClick: () => void;
+    colorClass: string;
+    badgeClass: string;
+}
+
 // --- DATA FETCHING FUNCTION FOR REACT QUERY ---
-const fetchProcessingData = async () => {
+const fetchProcessingData = async (): Promise<ProcessingData> => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error("No authenticated session");
 
@@ -49,23 +87,23 @@ const fetchProcessingData = async () => {
         supabase.from('departments').select('name').order('name')
     ]);
 
-    let processing: any[] = [];
-    let returned: any[] = [];
-    let departments: any[] = [];
+    let processing: DocumentItem[] = [];
+    let returned: DocumentItem[] = [];
+    let departments: DepartmentOption[] = [];
 
     if (docsRes.data) {
-        const myActiveDocs = docsRes.data.filter((d: any) => {
+        const myActiveDocs = (docsRes.data as DocumentItem[]).filter((d) => {
             const isActive = d.status !== 'sealed';
             const isMine = d.created_by === currentUserId || d.assigned_clerk === currentUserName;
             return isActive && isMine;
         });
 
-        const sortedDocs = myActiveDocs.sort((a: any, b: any) => 
+        const sortedDocs = myActiveDocs.sort((a, b) => 
             new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime()
         );
         
-        returned = sortedDocs.filter((d: any) => d.status === 'pending' && d.remarks);
-        processing = sortedDocs.filter((d: any) => d.status === 'routing' || (d.status === 'pending' && !d.remarks));
+        returned = sortedDocs.filter((d) => d.status === 'pending' && d.remarks);
+        processing = sortedDocs.filter((d) => d.status === 'routing' || (d.status === 'pending' && !d.remarks));
     }
     
     if (deptRes.data) {
@@ -77,19 +115,22 @@ const fetchProcessingData = async () => {
 
 export default function Processing() {
   const [activeTab, setActiveTab] = useState<'processing' | 'returned'>('processing');
-  const [selectedDoc, setSelectedDoc] = useState<any>(null);
-  const [trailDoc, setTrailDoc] = useState<any>(null);
+  const [selectedDoc, setSelectedDoc] = useState<DocumentItem | null>(null);
+  const [trailDoc, setTrailDoc] = useState<DocumentItem | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
 
   // --- REACT QUERY MAGIC IN ACTION ---
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading, refetch } = useQuery<ProcessingData>({
       queryKey: ['processingDocuments'],
       queryFn: fetchProcessingData
   });
 
-  // Safely extract our data or provide empty defaults
-  const documents = data ? { processing: data.processing, returned: data.returned } : { processing: [], returned: [] };
+  // FIX: Wrap the initialization of 'documents' in its own useMemo hook
+  const documents = useMemo(() => {
+      return data ? { processing: data.processing, returned: data.returned } : { processing: [], returned: [] };
+  }, [data]);
+  
   const departments = data?.departments || [];
 
   const filteredDocs = useMemo(() => {
@@ -98,7 +139,7 @@ export default function Processing() {
 
     if (!query) return sourceList;
     
-    return sourceList.filter((doc: any) => 
+    return sourceList.filter((doc: DocumentItem) => 
         (doc.title || '').toLowerCase().includes(query) ||
         (doc.reference_no || '').toLowerCase().includes(query) ||
         (doc.current_location || '').toLowerCase().includes(query) ||
@@ -183,7 +224,7 @@ export default function Processing() {
 
           {filteredDocs.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {filteredDocs.map((doc: any) => (
+                {filteredDocs.map((doc: DocumentItem) => (
                     <div key={doc.id} className={`bg-white rounded-3xl border-2 ${activeTab === 'returned' ? 'border-red-300 shadow-md shadow-red-100 hover:border-red-500' : (doc.is_urgent ? 'border-red-400 shadow-md shadow-red-100 hover:border-red-500' : 'border-slate-300 hover:border-slate-500')} shadow-sm p-5 flex flex-col transition-colors relative overflow-hidden`}>
                         
                         {(doc.is_urgent || activeTab === 'returned') && <div className="absolute top-0 left-0 w-full h-1.5 bg-red-600"></div>}
@@ -239,7 +280,7 @@ export default function Processing() {
                         <div className="flex gap-2 mt-auto">
                             {doc.attachment_url && (
                                 <button 
-                                    onClick={() => setPreviewDocUrl(doc.attachment_url)} 
+                                    onClick={() => setPreviewDocUrl(doc.attachment_url as string)} 
                                     className="shrink-0 py-2.5 px-3 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl flex items-center justify-center transition-all active:scale-95 border-2 border-slate-300"
                                     title="View Attached File"
                                 >
@@ -273,7 +314,7 @@ export default function Processing() {
   );
 }
 
-function TabButton({ label, icon, count, isActive, onClick, colorClass, badgeClass }: any) {
+function TabButton({ label, icon, count, isActive, onClick, colorClass, badgeClass }: TabButtonProps) {
     return (
         <button 
             onClick={onClick}
