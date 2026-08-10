@@ -14,6 +14,9 @@ import Settings from './routes/settings';
 import Login from './routes/login';
 import './index.css';
 
+// --- Import our new Safety Net ---
+import GlobalErrorBoundary from './components/system/GlobalErrorBoundary';
+
 // Initialize React Query
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -53,9 +56,12 @@ const router = createBrowserRouter([
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-      <Toaster position="top-center" richColors />
-    </QueryClientProvider>
+    {/* --- Wrap the entire app in the Error Boundary --- */}
+    <GlobalErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={router} />
+        <Toaster position="top-center" richColors />
+      </QueryClientProvider>
+    </GlobalErrorBoundary>
   </StrictMode>
 );

@@ -1,11 +1,15 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { 
   Search, MapPin, Clock, CheckCircle, XCircle, AlertCircle, 
-  ArrowRight, Archive, FileText, X, Eye, CornerUpLeft, User
+  Archive, FileText, X, Eye, CornerUpLeft, User
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { toast } from 'sonner';
-import { DigitalTrailModal } from './processing'; 
+
+// --- IMPORT OUR EXTRACTED UTILS & COMPONENTS ---
+import { formatPHDateTime } from '../lib/utils';
+import DigitalTrailModal from '../components/system/DigitalTrailModal';
+import FilePreviewModal from '../components/system/FilePreviewModal';
 
 // --- Shared Animation Styles ---
 const modalAnimationStyles = `
@@ -24,88 +28,68 @@ const modalAnimationStyles = `
     }
 `;
 
-// --- PH Time Formatter ---
-const formatPHDateTime = (isoString: string) => {
-    if (!isoString) return 'Unknown Time';
-    return new Date(isoString).toLocaleString('en-US', {
-        timeZone: 'Asia/Manila',
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: true
-    });
+// --- DATA FETCHING FUNCTION FOR REACT QUERY ---
+const fetchHistoryData = async () => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error("No authenticated session");
+
+    const { data: docs, error } = await supabase
+      .from('documents')
+      .select(`
+          *,
+          document_logs (
+              action,
+              created_at
+          )
+      `);
+
+    if (error) throw error;
+
+    let completed: any[] = [];
+    let returned: any[] = [];
+
+    if (docs) {
+        const processedDocs = docs.map((doc: any) => {
+            const logs = doc.document_logs || [];
+            
+            if (doc.status === 'sealed') {
+                const deliveryLog = logs.filter((l: any) => l.action === 'Delivered')
+                                        .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+                doc.action_time = deliveryLog ? deliveryLog.created_at : doc.created_at;
+            } else {
+                const returnLog = logs.filter((l: any) => l.action === 'Returned')
+                                      .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+                doc.action_time = returnLog ? returnLog.created_at : doc.created_at;
+            }
+            return doc;
+        });
+
+        completed = processedDocs
+          .filter((d: any) => d.status === 'sealed')
+          .sort((a, b) => new Date(b.action_time).getTime() - new Date(a.action_time).getTime());
+        
+        returned = processedDocs
+          .filter((d: any) => d.status === 'pending' && d.remarks)
+          .sort((a, b) => new Date(b.action_time).getTime() - new Date(a.action_time).getTime());
+    }
+
+    return { completed, returned };
 };
 
 export default function History() {
-  const [isLoading, setIsLoading] = useState(true);
-  const [documents, setDocuments] = useState<{completed: any[], returned: any[]}>({ completed: [], returned: [] });
-  
   const [activeTab, setActiveTab] = useState<'completed' | 'returned'>('completed');
   const [searchQuery, setSearchQuery] = useState("");
   const [trailDoc, setTrailDoc] = useState<any>(null);
+  const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
 
-  useEffect(() => {
-      fetchHistoryData();
-  }, []);
+  // --- REACT QUERY MAGIC ---
+  const { data, isLoading } = useQuery({
+      queryKey: ['historyDocuments'],
+      queryFn: fetchHistoryData
+  });
 
-  const fetchHistoryData = async () => {
-      setIsLoading(true);
-      try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session) return;
-
-          // Pull the documents AND their tracking logs simultaneously!
-          const { data: docs, error } = await supabase
-            .from('documents')
-            .select(`
-                *,
-                document_logs (
-                    action,
-                    created_at
-                )
-            `);
-
-          if (error) throw error;
-
-          if (docs) {
-              // 1. Process documents to find their TRUE action time from the logs
-              const processedDocs = docs.map((doc: any) => {
-                  const logs = doc.document_logs || [];
-                  
-                  if (doc.status === 'sealed') {
-                      // Find the "Delivered" log to get the exact completion time
-                      const deliveryLog = logs.filter((l: any) => l.action === 'Delivered')
-                                              .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
-                      doc.action_time = deliveryLog ? deliveryLog.created_at : doc.created_at;
-                  } else {
-                      // Find the "Returned" log to get the exact rejection time
-                      const returnLog = logs.filter((l: any) => l.action === 'Returned')
-                                            .sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
-                      doc.action_time = returnLog ? returnLog.created_at : doc.created_at;
-                  }
-                  return doc;
-              });
-
-              // 2. Filter and SORT by the true action_time (Latest to Oldest)
-              const completed = processedDocs
-                .filter((d: any) => d.status === 'sealed')
-                .sort((a, b) => new Date(b.action_time).getTime() - new Date(a.action_time).getTime());
-              
-              const returned = processedDocs
-                .filter((d: any) => d.status === 'pending' && d.remarks)
-                .sort((a, b) => new Date(b.action_time).getTime() - new Date(a.action_time).getTime());
-              
-              setDocuments({ completed, returned });
-          }
-      } catch (err: any) {
-          console.error("History Fetch Error:", err);
-          toast.error("Failed to load document history.");
-      } finally {
-          setIsLoading(false);
-      }
-  };
+  // Safely extract our data or provide empty defaults
+  const documents = data ? { completed: data.completed, returned: data.returned } : { completed: [], returned: [] };
 
   const filteredDocs = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
@@ -166,7 +150,6 @@ export default function History() {
               )}
           </div>
 
-          {/* Expandable Icon Tabs */}
           <div className="flex flex-nowrap overflow-x-auto scrollbar-hide gap-2 sm:gap-3 bg-white p-2 rounded-2xl border-2 border-slate-300 shadow-sm w-full mt-2">
               <TabButton 
                 label="Completed" 
@@ -189,9 +172,7 @@ export default function History() {
           </div>
       </div>
 
-      {/* Tab Content Area */}
       <div key={activeTab} className="animate-in fade-in zoom-in-[0.97] duration-300 ease-out fill-mode-both">
-          {/* Empty State */}
           {filteredDocs.length === 0 && (
               <div className="bg-white border-2 border-dashed border-slate-300 rounded-3xl p-10 flex flex-col items-center justify-center text-center">
                   <div className="bg-slate-50 p-4 rounded-full mb-4">
@@ -204,13 +185,11 @@ export default function History() {
               </div>
           )}
 
-          {/* Document Grid */}
           {filteredDocs.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {filteredDocs.map((doc: any) => (
                     <div key={doc.id} className={`bg-white rounded-3xl border-2 ${activeTab === 'completed' ? 'border-emerald-200 hover:border-emerald-400' : 'border-red-200 hover:border-red-400'} shadow-sm p-5 flex flex-col transition-colors relative overflow-hidden`}>
                         
-                        {/* Top Status Bar */}
                         <div className={`absolute top-0 left-0 w-full h-1.5 ${activeTab === 'completed' ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
                         
                         <div className="flex justify-between items-start mb-4 mt-1">
@@ -225,7 +204,6 @@ export default function History() {
                         
                         <h4 className="font-black text-xl text-slate-900 mb-2 leading-tight">{doc.title}</h4>
 
-                        {/* ASSIGNED EMPLOYEE TAG */}
                         <div className="flex items-center gap-1.5 mb-4 px-0.5">
                             <User size={14} className="text-slate-400" />
                             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Managed by: <span className="text-blue-600">{doc.assigned_clerk || 'Unassigned'}</span></p>
@@ -240,7 +218,6 @@ export default function History() {
                                     </div>
                                     <div className="flex items-start gap-3">
                                         <Clock size={18} className="text-emerald-600 mt-0.5 shrink-0" />
-                                        {/* Renders the EXACT time from the tracking log */}
                                         <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Completed On</span>{formatPHDateTime(doc.action_time)}</p>
                                     </div>
                                 </>
@@ -252,7 +229,6 @@ export default function History() {
                                     </div>
                                     <div className="flex items-start gap-3">
                                         <Clock size={18} className="text-red-600 mt-0.5 shrink-0" />
-                                        {/* Renders the EXACT time from the tracking log */}
                                         <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Returned On</span>{formatPHDateTime(doc.action_time)}</p>
                                     </div>
                                     <div className="flex items-start gap-3">
@@ -265,21 +241,19 @@ export default function History() {
                         
                         <div className="flex gap-2 mt-auto">
                             {doc.attachment_url && (
-                                <a 
-                                    href={doc.attachment_url} 
-                                    target="_blank" 
-                                    rel="noopener noreferrer"
+                                <button 
+                                    onClick={() => setPreviewDocUrl(doc.attachment_url)}
                                     className="shrink-0 py-2.5 px-3 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl flex items-center justify-center transition-all active:scale-95 border-2 border-slate-300"
                                     title="View Attached File"
                                 >
                                     <Eye size={18} />
-                                </a>
+                                </button>
                             )}
                             <button 
                                 onClick={() => setTrailDoc(doc)}
-                                className="flex-1 py-2.5 px-2 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 border-2 border-slate-300 text-sm"
+                                className="flex-1 py-2.5 px-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 border-2 border-blue-700 text-sm"
                             >
-                                View Record <ArrowRight size={16} />
+                                View Record <CornerUpLeft size={16} />
                             </button>
                         </div>
                     </div>
@@ -288,7 +262,9 @@ export default function History() {
           )}
       </div>
 
+      {/* --- RENDER MODALS --- */}
       {trailDoc && <DigitalTrailModal doc={trailDoc} onBack={() => setTrailDoc(null)} />}
+      {previewDocUrl && <FilePreviewModal url={previewDocUrl} onClose={() => setPreviewDocUrl(null)} />}
     </div>
   );
 }

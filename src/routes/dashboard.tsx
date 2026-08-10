@@ -7,7 +7,8 @@ import {
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { useUiStore } from '../store/uiStore';
-import { DigitalTrailModal } from './processing';
+import DigitalTrailModal from '../components/system/DigitalTrailModal';
+import FilePreviewModal from '../components/system/FilePreviewModal';
 
 // --- Shared Animation Styles ---
 const modalAnimationStyles = `
