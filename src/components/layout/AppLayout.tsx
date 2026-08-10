@@ -37,7 +37,7 @@ const modalAnimationStyles = `
 
 // --- TypeScript Interfaces ---
 interface NavItemProps {
-    icon: React.ReactElement;
+    icon: React.ReactElement<{ size?: number | string; strokeWidth?: number | string }>;
     label: string;
     to: string;
     isActive: boolean;
