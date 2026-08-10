@@ -1,5 +1,5 @@
 // vite.config.ts
-import { defineConfig } from 'vitest/config'; // <-- Changed from 'vite' to 'vitest/config'
+import { defineConfig } from 'vitest/config'; 
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
@@ -16,7 +16,8 @@ export default defineConfig({
     env: {
       VITE_SUPABASE_URL: 'https://test-dummy.supabase.co',
       VITE_SUPABASE_ANON_KEY: 'test-dummy-anon-key',
-      VITE_SUPABASE_SERVICE_ROLE_KEY: 'test-dummy-service-key'
+      VITE_SUPABASE_SERVICE_ROLE_KEY: 'test-dummy-service-key', // <-- Added missing comma here
+      VITE_TURNSTILE_SITE_KEY: '1x00000000000000000000AA'
     }
   },
 });

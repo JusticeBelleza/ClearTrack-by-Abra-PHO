@@ -14,7 +14,10 @@ export default function DigitalTrailModal({ doc, onBack }: any) {
     const headerClass = isCompleted ? 'bg-emerald-700' : isReturned ? 'bg-red-700' : 'bg-slate-900';
 
     const handleClose = (e?: any) => {
-        if (e && e.preventDefault) e.preventDefault(); 
+        // FIX: Check if the event can actually be canceled before trying to prevent default
+        if (e && e.cancelable && e.preventDefault) {
+            e.preventDefault(); 
+        }
         if (isClosing) return; 
         
         setIsClosing(true);

@@ -55,10 +55,11 @@ interface Department {
     name: string;
 }
 
-// --- Custom Dropdown Component for Departments ---
+// --- Custom Dropdown Component for Departments (Responsive + Auto-Scroll Version) ---
 function CustomSelect({ options, value, onChange, placeholder, disabled = false }: CustomSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const menuRef = useRef<HTMLDivElement>(null); 
   
     useEffect(() => {
       function handleClickOutside(event: MouseEvent) {
@@ -69,6 +70,15 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false 
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
+
+    // Auto-scroll the menu into view when opened
+    useEffect(() => {
+      if (isOpen && menuRef.current) {
+        setTimeout(() => {
+          menuRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 50);
+      }
+    }, [isOpen]);
   
     return (
       <div className="relative w-full" ref={dropdownRef}>
@@ -76,7 +86,7 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false 
           type="button"
           disabled={disabled}
           onClick={() => !disabled && setIsOpen(!isOpen)}
-          className={`w-full px-4 py-3.5 border-2 rounded-xl flex justify-between items-center transition-all text-base outline-none ${
+          className={`w-full px-3 py-2.5 sm:px-4 sm:py-3.5 border-2 rounded-xl flex justify-between items-center transition-all text-sm sm:text-base outline-none ${
             disabled ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed' :
             isOpen
               ? 'border-blue-600 ring-4 ring-blue-600/10 bg-white'
@@ -92,15 +102,15 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false 
           </span>
           {!disabled && (
               <ChevronDown 
-                size={20} 
-                className={`text-slate-600 transition-transform duration-300 ease-in-out ${isOpen ? 'rotate-180 text-slate-900' : ''}`} 
+                size={18} 
+                className={`text-slate-600 transition-transform duration-300 ease-in-out sm:w-5 sm:h-5 ${isOpen ? 'rotate-180 text-slate-900' : ''}`} 
               />
           )}
         </button>
   
         {isOpen && !disabled && (
-          <div className="absolute z-20 w-full mt-2 bg-white border-2 border-slate-400 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-            <div className="max-h-60 overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
+          <div ref={menuRef} className="absolute z-20 w-full mt-1 sm:mt-2 bg-white border-2 border-slate-400 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="max-h-48 sm:max-h-60 overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
               {options.map((option: OptionType, idx: number) => {
                 const optValue = typeof option === 'string' ? option : option.value;
                 const optLabel = typeof option === 'string' ? option : option.label;
@@ -113,7 +123,7 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false 
                       onChange(optValue);
                       setIsOpen(false);
                     }}
-                    className={`px-4 py-3 text-base rounded-lg cursor-pointer transition-colors flex items-center active:scale-95 ${
+                    className={`px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base rounded-lg cursor-pointer transition-colors flex items-center active:scale-95 ${
                       isSelected
                         ? 'bg-blue-600 text-white font-bold'
                         : 'text-slate-800 hover:bg-slate-100 font-medium'
@@ -148,7 +158,6 @@ export default function Settings() {
       department: ''
   });
 
-  // FIX: Hoist function definition above the useEffect
   const fetchData = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -193,7 +202,6 @@ export default function Settings() {
       setIsEditing(true);
   };
 
-  // Triggers the slide-down animation
   const handleCloseEdit = () => {
       setIsClosingEdit(true);
       setTimeout(() => {
@@ -231,7 +239,7 @@ export default function Settings() {
           } catch(e) { console.warn("Failed to sync to employees directory", e); }
 
           setProfile({ ...profile, ...formData });
-          handleCloseEdit(); // Closes the drawer with animation
+          handleCloseEdit(); 
           toast.success("Profile updated successfully!");
       } catch (err: unknown) {
           console.error(err);
@@ -302,7 +310,7 @@ export default function Settings() {
                     </div>
                 </div>
 
-                {/* DISPLAY MODE - Always rendered on mobile (blurred behind overlay), hidden on desktop during edit */}
+                {/* DISPLAY MODE */}
                 <div className={`space-y-6 transition-all duration-300 ${isEditing ? 'opacity-30 md:hidden pointer-events-none' : 'opacity-100 block'}`}>
                     <div>
                         <h3 className="text-2xl font-black text-slate-900">{profile?.full_name || 'Not provided'}</h3>
@@ -316,56 +324,56 @@ export default function Settings() {
                     </div>
                 </div>
 
-                {/* EDIT MODE (Slide Up Bottom-Sheet on Mobile, Inline Form on Desktop) */}
+                {/* EDIT MODE (Responsive Form) */}
                 {isEditing && (
                     <>
                         {/* Mobile Backdrop */}
                         <div className={`fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 md:hidden ${isClosingEdit ? 'animate-overlay-fade-out pointer-events-none' : 'animate-overlay-fade'}`} onClick={handleCloseEdit}></div>
                         
-                        {/* Container - Bottom Sheet on Mobile, Static Inline on Desktop */}
+                        {/* Container */}
                         <div className={`fixed inset-x-0 bottom-0 z-50 w-full max-h-[90vh] bg-white rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.1)] flex flex-col overflow-hidden md:static md:w-auto md:max-h-none md:bg-transparent md:shadow-none md:mt-6 md:rounded-none md:overflow-visible ${isClosingEdit ? 'animate-responsive-modal-close md:hidden' : 'animate-responsive-modal md:block md:animate-in md:slide-in-from-bottom-4 md:fade-in'}`}>
                             
                             {/* Sticky Colored Mobile Drawer Header */}
-                            <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-5 sm:p-6 flex items-center justify-between shrink-0 relative md:hidden">
+                            <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white p-4 sm:p-6 flex items-center justify-between shrink-0 relative md:hidden">
                                 <div className="w-16 h-1.5 bg-white/30 rounded-full absolute top-2 left-1/2 -translate-x-1/2"></div>
-                                <h3 className="text-xl font-black flex items-center gap-2 mt-2"><Edit3 size={20} /> Edit Profile</h3>
-                                <button onClick={handleCloseEdit} className="p-2 bg-white/20 hover:bg-white/30 text-white rounded-full active:scale-95 transition-all mt-2">
-                                    <X size={20} />
+                                <h3 className="text-lg font-black flex items-center gap-2 mt-2"><Edit3 size={18} /> Edit Profile</h3>
+                                <button onClick={handleCloseEdit} className="p-1.5 bg-white/20 hover:bg-white/30 text-white rounded-full active:scale-95 transition-all mt-2">
+                                    <X size={18} />
                                 </button>
                             </div>
 
-                            {/* Scrollable Form Content */}
-                            <div className="flex-1 space-y-6 overflow-y-auto p-6 pb-8 md:p-0 md:overflow-visible custom-scrollbar">
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                            {/* Form Content - Compact on Mobile, Standard on Desktop */}
+                            <div className="flex-1 space-y-4 sm:space-y-6 overflow-y-auto p-5 md:p-0 md:overflow-visible custom-scrollbar pb-10">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                                     <div>
-                                        <label className="block text-sm font-bold text-slate-900 mb-1.5 uppercase tracking-wider">Full Name *</label>
-                                        <input type="text" value={formData.full_name} onChange={(e) => setFormData({...formData, full_name: e.target.value})} className="w-full p-3.5 bg-white border-2 border-slate-300 rounded-xl focus:border-blue-600 outline-none font-bold text-slate-900 transition-colors shadow-sm" />
+                                        <label className="block text-[10px] sm:text-xs font-bold text-slate-900 mb-1 uppercase tracking-wider">Full Name *</label>
+                                        <input type="text" value={formData.full_name} onChange={(e) => setFormData({...formData, full_name: e.target.value})} className="w-full p-2.5 sm:p-3.5 text-sm sm:text-base bg-white border-2 border-slate-300 rounded-xl focus:border-blue-600 outline-none font-bold text-slate-900 transition-colors shadow-sm" />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-slate-900 mb-1.5 uppercase tracking-wider">Employee ID *</label>
-                                        <input type="text" value={formData.emp_id} onChange={(e) => setFormData({...formData, emp_id: e.target.value})} className="w-full p-3.5 bg-white border-2 border-slate-300 rounded-xl focus:border-blue-600 outline-none font-bold text-slate-900 font-mono transition-colors shadow-sm" />
-                                    </div>
-                                </div>
-
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2 md:border-t-2 border-slate-100">
-                                    <div>
-                                        <label className="block text-sm font-bold text-slate-500 mb-1.5 uppercase tracking-wider flex items-center gap-1.5"><Mail size={16}/> Login Email</label>
-                                        <input type="text" value={profile?.email || ''} disabled className="w-full p-3.5 bg-slate-100 border-2 border-slate-200 rounded-xl text-slate-500 font-bold cursor-not-allowed shadow-sm" />
-                                        <p className="text-[11px] font-bold text-slate-400 mt-1">Email cannot be changed directly.</p>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-bold text-slate-900 mb-1.5 uppercase tracking-wider flex items-center gap-1.5"><Phone size={16}/> Contact Number</label>
-                                        <input type="tel" value={formData.contact_number} onChange={(e) => setFormData({...formData, contact_number: e.target.value})} className="w-full p-3.5 bg-white border-2 border-slate-300 rounded-xl focus:border-blue-600 outline-none font-bold text-slate-900 transition-colors shadow-sm" />
+                                        <label className="block text-[10px] sm:text-xs font-bold text-slate-900 mb-1 uppercase tracking-wider">Employee ID *</label>
+                                        <input type="text" value={formData.emp_id} onChange={(e) => setFormData({...formData, emp_id: e.target.value})} className="w-full p-2.5 sm:p-3.5 text-sm sm:text-base bg-white border-2 border-slate-300 rounded-xl focus:border-blue-600 outline-none font-bold text-slate-900 font-mono transition-colors shadow-sm" />
                                     </div>
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2 md:border-t-2 border-slate-100">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 pt-1 sm:pt-2 md:border-t-2 border-slate-100">
                                     <div>
-                                        <label className="block text-sm font-bold text-slate-900 mb-1.5 uppercase tracking-wider flex items-center gap-1.5"><Briefcase size={16}/> Designation</label>
-                                        <input type="text" value={formData.designation} onChange={(e) => setFormData({...formData, designation: e.target.value})} className="w-full p-3.5 bg-white border-2 border-slate-300 rounded-xl focus:border-blue-600 outline-none font-bold text-slate-900 transition-colors shadow-sm" />
+                                        <label className="block text-[10px] sm:text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider flex items-center gap-1.5"><Mail size={14} className="sm:w-4 sm:h-4"/> Login Email</label>
+                                        <input type="text" value={profile?.email || ''} disabled className="w-full p-2.5 sm:p-3.5 text-sm sm:text-base bg-slate-100 border-2 border-slate-200 rounded-xl text-slate-500 font-bold cursor-not-allowed shadow-sm" />
+                                        <p className="text-[10px] sm:text-[11px] font-bold text-slate-400 mt-1">Email cannot be changed directly.</p>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-bold text-slate-900 mb-1.5 uppercase tracking-wider flex items-center gap-1.5"><Building2 size={16}/> Department *</label>
+                                        <label className="block text-[10px] sm:text-xs font-bold text-slate-900 mb-1 uppercase tracking-wider flex items-center gap-1.5"><Phone size={14} className="sm:w-4 sm:h-4"/> Contact Number</label>
+                                        <input type="tel" value={formData.contact_number} onChange={(e) => setFormData({...formData, contact_number: e.target.value})} className="w-full p-2.5 sm:p-3.5 text-sm sm:text-base bg-white border-2 border-slate-300 rounded-xl focus:border-blue-600 outline-none font-bold text-slate-900 transition-colors shadow-sm" />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 pt-1 sm:pt-2 md:border-t-2 border-slate-100">
+                                    <div>
+                                        <label className="block text-[10px] sm:text-xs font-bold text-slate-900 mb-1 uppercase tracking-wider flex items-center gap-1.5"><Briefcase size={14} className="sm:w-4 sm:h-4"/> Designation</label>
+                                        <input type="text" value={formData.designation} onChange={(e) => setFormData({...formData, designation: e.target.value})} className="w-full p-2.5 sm:p-3.5 text-sm sm:text-base bg-white border-2 border-slate-300 rounded-xl focus:border-blue-600 outline-none font-bold text-slate-900 transition-colors shadow-sm" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] sm:text-xs font-bold text-slate-900 mb-1 uppercase tracking-wider flex items-center gap-1.5"><Building2 size={14} className="sm:w-4 sm:h-4"/> Department *</label>
                                         <CustomSelect 
                                             options={departments.map(d => ({ value: d.name, label: d.name }))} 
                                             value={formData.department} 
@@ -376,13 +384,13 @@ export default function Settings() {
                                 </div>
                             </div>
 
-                            {/* Action Buttons */}
-                            <div className="flex gap-3 pt-6 border-t-2 border-slate-100 mt-6 shrink-0 pb-safe md:pb-0 px-6 md:px-0">
-                                <button onClick={handleCloseEdit} disabled={isSaving} className="flex-1 py-3.5 bg-white border-2 border-slate-300 text-slate-700 font-bold rounded-xl active:scale-95 transition-transform text-base disabled:opacity-50">
+                            {/* Action Buttons with solid background to prevent dropdown overlap */}
+                            <div className="flex gap-3 pt-3 pb-5 border-t-2 border-slate-100 bg-white shrink-0 md:mt-2 md:pb-0 px-5 md:px-0">
+                                <button onClick={handleCloseEdit} disabled={isSaving} className="flex-1 py-2.5 sm:py-3.5 bg-white border-2 border-slate-300 text-slate-700 font-bold rounded-xl active:scale-95 transition-transform text-sm sm:text-base disabled:opacity-50">
                                     Cancel
                                 </button>
-                                <button onClick={handleSaveProfile} disabled={isSaving} className="flex-[1.5] py-3.5 bg-blue-600 text-white font-bold rounded-xl border-2 border-blue-600 hover:bg-blue-700 hover:border-blue-700 active:scale-95 transition-all text-base flex justify-center items-center gap-2 disabled:opacity-50 shadow-md">
-                                    {isSaving ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : <><Save size={18} /> Save</>}
+                                <button onClick={handleSaveProfile} disabled={isSaving} className="flex-[1.5] py-2.5 sm:py-3.5 bg-blue-600 text-white font-bold rounded-xl border-2 border-blue-600 hover:bg-blue-700 hover:border-blue-700 active:scale-95 transition-all text-sm sm:text-base flex justify-center items-center gap-2 disabled:opacity-50 shadow-md">
+                                    {isSaving ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : <><Save size={16} /> Save</>}
                                 </button>
                             </div>
                         </div>

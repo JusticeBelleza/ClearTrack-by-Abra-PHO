@@ -1,7 +1,7 @@
 {
   "name": "clear-track-app",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,6 +12,7 @@
     "prepare": "husky"
   },
   "dependencies": {
+    "@marsidev/react-turnstile": "^1.5.5",
     "@radix-ui/react-slot": "^1.3.3",
     "@supabase/supabase-js": "^2.112.1",
     "@tailwindcss/vite": "^4.3.3",

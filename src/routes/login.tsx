@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ArrowRight, } from 'lucide-react';
+import { Lock, Mail, ArrowRight } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
+import { Turnstile } from '@marsidev/react-turnstile';
+import { env } from '../lib/env';
 
 // Import both logos from your assets folder
 import clearTrackLogo from '../assets/clear_track_logo.png';
@@ -13,6 +15,7 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,11 +24,19 @@ export default function Login() {
       return;
     }
 
+    if (!turnstileToken) {
+      toast.error("Security Check Required", { description: "Please complete the Cloudflare security verification." });
+      return;
+    }
+
     setIsLoading(true);
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password: password.trim(),
+        options: {
+          captchaToken: turnstileToken // <-- Pass the Turnstile token to Supabase!
+        }
       });
 
       if (error) throw error;
@@ -45,6 +56,9 @@ export default function Login() {
         navigate('/dashboard', { replace: true });
       }
     } catch (err: any) {
+      // ADD THIS LINE TO SEE THE REAL ERROR IN YOUR BROWSER CONSOLE:
+      console.error("Supabase Auth Error:", err); 
+      
       toast.error("Login Failed", { description: err.message || "Invalid credentials." });
     } finally {
       setIsLoading(false);
@@ -137,9 +151,22 @@ export default function Login() {
             </div>
           </div>
 
+          {/* Cloudflare Turnstile Widget */}
+          <div className="flex justify-center pt-2">
+            <Turnstile
+              siteKey={env.VITE_TURNSTILE_SITE_KEY}
+              onSuccess={(token) => setTurnstileToken(token)}
+              onError={() => {
+                setTurnstileToken(null);
+                toast.error("Security check failed. Please try again.");
+              }}
+              onExpire={() => setTurnstileToken(null)}
+            />
+          </div>
+
           <button 
             type="submit" 
-            disabled={isLoading}
+            disabled={isLoading || !turnstileToken}
             className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl shadow-lg shadow-blue-600/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-base border-2 border-blue-500 disabled:opacity-50 mt-2"
           >
             {isLoading ? (
