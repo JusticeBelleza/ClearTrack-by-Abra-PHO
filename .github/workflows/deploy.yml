@@ -57,6 +57,6 @@ jobs:
         with:
           apiToken: ${{ secrets.CF_API_TOKEN }}
           accountId: ${{ secrets.CF_ACCOUNT_ID }}
-          projectName: ClearTrack
+          projectName: cleartrack
           directory: dist
           branch: main
