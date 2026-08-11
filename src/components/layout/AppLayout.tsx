@@ -8,9 +8,12 @@ import { useUiStore } from '../../store/uiStore';
 import CreateDocumentModal from '../system/CreateDocumentModal';
 import { supabase } from '../../lib/supabase';
 
+// --- IMPORT YOUR NEW INSTALL PROMPT ---
+import InstallPrompt from '../InstallPrompt'; 
+
 import clearTrackLogo from '../../assets/clear_track_logo.png';
 
-// --- Shared Modal Animation Styles ---
+// --- Shared Modal Animation Styles (UPDATED FOR FASTER NATIVE FEEL) ---
 const modalAnimationStyles = `
     @keyframes customFadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes iosSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -19,14 +22,14 @@ const modalAnimationStyles = `
     @keyframes iosSlideDown { from { transform: translateY(0); } to { transform: translateY(100%); } }
     @keyframes desktopZoomOut { from { transform: scale(1); opacity: 1; } to { transform: scale(0.95); opacity: 0; } }
     
-    .animate-overlay-fade { animation: customFadeIn 0.5s ease-out forwards; }
-    .animate-overlay-fade-out { animation: customFadeOut 0.4s ease-in forwards; }
-    .animate-responsive-modal { animation: iosSlideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-    .animate-responsive-modal-close { animation: iosSlideDown 0.4s cubic-bezier(0.3, 0, 0.8, 0.15) forwards; }
+    .animate-overlay-fade { animation: customFadeIn 0.2s ease-out forwards; }
+    .animate-overlay-fade-out { animation: customFadeOut 0.2s ease-in forwards; }
+    .animate-responsive-modal { animation: iosSlideUp 0.3s cubic-bezier(0.25, 1, 0.3, 1) forwards; }
+    .animate-responsive-modal-close { animation: iosSlideDown 0.25s cubic-bezier(0.3, 0, 0.8, 0.15) forwards; }
 
     @media (min-width: 640px) {
-        .animate-responsive-modal { animation: desktopZoomIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        .animate-responsive-modal-close { animation: desktopZoomOut 0.3s cubic-bezier(0.3, 0, 0.8, 0.15) forwards; }
+        .animate-responsive-modal { animation: desktopZoomIn 0.25s cubic-bezier(0.25, 1, 0.3, 1) forwards; }
+        .animate-responsive-modal-close { animation: desktopZoomOut 0.2s ease-in forwards; }
     }
 
     /* Hide scrollbar for the scrollable areas */
@@ -132,7 +135,7 @@ export default function AppLayout() {
   
   const closeLogoutModal = () => {
       setIsClosingLogout(true);
-      setTimeout(() => { setIsLogoutModalOpen(false); setIsClosingLogout(false); }, 400);
+      setTimeout(() => { setIsLogoutModalOpen(false); setIsClosingLogout(false); }, 300);
   };
 
   const confirmLogout = async () => {
@@ -304,6 +307,9 @@ export default function AppLayout() {
 
       {/* Global Create Document Modal */}
       {isCreateModalOpen && <CreateDocumentModal />}
+      
+      {/* --- NEW PWA INSTALL PROMPT --- */}
+      <InstallPrompt />
     </div>
   );
 }

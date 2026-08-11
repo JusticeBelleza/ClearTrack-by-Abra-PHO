@@ -1,17 +1,17 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { 
-  Search, AlertCircle, MapPin, Eye, Clock, ChevronRight, X, Activity, CornerUpLeft, User
+    Search, AlertCircle, MapPin, Eye, Clock, ChevronRight, X, Activity, CornerUpLeft, User
 } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 
-// --- IMPORT OUR EXTRACTED UTILS & COMPONENTS ---
+// --- FIXED IMPORT PATHS ---
+import { supabase } from '../lib/supabase';
 import { formatPHDateTime } from '../lib/utils';
 import HandoverScreen from '../components/system/HandoverScreen';
 import DigitalTrailModal from '../components/system/DigitalTrailModal';
 import FilePreviewModal from '../components/system/FilePreviewModal';
 
-// --- Shared Animation Styles ---
+// --- Shared Animation Styles (UPDATED FOR INSTANT NATIVE SNAP) ---
 const modalAnimationStyles = `
     @keyframes customFadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes iosSlideUp { from { transform: translateY(100vh); } to { transform: translateY(0); } }
@@ -20,18 +20,18 @@ const modalAnimationStyles = `
     @keyframes iosSlideDown { from { transform: translateY(0); } to { transform: translateY(100vh); } }
     @keyframes desktopZoomOut { from { transform: scale(1); opacity: 1; } to { transform: scale(0.95); opacity: 0; } }
     
-    .animate-overlay-fade { animation: customFadeIn 0.3s ease-out forwards; }
-    .animate-overlay-fade-out { animation: customFadeOut 0.2s ease-in forwards; }
+    .animate-overlay-fade { animation: customFadeIn 0.15s ease-out forwards; }
+    .animate-overlay-fade-out { animation: customFadeOut 0.15s ease-in forwards; }
     
-    .animate-responsive-modal { animation: iosSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; will-change: transform; }
-    .animate-responsive-modal-close { animation: iosSlideDown 0.3s cubic-bezier(0.3, 0, 0.8, 0.15) forwards; will-change: transform; }
+    .animate-responsive-modal { animation: iosSlideUp 0.25s cubic-bezier(0.25, 1, 0.3, 1) forwards; will-change: transform; }
+    .animate-responsive-modal-close { animation: iosSlideDown 0.2s cubic-bezier(0.3, 0, 0.8, 0.15) forwards; will-change: transform; }
 
     .scrollbar-hide::-webkit-scrollbar { display: none; }
     .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
     
     @media (min-width: 640px) {
-        .animate-responsive-modal { animation: desktopZoomIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        .animate-responsive-modal-close { animation: desktopZoomOut 0.25s cubic-bezier(0.3, 0, 0.8, 0.15) forwards; }
+        .animate-responsive-modal { animation: desktopZoomIn 0.2s cubic-bezier(0.25, 1, 0.3, 1) forwards; }
+        .animate-responsive-modal-close { animation: desktopZoomOut 0.15s cubic-bezier(0.3, 0, 0.8, 0.15) forwards; }
     }
 `;
 
@@ -126,7 +126,6 @@ export default function Processing() {
       queryFn: fetchProcessingData
   });
 
-  // FIX: Wrap the initialization of 'documents' in its own useMemo hook
   const documents = useMemo(() => {
       return data ? { processing: data.processing, returned: data.returned } : { processing: [], returned: [] };
   }, [data]);

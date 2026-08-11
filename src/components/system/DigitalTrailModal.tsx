@@ -1,7 +1,28 @@
 import { useState, useEffect, type SyntheticEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { X, Archive, Check, ArrowRight, FileText } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import FilePreviewModal from './FilePreviewModal';
+
+const trailModalStyles = `
+    @keyframes trailFadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes trailFadeOut { from { opacity: 1; } to { opacity: 0; } }
+    @keyframes trailSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+    @keyframes trailSlideDown { from { transform: translateY(0); } to { transform: translateY(100%); } }
+    @keyframes trailZoomIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    @keyframes trailZoomOut { from { transform: scale(1); opacity: 1; } to { transform: scale(0.95); opacity: 0; } }
+
+    .trail-overlay-in { animation: trailFadeIn 0.2s ease-out forwards; }
+    .trail-overlay-out { animation: trailFadeOut 0.2s ease-in forwards; }
+    
+    .trail-modal-in { animation: trailSlideUp 0.25s cubic-bezier(0.25, 1, 0.3, 1) forwards; }
+    .trail-modal-out { animation: trailSlideDown 0.2s cubic-bezier(0.3, 0, 0.8, 0.15) forwards; }
+
+    @media (min-width: 640px) {
+        .trail-modal-in { animation: trailZoomIn 0.2s cubic-bezier(0.25, 1, 0.3, 1) forwards; }
+        .trail-modal-out { animation: trailZoomOut 0.15s cubic-bezier(0.3, 0, 0.8, 0.15) forwards; }
+    }
+`;
 
 interface DocumentLog {
     id: string;
@@ -29,9 +50,8 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
     const [isLoadingLogs, setIsLoadingLogs] = useState(true);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-    const isCompleted = doc.status === 'sealed';
-    const isReturned = doc.status === 'pending' && doc.remarks;
-    const headerClass = isCompleted ? 'bg-emerald-700' : isReturned ? 'bg-red-700' : 'bg-slate-900';
+    // FIX: Locked the header to a consistent dark blue for ALL tabs (History, Processing, Dashboard)
+    const headerClass = 'bg-slate-900';
 
     const handleClose = (e?: SyntheticEvent) => {
         if (e && e.cancelable && e.preventDefault) {
@@ -40,7 +60,7 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
         if (isClosing) return; 
         
         setIsClosing(true);
-        setTimeout(() => { onBack(); }, 400); 
+        setTimeout(() => { onBack(); }, 200); 
     };
 
     useEffect(() => {
@@ -58,10 +78,12 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
         fetchLogs();
     }, [doc.id]);
 
-    return (
+    return createPortal(
         <>
-        <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/60 backdrop-blur-sm ${isClosing ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
-            <div className={`bg-white w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl rounded-t-3xl sm:rounded-3xl overflow-hidden ${isClosing ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
+        <style>{trailModalStyles}</style>
+        
+        <div className={`fixed inset-0 z-[999] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/70 backdrop-blur-sm ${isClosing ? 'trail-overlay-out' : 'trail-overlay-in'}`}>
+            <div className={`bg-white w-full max-w-md max-h-[95vh] flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.3)] rounded-t-[2rem] sm:rounded-3xl overflow-hidden ${isClosing ? 'trail-modal-out' : 'trail-modal-in'}`}>
                 
                 <div className={`text-white relative flex flex-col shrink-0 ${headerClass}`}>
                     <div className="w-12 h-1.5 bg-white/30 rounded-full mx-auto mt-3 sm:hidden shrink-0"></div>
@@ -144,7 +166,13 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
                 </div>
             </div>
         </div>
-        {previewUrl && <FilePreviewModal url={previewUrl} onClose={() => setPreviewUrl(null)} />}
-        </>
+        
+        {previewUrl && (
+            <div className="fixed inset-0 z-[9999]">
+                <FilePreviewModal url={previewUrl} onClose={() => setPreviewUrl(null)} />
+            </div>
+        )}
+        </>,
+        document.body
     );
 }
