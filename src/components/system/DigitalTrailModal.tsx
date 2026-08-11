@@ -91,7 +91,29 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
                 {/* Content */}
                 <div className="flex-1 overflow-y-auto bg-white p-4 pt-6">
                     <div className="relative">
-                        {isLoadingLogs && <div className="text-center p-4 text-slate-500 font-bold">Loading route history...</div>}
+                        
+                        {/* Shimmering Skeleton Loader */}
+                        {isLoadingLogs && (
+                            <div className="space-y-0 animate-pulse pt-2">
+                                {[1, 2, 3].map((i) => (
+                                    <div key={i} className="flex gap-4 relative w-full">
+                                        <div className="w-14 shrink-0 flex flex-col items-end gap-1.5 pt-1">
+                                            <div className="w-10 h-2.5 bg-slate-200 rounded-full"></div>
+                                            <div className="w-12 h-2 bg-slate-100 rounded-full"></div>
+                                        </div>
+                                        <div className="relative flex flex-col items-center">
+                                            {i !== 3 && <div className="absolute top-6 bottom-[-1.5rem] w-[2px] bg-slate-100"></div>}
+                                            <div className="relative z-10 w-[22px] h-[22px] mt-0.5 rounded-full bg-slate-200"></div>
+                                        </div>
+                                        <div className="flex-1 pb-10 space-y-2.5 pt-1">
+                                            <div className="w-32 h-3.5 bg-slate-200 rounded-full mb-2"></div>
+                                            <div className="w-3/4 h-2.5 bg-slate-100 rounded-full"></div>
+                                            <div className="w-1/2 h-2.5 bg-slate-100 rounded-full"></div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                         
                         {!isLoadingLogs && events.length === 0 && (
                             <div className="text-center p-6 text-slate-500">
@@ -100,7 +122,7 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
                             </div>
                         )}
 
-                        {events.map((log, index) => {
+                        {!isLoadingLogs && events.map((log, index) => {
                             const dateObj = new Date(log.created_at);
                             const dateStr = dateObj.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric' });
                             const timeStr = dateObj.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit' });
@@ -160,7 +182,7 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
             </div>
         </div>
         
-        {/* FIX: Clean component render without the blocking wrapper */}
+        {/* Clean component render without the blocking wrapper */}
         {previewUrl && <FilePreviewModal url={previewUrl} onClose={() => setPreviewUrl(null)} />}
         </>,
         document.body

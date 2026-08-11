@@ -6,23 +6,9 @@ import {
   Save, ChevronDown, Phone, Zap, MapPin, Hash, AlertCircle, Mail
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '../lib/supabase'; 
-import { createClient } from '@supabase/supabase-js'; 
 
-// --- ADMIN BYPASS CLIENT ---
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || '';
-
-const supabaseAdmin = createClient(
-  supabaseUrl || 'https://placeholder.supabase.co', 
-  serviceRoleKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoic2VydmljZV9yb2xlIn0.dummy_key', 
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false 
-    }
-  }
-);
+// ✅ Safely importing the singleton clients
+import { supabase, supabaseAdmin } from '../lib/supabase';
 
 // --- Shared Modal Animation Styles ---
 const modalAnimationStyles = `
@@ -388,6 +374,7 @@ export default function SystemAdmin() {
         return;
     }
 
+    const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
     if (!serviceRoleKey) {
         toast.error('Configuration Error', { description: 'Missing VITE_SUPABASE_SERVICE_ROLE_KEY in environment variables.' });
         return;
@@ -431,7 +418,7 @@ export default function SystemAdmin() {
         department: newEmp.department,
         designation: newEmp.designation,
         contact_number: newEmp.contactNumber,
-        role: 'pho_staff'               // <-- Explicitly locks them into the Staff role
+        role: 'pho_staff'              // <-- Explicitly locks them into the Staff role
     });
 
     if (profileError) {
