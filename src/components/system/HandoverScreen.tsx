@@ -1,4 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { MapPin, PenTool, X, CheckCircle, ChevronDown, Camera, Paperclip, AlertCircle, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabase';
@@ -99,11 +100,21 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
     const [completionRemarks, setCompletionRemarks] = useState('');
     const [retentionFate, setRetentionFate] = useState<'originator' | 'destination' | null>(null);
 
+    // Pure Tailwind-Animate classes for the background overlay
+    const overlayAnimation = isClosing 
+        ? "animate-out fade-out duration-200 ease-in fill-mode-forwards" 
+        : "animate-in fade-in duration-200 ease-out fill-mode-forwards";
+        
+    // Pure Tailwind-Animate classes for the modal (Slide on mobile, Zoom on desktop)
+    const modalAnimation = isClosing 
+        ? "animate-out slide-out-to-bottom-[100%] sm:slide-out-to-bottom-0 sm:zoom-out-95 duration-200 ease-in fill-mode-forwards" 
+        : "animate-in slide-in-from-bottom-[100%] sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200 ease-out fill-mode-forwards";
+
     const handleClose = (e?: React.MouseEvent | React.TouchEvent) => {
         if (e && e.preventDefault) e.preventDefault(); 
         if (isClosing) return; 
         setIsClosing(true);
-        setTimeout(() => { onBack(); }, 400); 
+        setTimeout(() => { onBack(); }, 200); // Matches the 200ms Tailwind duration
     };
     
     const handleBackBtn = (e?: React.MouseEvent | React.TouchEvent) => {
@@ -240,9 +251,9 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
         finally { setIsSubmitting(false); }
     };
 
-    return (
-        <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/60 backdrop-blur-sm ${isClosing ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
-            <div className={`bg-white w-full max-w-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden shadow-2xl rounded-t-2xl sm:rounded-3xl ${isClosing ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
+    return createPortal(
+        <div className={`fixed inset-0 z-[999] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/70 backdrop-blur-sm ${overlayAnimation}`}>
+            <div className={`bg-white w-full max-w-2xl max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden shadow-[0_-10px_40px_rgba(0,0,0,0.3)] rounded-t-[2rem] sm:rounded-3xl ${modalAnimation}`}>
                 <div className={`text-white relative flex flex-col shrink-0 transition-colors duration-300 ${activeAction === 'reject' ? 'bg-red-700' : activeAction === 'complete' ? 'bg-emerald-700' : 'bg-slate-900'}`}>
                     <div className="w-16 h-1.5 bg-white/30 rounded-full mx-auto mt-3 sm:hidden shrink-0"></div>
                     <div className="p-5 pt-3 sm:pt-6 flex items-center justify-between">
@@ -299,6 +310,7 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
                     </div>
                 )}
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }
