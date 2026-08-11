@@ -1,6 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { MapPin, PenTool, X, CheckCircle, ChevronDown, Camera, Paperclip, AlertCircle, ArrowLeft } from 'lucide-react';
+import { 
+    MapPin, PenTool, X, CheckCircle, ChevronDown, Camera, 
+    Paperclip, AlertCircle, ArrowLeft, ChevronRight 
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabase';
 import { jsPDF } from 'jspdf';
@@ -105,7 +108,7 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
         ? "animate-out fade-out duration-200 ease-in fill-mode-forwards" 
         : "animate-in fade-in duration-200 ease-out fill-mode-forwards";
         
-    // Pure Tailwind-Animate classes for the modal (Slide on mobile, Zoom on desktop)
+    // Pure Tailwind-Animate classes for the modal
     const modalAnimation = isClosing 
         ? "animate-out slide-out-to-bottom-[100%] sm:slide-out-to-bottom-0 sm:zoom-out-95 duration-200 ease-in fill-mode-forwards" 
         : "animate-in slide-in-from-bottom-[100%] sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200 ease-out fill-mode-forwards";
@@ -114,7 +117,7 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
         if (e && e.preventDefault) e.preventDefault(); 
         if (isClosing) return; 
         setIsClosing(true);
-        setTimeout(() => { onBack(); }, 200); // Matches the 200ms Tailwind duration
+        setTimeout(() => { onBack(); }, 200);
     };
     
     const handleBackBtn = (e?: React.MouseEvent | React.TouchEvent) => {
@@ -264,19 +267,47 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-5 sm:p-8 space-y-6 scrollbar-hide bg-slate-50">
-                    <div className="bg-white p-5 rounded-2xl border-2 border-slate-200 shadow-sm relative z-20">
-                        <p className="text-sm font-bold text-slate-500 mb-2 font-mono">{doc.reference_no}</p>
-                        <p className="font-black text-xl text-slate-900 leading-tight flex items-start gap-2">{doc.is_urgent && <AlertCircle size={24} className="text-red-600 shrink-0 mt-0.5" />} {doc.title || doc.subject}</p>
-                    </div>
+                    
+                    {/* ENTERPRISE DOCUMENT HEADER */}
+                    {!activeAction && (
+                        <div className="bg-white border-2 border-slate-200 p-4 sm:p-5 rounded-2xl flex flex-col items-start shadow-sm mb-2">
+                            <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                                {doc.reference_no || `DOC-${doc.id.substring(0, 8)}`}
+                            </p>
+                            <h4 className="text-lg sm:text-xl font-black text-slate-900 leading-tight flex items-center gap-2">
+                                {doc.is_urgent && <AlertCircle size={20} className="text-red-600 shrink-0" />} 
+                                {doc.title || doc.subject || 'Untitled Document'}
+                            </h4>
+                        </div>
+                    )}
 
                     {!activeAction ? (
-                        <div className="flex flex-col gap-4 pt-2">
-                            <button onClick={() => setActiveAction('route')} className="animate-stagger-1 bg-white border-2 border-blue-200 hover:border-blue-400 p-5 rounded-2xl flex items-center gap-4 text-left transition-all hover:shadow-md active:scale-[0.98] group"><div className="w-14 h-14 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform"><MapPin size={28} /></div><div><h4 className="font-black text-xl text-slate-900 mb-0.5">Add Step</h4><p className="text-sm font-medium text-slate-500">Route this document to its next destination.</p></div></button>
-                            <button onClick={() => setActiveAction('complete')} className="animate-stagger-2 bg-white border-2 border-emerald-200 hover:border-emerald-400 p-5 rounded-2xl flex items-center gap-4 text-left transition-all hover:shadow-md active:scale-[0.98] group"><div className="w-14 h-14 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform"><CheckCircle size={28} /></div><div><h4 className="font-black text-xl text-slate-900 mb-0.5">Complete Document</h4><p className="text-sm font-medium text-slate-500">Finalize, log remarks, and secure the record.</p></div></button>
-                            <button onClick={() => setActiveAction('reject')} className="animate-stagger-3 bg-white border-2 border-red-200 hover:border-red-400 p-5 rounded-2xl flex items-center gap-4 text-left transition-all hover:shadow-md active:scale-[0.98] group"><div className="w-14 h-14 bg-red-50 text-red-600 rounded-xl flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform"><AlertCircle size={28} /></div><div><h4 className="font-black text-xl text-slate-900 mb-0.5">Return / Reject</h4><p className="text-sm font-medium text-slate-500">Bounce this document back to a previous office.</p></div></button>
+                        <div className="flex flex-col gap-3">
+                            <ActionCard 
+                                title="Add Step" 
+                                description="Route this document to its next destination."
+                                icon={<MapPin size={22} />}
+                                colorTheme="blue"
+                                onClick={() => setActiveAction('route')}
+                            />
+                            <ActionCard 
+                                title="Complete Document" 
+                                description="Finalize, log remarks, and secure the record."
+                                icon={<CheckCircle size={22} />}
+                                colorTheme="emerald"
+                                onClick={() => setActiveAction('complete')}
+                            />
+                            <ActionCard 
+                                title="Return / Reject" 
+                                description="Bounce this document back to a previous office."
+                                icon={<AlertCircle size={22} />}
+                                colorTheme="rose"
+                                onClick={() => setActiveAction('reject')}
+                            />
                         </div>
                     ) : null}
 
+                    {/* ROUTE DOCUMENT FORM */}
                     {activeAction === 'route' && (
                         <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
                             <div><label className="block text-base font-bold text-slate-900 mb-2">Next Destination Office *</label><CustomSelect options={departments} value={destination} onChange={setDestination} placeholder="Select receiving office..." /></div>
@@ -285,6 +316,7 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
                         </div>
                     )}
 
+                    {/* COMPLETE DOCUMENT FORM */}
                     {activeAction === 'complete' && (
                         <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
                             <div><label className="block text-sm font-bold text-slate-900 mb-1.5">Scanned Signed Copy (Optional)</label><div className="flex items-center gap-3"><label className={`hidden sm:flex flex-1 items-center justify-center gap-2 p-4 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${attachment ? 'bg-emerald-50 border-emerald-400 text-emerald-700' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`}><input type="file" accept="image/*,application/pdf" className="hidden" onChange={handleFileChange} disabled={isProcessingFile} />{isProcessingFile ? <span className="animate-pulse font-bold">Processing PDF...</span> : attachment ? <><CheckCircle size={18}/> <span className="font-bold truncate max-w-[200px]">{attachmentName}</span></> : <><Paperclip size={18}/> <span className="font-bold">Attach Final PDF</span></>}</label><label className={`flex sm:hidden flex-1 items-center justify-center gap-2 p-4 border-2 border-dashed rounded-xl cursor-pointer transition-colors active:scale-95 ${attachment ? 'bg-emerald-50 border-emerald-400 text-emerald-700' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`}><input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} disabled={isProcessingFile} />{isProcessingFile ? <span className="animate-pulse font-bold">Processing PDF...</span> : attachment ? <><CheckCircle size={18}/> <span className="font-bold truncate max-w-[150px]">{attachmentName}</span></> : <><Camera size={18}/> <span className="font-bold">Scan Signed Document</span></>}</label>{attachment && !isProcessingFile && (<button type="button" onClick={() => { setAttachment(null); setAttachmentName(''); }} className="p-4 bg-red-50 text-red-600 rounded-xl border-2 border-red-200 hover:bg-red-100 active:scale-95 transition-all"><X size={18} /></button>)}</div></div>
@@ -294,6 +326,7 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
                         </div>
                     )}
 
+                    {/* RETURN/REJECT FORM */}
                     {activeAction === 'reject' && (
                         <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
                             <div><label className="block text-base font-bold text-slate-900 mb-2">Returning To Office *</label><CustomSelect options={departments} value={rejectOffice} onChange={setRejectOffice} placeholder="Select office..." /></div>
@@ -302,6 +335,7 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
                     )}
                 </div>
 
+                {/* FORM SUBMISSION BUTTONS */}
                 {activeAction && (
                     <div className="bg-white p-4 sm:p-6 pb-8 sm:pb-6 border-t-2 border-slate-200 flex shrink-0">
                         {activeAction === 'route' && <button onClick={handleSaveRouting} disabled={isSubmitting} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all active:scale-95 text-base flex justify-center items-center gap-2 border-2 border-blue-700 disabled:opacity-50">{isSubmitting ? <span className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : <><MapPin size={24} strokeWidth={2.5} /> Confirm Add Step</>}</button>}
@@ -312,5 +346,52 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
             </div>
         </div>,
         document.body
+    );
+}
+
+// --- HELPER COMPONENT: ENTERPRISE ACTION CARD --- //
+
+interface ActionCardProps {
+    title: string;
+    description: string;
+    icon: React.ReactNode;
+    colorTheme: 'blue' | 'emerald' | 'rose';
+    onClick: () => void;
+}
+
+function ActionCard({ title, description, icon, colorTheme, onClick }: ActionCardProps) {
+    // Tailwind classes mapped to specific enterprise themes
+    const themeStyles = {
+        blue: "hover:border-blue-400 hover:shadow-blue-100",
+        emerald: "hover:border-emerald-400 hover:shadow-emerald-100",
+        rose: "hover:border-rose-400 hover:shadow-rose-100",
+    };
+
+    const iconStyles = {
+        blue: "bg-blue-50 text-blue-600 border-blue-100",
+        emerald: "bg-emerald-50 text-emerald-600 border-emerald-100",
+        rose: "bg-rose-50 text-rose-600 border-rose-100",
+    };
+
+    const chevronStyles = {
+        blue: "group-hover:text-blue-500",
+        emerald: "group-hover:text-emerald-500",
+        rose: "group-hover:text-rose-500",
+    };
+
+    return (
+        <button 
+            onClick={onClick}
+            className={`w-full text-left group bg-white border-2 border-slate-200 p-4 sm:p-5 rounded-2xl transition-all duration-200 shadow-sm flex items-center gap-4 active:scale-[0.98] ${themeStyles[colorTheme]}`}
+        >
+            <div className={`p-3 rounded-xl border ${iconStyles[colorTheme]} transition-transform duration-300 group-hover:scale-110 shrink-0`}>
+                {icon}
+            </div>
+            <div className="flex-1">
+                <h5 className="font-black text-slate-900 text-base sm:text-lg leading-tight mb-0.5">{title}</h5>
+                <p className="text-xs sm:text-sm font-medium text-slate-500 leading-snug">{description}</p>
+            </div>
+            <ChevronRight className={`text-slate-300 transition-colors shrink-0 ${chevronStyles[colorTheme]}`} size={20} />
+        </button>
     );
 }

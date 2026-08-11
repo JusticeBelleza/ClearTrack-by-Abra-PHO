@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { 
-    Search, AlertCircle, MapPin, Eye, Clock, ChevronRight, X, Activity, CornerUpLeft, User
+    Search, AlertCircle, MapPin, Eye, Clock, ChevronRight, X, Activity, CornerUpLeft, User, MessageSquareWarning
 } from 'lucide-react';
 
 import { supabase } from '../lib/supabase';
@@ -81,7 +81,6 @@ const fetchProcessingData = async (): Promise<ProcessingData> => {
     const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', currentUserId).single();
     const currentUserName = profile?.full_name || '';
 
-    // OPTIMIZATION: Filter out 'sealed' documents at the database level to reduce payload size.
     const [docsRes, deptRes] = await Promise.all([
         supabase.from('documents').select('*').neq('status', 'sealed'),
         supabase.from('departments').select('name').order('name')
@@ -199,8 +198,8 @@ export default function Processing() {
                 count={documents.returned.length} 
                 isActive={activeTab === 'returned'} 
                 onClick={() => { setActiveTab('returned'); setSearchQuery(''); }} 
-                colorClass="bg-red-600 text-white"
-                badgeClass="bg-red-500 text-white border-red-400"
+                colorClass="bg-amber-600 text-white"
+                badgeClass="bg-amber-500 text-white border-amber-400"
               />
           </div>
       </div>
@@ -209,11 +208,15 @@ export default function Processing() {
           {filteredDocs.length === 0 && (
               <div className="bg-white border-2 border-dashed border-slate-300 rounded-3xl p-10 flex flex-col items-center justify-center text-center">
                   <div className="bg-slate-50 p-4 rounded-full mb-4">
-                    {activeTab === 'processing' ? <Search size={36} className="text-slate-400" /> : <AlertCircle size={36} className="text-slate-400" />}
+                    {activeTab === 'processing' ? <Search size={36} className="text-slate-400" /> : <CheckCircle size={36} className="text-emerald-500" />}
                   </div>
-                  <h3 className="text-xl font-black text-slate-900 mb-2">No documents found</h3>
+                  <h3 className="text-xl font-black text-slate-900 mb-2">
+                      {activeTab === 'processing' ? 'No documents found' : 'Inbox Zero!'}
+                  </h3>
                   <p className="text-base font-medium text-slate-600 max-w-md">
-                     You currently have no {activeTab === 'returned' ? 'returned' : 'active'} documents assigned to you.
+                     {activeTab === 'processing' 
+                        ? 'You currently have no active documents assigned to you.' 
+                        : 'You have no returned documents requiring your attention. Great job!'}
                   </p>
               </div>
           )}
@@ -221,82 +224,129 @@ export default function Processing() {
           {filteredDocs.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {filteredDocs.map((doc: DocumentItem) => (
-                    <div key={doc.id} className={`bg-white rounded-3xl border-2 ${activeTab === 'returned' ? 'border-red-300 shadow-md shadow-red-100 hover:border-red-500' : (doc.is_urgent ? 'border-red-400 shadow-md shadow-red-100 hover:border-red-500' : 'border-slate-300 hover:border-slate-500')} shadow-sm p-5 flex flex-col transition-colors relative overflow-hidden`}>
-                        
-                        {(doc.is_urgent || activeTab === 'returned') && <div className="absolute top-0 left-0 w-full h-1.5 bg-red-600"></div>}
-                        
-                        <div className="flex justify-between items-start mb-4 mt-1">
-                            <div className="flex items-center gap-2">
-                                <span className="text-sm font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md font-mono border border-slate-200">{doc.reference_no || doc.id}</span>
-                                {activeTab === 'returned' ? (
-                                     <span className="flex items-center gap-1 text-xs font-black text-red-700 bg-red-50 px-2.5 py-1 rounded-full border-2 border-red-200 uppercase tracking-wider"><AlertCircle size={14} strokeWidth={3}/> Returned</span>
-                                ) : (
-                                    doc.is_urgent && <span className="flex items-center gap-1 text-xs font-black text-red-700 bg-red-50 px-2.5 py-1 rounded-full border-2 border-red-200 uppercase tracking-wider animate-pulse"><AlertCircle size={14} strokeWidth={3}/> Rush</span>
-                                )}
+                    
+                    activeTab === 'returned' ? (
+                        // ==========================================
+                        // PROFESSIONAL "ACTION NEEDED" CARD DESIGN
+                        // ==========================================
+                        <div key={doc.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden flex flex-col">
+                            {/* Enterprise Left Accent Border */}
+                            <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-500"></div>
+                            
+                            <div className="p-5 flex-1 flex flex-col pl-6">
+                                <div className="flex justify-between items-start mb-3">
+                                    <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded font-mono border border-slate-200">{doc.reference_no || doc.id}</span>
+                                    <span className="flex items-center gap-1 text-[10px] font-black text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200 uppercase tracking-wider">
+                                        <AlertCircle size={12} strokeWidth={3}/> Action Required
+                                    </span>
+                                </div>
+                                
+                                <h4 className="font-black text-lg text-slate-900 mb-1.5 leading-tight">{doc.title || doc.subject}</h4>
+                                
+                                <div className="flex items-center gap-1.5 mb-4">
+                                    <CornerUpLeft size={14} className="text-slate-400" />
+                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Returned by: <span className="text-slate-800">{doc.current_location}</span></p>
+                                </div>
+                                
+                                {/* Highlighted Remarks Box */}
+                                <div className="bg-amber-50/60 rounded-xl p-3.5 border border-amber-100 mb-5 relative">
+                                    <div className="flex items-center gap-1.5 mb-1.5 text-amber-800">
+                                        <MessageSquareWarning size={14} />
+                                        <p className="text-[10px] font-black uppercase tracking-wider">Reason for Return</p>
+                                    </div>
+                                    <p className="text-sm text-amber-950 font-medium leading-relaxed">
+                                        {doc.remarks}
+                                    </p>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 mb-5 mt-auto">
+                                    <Clock size={14} className="text-slate-400" />
+                                    <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Returned {formatPHDateTime(doc.updated_at || doc.created_at)}</p>
+                                </div>
+                                
+                                <div className="flex gap-2">
+                                    {doc.attachment_url && (
+                                        <button 
+                                            onClick={() => setPreviewDocUrl(doc.attachment_url as string)} 
+                                            className="shrink-0 py-2.5 px-3 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl flex items-center justify-center transition-all active:scale-95 border-2 border-slate-200"
+                                            title="View Attached File"
+                                        >
+                                            <Eye size={18} />
+                                        </button>
+                                    )}
+                                    <button 
+                                        onClick={() => setTrailDoc(doc)}
+                                        className="flex-1 py-2.5 px-2 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 border-2 border-slate-200 text-sm"
+                                    >
+                                        History
+                                    </button>
+                                    <button 
+                                        onClick={() => setSelectedDoc(doc)}
+                                        className="flex-[1.5] py-2.5 px-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-sm border-2 border-amber-700 shadow-sm"
+                                    >
+                                        Resolve Issue
+                                    </button>
+                                </div>
                             </div>
                         </div>
-                        
-                        <h4 className="font-black text-xl text-slate-900 mb-2 leading-tight">{doc.title || doc.subject}</h4>
-                        
-                        <div className="flex items-center gap-1.5 mb-4 px-0.5">
-                            <User size={14} className="text-slate-400" />
-                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Managed by: <span className="text-blue-600">{doc.assigned_clerk || 'Unassigned'}</span></p>
-                        </div>
-                        
-                        <div className={`p-4 rounded-xl border-2 mb-5 flex-1 space-y-3 ${activeTab === 'returned' ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'}`}>
-                            {activeTab === 'returned' ? (
-                                <>
-                                    <div className="flex items-start gap-3">
-                                        <MapPin size={18} className="text-red-600 mt-0.5 shrink-0" />
-                                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-red-700/70 text-xs block font-bold uppercase tracking-wider mb-0.5">Returned By</span>{doc.current_location}</p>
-                                    </div>
-                                    <div className="flex items-start gap-3">
-                                        <Clock size={18} className="text-red-600 mt-0.5 shrink-0" />
-                                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-red-700/70 text-xs block font-bold uppercase tracking-wider mb-0.5">Returned On</span>{formatPHDateTime(doc.updated_at || doc.created_at)}</p>
-                                    </div>
-                                    <div className="flex items-start gap-3">
-                                        <AlertCircle size={18} className="text-red-600 mt-0.5 shrink-0" />
-                                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-red-700/70 text-xs block font-bold uppercase tracking-wider mb-0.5">Reason</span>{doc.remarks}</p>
-                                    </div>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="flex items-start gap-3">
-                                        <MapPin size={18} className="text-slate-500 mt-0.5 shrink-0" />
-                                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Current Location</span>{doc.current_location || 'Processing'}</p>
-                                    </div>
-                                    <div className="flex items-start gap-3">
-                                        <Clock size={18} className="text-slate-500 mt-0.5 shrink-0" />
-                                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Last Update</span>{formatPHDateTime(doc.updated_at || doc.created_at)}</p>
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                        
-                        <div className="flex gap-2 mt-auto">
-                            {doc.attachment_url && (
+
+                    ) : (
+
+                        // ==========================================
+                        // STANDARD "PROCESSING" CARD DESIGN
+                        // ==========================================
+                        <div key={doc.id} className={`bg-white rounded-3xl border-2 ${doc.is_urgent ? 'border-red-400 shadow-md shadow-red-100 hover:border-red-500' : 'border-slate-300 hover:border-slate-500'} shadow-sm p-5 flex flex-col transition-colors relative overflow-hidden`}>
+                            
+                            {doc.is_urgent && <div className="absolute top-0 left-0 w-full h-1.5 bg-red-600"></div>}
+                            
+                            <div className="flex justify-between items-start mb-4 mt-1">
+                                <span className="text-sm font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md font-mono border border-slate-200">{doc.reference_no || doc.id}</span>
+                                {doc.is_urgent && <span className="flex items-center gap-1 text-xs font-black text-red-700 bg-red-50 px-2.5 py-1 rounded-full border-2 border-red-200 uppercase tracking-wider animate-pulse"><AlertCircle size={14} strokeWidth={3}/> Rush</span>}
+                            </div>
+                            
+                            <h4 className="font-black text-xl text-slate-900 mb-2 leading-tight">{doc.title || doc.subject}</h4>
+                            
+                            <div className="flex items-center gap-1.5 mb-4 px-0.5">
+                                <User size={14} className="text-slate-400" />
+                                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Managed by: <span className="text-blue-600">{doc.assigned_clerk || 'Unassigned'}</span></p>
+                            </div>
+                            
+                            <div className="p-4 rounded-xl border-2 mb-5 flex-1 space-y-3 bg-slate-50 border-slate-200">
+                                <div className="flex items-start gap-3">
+                                    <MapPin size={18} className="text-slate-500 mt-0.5 shrink-0" />
+                                    <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Current Location</span>{doc.current_location || 'Processing'}</p>
+                                </div>
+                                <div className="flex items-start gap-3">
+                                    <Clock size={18} className="text-slate-500 mt-0.5 shrink-0" />
+                                    <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Last Update</span>{formatPHDateTime(doc.updated_at || doc.created_at)}</p>
+                                </div>
+                            </div>
+                            
+                            <div className="flex gap-2 mt-auto">
+                                {doc.attachment_url && (
+                                    <button 
+                                        onClick={() => setPreviewDocUrl(doc.attachment_url as string)} 
+                                        className="shrink-0 py-2.5 px-3 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl flex items-center justify-center transition-all active:scale-95 border-2 border-slate-300"
+                                        title="View Attached File"
+                                    >
+                                        <Eye size={18} />
+                                    </button>
+                                )}
                                 <button 
-                                    onClick={() => setPreviewDocUrl(doc.attachment_url as string)} 
-                                    className="shrink-0 py-2.5 px-3 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl flex items-center justify-center transition-all active:scale-95 border-2 border-slate-300"
-                                    title="View Attached File"
+                                    onClick={() => setTrailDoc(doc)}
+                                    className="flex-1 py-2.5 px-2 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 border-2 border-slate-300 text-sm"
                                 >
-                                    <Eye size={18} />
+                                    <Clock size={16} /> Track
                                 </button>
-                            )}
-                            <button 
-                                onClick={() => setTrailDoc(doc)}
-                                className="flex-1 py-2.5 px-2 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 border-2 border-slate-300 text-sm"
-                            >
-                                <Clock size={16} /> Track
-                            </button>
-                            <button 
-                                onClick={() => setSelectedDoc(doc)}
-                                className="flex-[1.5] py-2.5 px-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-sm border-2 border-blue-700"
-                            >
-                                Action <ChevronRight size={16} />
-                            </button>
+                                <button 
+                                    onClick={() => setSelectedDoc(doc)}
+                                    className="flex-[1.5] py-2.5 px-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-sm border-2 border-blue-700 shadow-sm"
+                                >
+                                    Action <ChevronRight size={16} />
+                                </button>
+                            </div>
                         </div>
-                    </div>
+                    )
                 ))}
               </div>
           )}

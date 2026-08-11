@@ -30,18 +30,15 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
     const [isLoadingLogs, setIsLoadingLogs] = useState(true);
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
 
-    // Locked to Dark Blue for all states (History, Processing, etc.)
     const headerClass = 'bg-slate-900';
 
-    // Pure Tailwind-Animate classes for the background overlay
     const overlayAnimation = isClosing 
         ? "animate-out fade-out duration-200 ease-in fill-mode-forwards" 
         : "animate-in fade-in duration-200 ease-out fill-mode-forwards";
         
-    // Pure Tailwind-Animate classes for the modal (Slide on mobile, Zoom on desktop)
     const modalAnimation = isClosing 
-        ? "animate-out slide-out-to-bottom-[100%] sm:slide-out-to-bottom-0 sm:zoom-out-95 duration-200 ease-in fill-mode-forwards" 
-        : "animate-in slide-in-from-bottom-[100%] sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200 ease-out fill-mode-forwards";
+        ? "animate-out slide-out-to-bottom-[100%] sm:slide-out-to-bottom-0 sm:zoom-out-95 duration-300 ease-in fill-mode-forwards" 
+        : "animate-in slide-in-from-bottom-[100%] sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-300 ease-out fill-mode-forwards";
 
     const handleClose = (e?: SyntheticEvent) => {
         if (e && e.cancelable && e.preventDefault) {
@@ -50,7 +47,7 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
         if (isClosing) return; 
         
         setIsClosing(true);
-        setTimeout(() => { onBack(); }, 200); 
+        setTimeout(() => { onBack(); }, 300); 
     };
 
     useEffect(() => {
@@ -73,10 +70,10 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
         {/* Background Overlay */}
         <div className={`fixed inset-0 z-[999] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/70 backdrop-blur-sm ${overlayAnimation}`}>
             
-            {/* Modal Container */}
-            <div className={`bg-white w-full max-w-md max-h-[95vh] flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.3)] rounded-t-[2rem] sm:rounded-3xl overflow-hidden ${modalAnimation}`}>
+            {/* THE MODAL (Fixed Height Implementation: h-[80vh] sm:h-[600px]) */}
+            <div className={`bg-white w-full max-w-md h-[60vh] sm:h-[600px] flex flex-col shadow-[0_-10px_40px_rgba(0,0,0,0.3)] rounded-t-[2rem] sm:rounded-3xl overflow-hidden ${modalAnimation}`}>
                 
-                {/* Header */}
+                {/* Header (Always Visible) */}
                 <div className={`text-white relative flex flex-col shrink-0 ${headerClass}`}>
                     <div className="w-12 h-1.5 bg-white/30 rounded-full mx-auto mt-3 sm:hidden shrink-0"></div>
                     <div className="p-4 flex items-center justify-between">
@@ -88,11 +85,11 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
                     </div>
                 </div>
 
-                {/* Content */}
+                {/* Content Area (Handles scrolling independently of the modal height) */}
                 <div className="flex-1 overflow-y-auto bg-white p-4 pt-6">
                     <div className="relative">
                         
-                        {/* Shimmering Skeleton Loader */}
+                        {/* 1. SKELETON LOADER */}
                         {isLoadingLogs && (
                             <div className="space-y-0 animate-pulse pt-2">
                                 {[1, 2, 3].map((i) => (
@@ -115,8 +112,9 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
                             </div>
                         )}
                         
+                        {/* 2. ACTUAL DATA */}
                         {!isLoadingLogs && events.length === 0 && (
-                            <div className="text-center p-6 text-slate-500">
+                            <div className="text-center p-6 text-slate-500 animate-in fade-in duration-300">
                                 <Archive size={32} className="mx-auto mb-2 opacity-50" />
                                 <p className="font-medium text-sm">Tracking history is not available for this legacy document.</p>
                             </div>
@@ -154,7 +152,7 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
                             if (log.action === 'Delivered') { desc = `Secured At: ${log.location}`; if (log.remarks) desc += `\n${log.remarks}`; }
 
                             return (
-                                <div key={index} className="flex gap-4 relative w-full">
+                                <div key={index} className="flex gap-4 relative w-full animate-in fade-in duration-300" style={{ animationFillMode: 'both', animationDelay: `${index * 50}ms` }}>
                                     <div className="w-14 shrink-0 flex flex-col text-right pt-0.5">
                                         <span className="text-[11px] font-bold text-slate-600 uppercase tracking-tight">{dateStr}</span>
                                         <span className="text-[10px] font-medium text-slate-400 mt-0.5">{timeStr}</span>
@@ -182,7 +180,6 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
             </div>
         </div>
         
-        {/* Clean component render without the blocking wrapper */}
         {previewUrl && <FilePreviewModal url={previewUrl} onClose={() => setPreviewUrl(null)} />}
         </>,
         document.body
