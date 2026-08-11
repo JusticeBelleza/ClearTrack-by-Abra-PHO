@@ -1,12 +1,11 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { 
-  Search, MapPin, Clock, CheckCircle, XCircle, AlertCircle, 
-  Archive, FileText, X, Eye, CornerUpLeft, User
+    Search, MapPin, Clock, CheckCircle, XCircle, AlertCircle, 
+    Archive, FileText, X, Eye, CornerUpLeft, User
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
-// --- IMPORT OUR EXTRACTED UTILS & COMPONENTS ---
 import { formatPHDateTime } from '../lib/utils';
 import DigitalTrailModal from '../components/system/DigitalTrailModal';
 import FilePreviewModal from '../components/system/FilePreviewModal';
@@ -70,6 +69,7 @@ const fetchHistoryData = async (): Promise<HistoryData> => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error("No authenticated session");
 
+    // OPTIMIZATION: Only fetch documents that are sealed or pending, ignoring active routing
     const { data: docs, error } = await supabase
       .from('documents')
       .select(`
@@ -78,7 +78,8 @@ const fetchHistoryData = async (): Promise<HistoryData> => {
               action,
               created_at
           )
-      `);
+      `)
+      .in('status', ['sealed', 'pending']); 
 
     if (error) throw error;
 
@@ -119,13 +120,11 @@ export default function History() {
   const [trailDoc, setTrailDoc] = useState<DocumentItem | null>(null);
   const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
 
-  // --- REACT QUERY MAGIC ---
   const { data, isLoading } = useQuery<HistoryData>({
       queryKey: ['historyDocuments'],
       queryFn: fetchHistoryData
   });
 
-  // FIX: Wrap the initialization of 'documents' in its own useMemo hook
   const documents = useMemo<HistoryData>(() => {
       return data ? { completed: data.completed, returned: data.returned } : { completed: [], returned: [] };
   }, [data]);

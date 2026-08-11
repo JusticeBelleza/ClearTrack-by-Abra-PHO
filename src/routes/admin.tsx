@@ -7,8 +7,9 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
-// ✅ Safely importing the singleton clients
-import { supabase, supabaseAdmin } from '../lib/supabase';
+// --- Import React Query Hooks ---
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '../lib/supabase';
 
 // --- Shared Modal Animation Styles ---
 const modalAnimationStyles = `
@@ -34,11 +35,7 @@ const modalAnimationStyles = `
 `;
 
 // --- TypeScript Interfaces ---
-interface SelectOption {
-    label: string;
-    value: string;
-}
-
+interface SelectOption { label: string; value: string; }
 type OptionType = SelectOption | string;
 
 interface CustomSelectProps {
@@ -48,184 +45,48 @@ interface CustomSelectProps {
     placeholder?: string;
 }
 
-interface Department {
-    id: string;
-    name: string;
-    office_id: string;
-    office_address: string;
-}
-
-interface Category {
-    id: string;
-    name: string;
-    category_id: string;
-}
-
-interface Employee {
-    id: string;
-    emp_id: string;
-    name: string;
-    email: string;
-    designation: string;
-    department: string;
-    contact_number: string;
-}
-
-interface AuditLog {
-    id: string;
-    created_at: string;
-    user_name: string;
-    action: string;
-    ip_address: string;
-}
-
-interface NavButtonProps {
-    label: string;
-    icon: React.ReactNode;
-    isActive: boolean;
-    onClick: () => void;
-}
-
-interface StatCardProps {
-    title: string;
-    value: string | number;
-    icon: React.ReactNode;
-    color: string;
-}
-
-// --- Custom Senior-Friendly Dropdown Component ---
-function CustomSelect({ options, value, onChange, placeholder }: CustomSelectProps) {
-    const [isOpen, setIsOpen] = useState(false);
-    const dropdownRef = useRef<HTMLDivElement>(null);
-  
-    useEffect(() => {
-      function handleClickOutside(event: MouseEvent) {
-        if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-          setIsOpen(false);
-        }
-      }
-      document.addEventListener("mousedown", handleClickOutside);
-      return () => document.removeEventListener("mousedown", handleClickOutside);
-    }, []);
-  
-    return (
-      <div className="relative w-full" ref={dropdownRef}>
-        <button
-          type="button"
-          onClick={() => setIsOpen(!isOpen)}
-          className={`w-full px-4 py-3.5 bg-slate-50 border-2 rounded-xl flex justify-between items-center transition-all text-base outline-none active:scale-[0.99] ${
-            isOpen
-              ? 'border-slate-900 ring-4 ring-slate-900/10 bg-white'
-              : 'border-slate-400 hover:bg-slate-100 hover:border-slate-600'
-          } ${!value ? 'text-slate-500' : 'text-slate-900 font-bold'}`}
-        >
-          <span className="truncate">
-            {options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value)
-              ? (typeof options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value) === 'string' 
-                  ? options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value) as string
-                  : (options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value) as SelectOption).label)
-              : value || placeholder}
-          </span>
-          <ChevronDown 
-            size={20} 
-            className={`text-slate-600 transition-transform duration-300 ease-in-out ${isOpen ? 'rotate-180 text-slate-900' : ''}`} 
-          />
-        </button>
-  
-        {isOpen && (
-          <div className="absolute z-20 w-full mt-2 bg-white border-2 border-slate-400 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-            <div className="max-h-60 overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
-              {options.map((option: OptionType, idx: number) => {
-                const optValue = typeof option === 'string' ? option : option.value;
-                const optLabel = typeof option === 'string' ? option : option.label;
-                const isSelected = optValue === value;
-  
-                return (
-                  <div
-                    key={idx}
-                    onClick={() => {
-                      onChange(optValue);
-                      setIsOpen(false);
-                    }}
-                    className={`px-4 py-3 text-base rounded-lg cursor-pointer transition-colors flex items-center active:scale-95 ${
-                      isSelected
-                        ? 'bg-slate-900 text-white font-bold'
-                        : 'text-slate-800 hover:bg-slate-100 font-medium'
-                    }`}
-                  >
-                    {optLabel}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-}
-
 export default function SystemAdmin() {
+  const queryClient = useQueryClient();
   const [mainTab, setMainTab] = useState<'dashboard' | 'directory' | 'audit' | 'settings'>('dashboard');
   const [dirTab, setDirTab] = useState<'departments' | 'categories' | 'employees'>('departments');
 
-  // --- Data States ---
-  const [isLoading, setIsLoading] = useState(true);
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
+  // --- LOCAL FORM STATES ---
   const [globalSettings, setGlobalSettings] = useState({ maintenanceMode: false, sessionTimeout: '30' });
+  const [newOffice, setNewOffice] = useState({ office_id: '', office_name: '', office_address: '' });
+  const [newCat, setNewCat] = useState({ category_id: '', name: '' });
+  const [newEmp, setNewEmp] = useState({ 
+    emp_id: '', name: '', email: '', designation: '', 
+    department: '', contactNumber: '', password: '', confirmPassword: '' 
+  });
 
   // --- Modal Open/Close States ---
   const [isDeptModalOpen, setIsDeptModalOpen] = useState(false);
   const [isClosingDept, setIsClosingDept] = useState(false);
-  
   const [isCatModalOpen, setIsCatModalOpen] = useState(false);
   const [isClosingCat, setIsClosingCat] = useState(false);
-  
   const [isEmpModalOpen, setIsEmpModalOpen] = useState(false);
   const [isClosingEmp, setIsClosingEmp] = useState(false);
 
-  // Delete Confirmation States
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
   const [isClosingDelete, setIsClosingDelete] = useState(false);
-
   const [deleteCatConfirm, setDeleteCatConfirm] = useState<{ id: string; name: string } | null>(null);
   const [isClosingCatDelete, setIsClosingCatDelete] = useState(false);
-
   const [deleteEmpConfirm, setDeleteEmpConfirm] = useState<{ id: string; name: string; emp_id: string } | null>(null);
   const [isClosingEmpDelete, setIsClosingEmpDelete] = useState(false);
 
   const closeDeptModal = () => { setIsClosingDept(true); setTimeout(() => { setIsDeptModalOpen(false); setIsClosingDept(false); }, 400); };
   const closeCatModal = () => { setIsClosingCat(true); setTimeout(() => { setIsCatModalOpen(false); setIsClosingCat(false); }, 400); };
   const closeEmpModal = () => { setIsClosingEmp(true); setTimeout(() => { setIsEmpModalOpen(false); setIsClosingEmp(false); }, 400); };
-  
-  const closeDeleteModal = () => { 
-      setIsClosingDelete(true); 
-      setTimeout(() => { setDeleteConfirm(null); setIsClosingDelete(false); }, 400); 
-  };
-  const closeCatDeleteModal = () => { 
-      setIsClosingCatDelete(true); 
-      setTimeout(() => { setDeleteCatConfirm(null); setIsClosingCatDelete(false); }, 400); 
-  };
-  const closeEmpDeleteModal = () => { 
-      setIsClosingEmpDelete(true); 
-      setTimeout(() => { setDeleteEmpConfirm(null); setIsClosingEmpDelete(false); }, 400); 
-  };
+  const closeDeleteModal = () => { setIsClosingDelete(true); setTimeout(() => { setDeleteConfirm(null); setIsClosingDelete(false); }, 400); };
+  const closeCatDeleteModal = () => { setIsClosingCatDelete(true); setTimeout(() => { setDeleteCatConfirm(null); setIsClosingCatDelete(false); }, 400); };
+  const closeEmpDeleteModal = () => { setIsClosingEmpDelete(true); setTimeout(() => { setDeleteEmpConfirm(null); setIsClosingEmpDelete(false); }, 400); };
 
-  // --- Form States ---
-  const [newOffice, setNewOffice] = useState({ office_id: '', office_name: '', office_address: '' });
-  const [newCat, setNewCat] = useState({ category_id: '', name: '' });
-  
-  const [newEmp, setNewEmp] = useState({ 
-    emp_id: '', name: '', email: '', designation: '', 
-    department: '', contactNumber: '', password: '', confirmPassword: '' 
-  });
-
-  // --- Data Fetching ---
-  const fetchAdminData = async () => {
-    setIsLoading(true);
-    try {
+  // =========================================
+  // 🚀 REACT QUERY: FETCH ALL ADMIN DATA
+  // =========================================
+  const { data: adminData, isLoading } = useQuery({
+    queryKey: ['adminData'],
+    queryFn: async () => {
       const [deptRes, catRes, empRes, logRes, settingsRes] = await Promise.all([
         supabase.from('departments').select('*').order('name'),
         supabase.from('categories').select('*').order('name'),
@@ -234,27 +95,31 @@ export default function SystemAdmin() {
         supabase.from('global_settings').select('*').eq('id', 1).single()
       ]);
 
-      if (deptRes.data) setDepartments(deptRes.data);
-      if (catRes.data) setCategories(catRes.data);
-      if (empRes.data) setEmployees(empRes.data);
-      if (logRes.data) setAuditLogs(logRes.data);
-      if (settingsRes.data) {
-        setGlobalSettings({
-            maintenanceMode: settingsRes.data.maintenance_mode,
-            sessionTimeout: settingsRes.data.session_timeout
-        });
-      }
-    } catch (error) {
-      toast.error('Failed to load system data.');
-      console.error(error);
-    } finally {
-      setIsLoading(false);
+      return {
+        departments: deptRes.data || [],
+        categories: catRes.data || [],
+        employees: empRes.data || [],
+        auditLogs: logRes.data || [],
+        settings: settingsRes.data
+      };
     }
-  };
+  });
 
+  // Sync settings when fetched
   useEffect(() => {
-    fetchAdminData();
-  }, []);
+    if (adminData?.settings) {
+      setGlobalSettings({
+        maintenanceMode: adminData.settings.maintenance_mode,
+        sessionTimeout: adminData.settings.session_timeout
+      });
+    }
+  }, [adminData?.settings]);
+
+  // Safe fallback arrays
+  const departments = adminData?.departments || [];
+  const categories = adminData?.categories || [];
+  const employees = adminData?.employees || [];
+  const auditLogs = adminData?.auditLogs || [];
 
   // --- Action Handlers ---
   const openOfficeModal = () => {
@@ -283,6 +148,12 @@ export default function SystemAdmin() {
       setNewEmp({...newEmp, password: pass, confirmPassword: pass});
   };
 
+  // --- Audit Log Helper ---
+  const logAuditAction = async (action: string) => {
+      await supabase.from('audit_logs').insert([{ user_name: 'System Admin', action: action, ip_address: 'Internal' }]);
+      queryClient.invalidateQueries({ queryKey: ['adminData'] }); // Refresh logs
+  };
+
   // Departments Handlers
   const handleAddDepartment = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -291,32 +162,28 @@ export default function SystemAdmin() {
         return;
     }
     
-    const { data, error } = await supabase.from('departments').insert([{ 
+    const { error } = await supabase.from('departments').insert([{ 
         name: newOffice.office_name.trim(),
         office_id: newOffice.office_id,
         office_address: newOffice.office_address.trim()
-    }]).select();
+    }]);
 
-    if (error) {
-        toast.error('Failed to add office', { description: error.message });
-        return;
-    }
-    if (data) setDepartments([...departments, data[0]]);
+    if (error) { toast.error('Failed to add office'); return; }
     
+    queryClient.invalidateQueries({ queryKey: ['adminData'] }); // <-- Auto Refresh!
     closeDeptModal(); 
     toast.success('Office added successfully');
-    logAuditAction(`Added new office: ${newOffice.office_name.trim()} (${newOffice.office_id})`);
+    logAuditAction(`Added new office: ${newOffice.office_name.trim()}`);
   };
 
   const confirmDeleteDepartment = async () => {
       if (!deleteConfirm) return;
       const { id, name } = deleteConfirm;
-
       const { error } = await supabase.from('departments').delete().eq('id', id);
-      if (error) {
-          toast.error('Failed to delete office');
-      } else {
-          setDepartments(departments.filter(d => d.id !== id));
+      
+      if (error) { toast.error('Failed to delete office'); } 
+      else {
+          queryClient.invalidateQueries({ queryKey: ['adminData'] });
           toast.success('Office removed successfully');
           logAuditAction(`Deleted office: ${name}`);
       }
@@ -326,36 +193,26 @@ export default function SystemAdmin() {
   // Categories Handlers
   const handleAddCategory = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCat.name.trim()) {
-        toast.error('Please provide a category name.');
-        return;
-    }
+    if (!newCat.name.trim()) { toast.error('Please provide a category name.'); return; }
     
-    const { data, error } = await supabase.from('categories').insert([{ 
-        name: newCat.name.trim(),
-        category_id: newCat.category_id 
-    }]).select();
+    const { error } = await supabase.from('categories').insert([{ name: newCat.name.trim(), category_id: newCat.category_id }]);
 
-    if (error) {
-        toast.error('Failed to add category', { description: error.message });
-        return;
-    }
-    if (data) setCategories([...categories, data[0]]);
+    if (error) { toast.error('Failed to add category'); return; }
     
+    queryClient.invalidateQueries({ queryKey: ['adminData'] });
     closeCatModal(); 
-    toast.success('Document category added successfully');
-    logAuditAction(`Added new category: ${newCat.name.trim()} (${newCat.category_id})`);
+    toast.success('Category added successfully');
+    logAuditAction(`Added new category: ${newCat.name.trim()}`);
   };
 
   const confirmDeleteCategory = async () => {
       if (!deleteCatConfirm) return;
       const { id, name } = deleteCatConfirm;
-
       const { error } = await supabase.from('categories').delete().eq('id', id);
-      if (error) {
-          toast.error('Failed to delete category');
-      } else {
-          setCategories(categories.filter(c => c.id !== id));
+      
+      if (error) { toast.error('Failed to delete category'); } 
+      else {
+          queryClient.invalidateQueries({ queryKey: ['adminData'] });
           toast.success('Category removed successfully');
           logAuditAction(`Deleted category: ${name}`);
       }
@@ -366,82 +223,39 @@ export default function SystemAdmin() {
   const handleAddEmployee = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newEmp.emp_id || !newEmp.name || !newEmp.email || !newEmp.designation || !newEmp.contactNumber || !newEmp.password) { 
-        toast.error('Please fill all required fields.'); 
-        return; 
+        toast.error('Please fill all required fields.'); return; 
     }
     if (newEmp.password !== newEmp.confirmPassword) {
-        toast.error('Passwords do not match.');
-        return;
+        toast.error('Passwords do not match.'); return;
     }
 
-    const serviceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY;
-    if (!serviceRoleKey) {
-        toast.error('Configuration Error', { description: 'Missing VITE_SUPABASE_SERVICE_ROLE_KEY in environment variables.' });
-        return;
-    }
-    
-    // 1. Create the user in Supabase Authentication via Admin bypass
-    const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-        email: newEmp.email.trim(),
-        password: newEmp.password,
-        email_confirm: true, // Auto-confirm so the user can log in instantly
-        user_metadata: { full_name: newEmp.name }
+    const { data, error } = await supabase.functions.invoke('create-employee', {
+      body: {
+        email: newEmp.email.trim(), password: newEmp.password, name: newEmp.name,
+        emp_id: newEmp.emp_id, department: newEmp.department,
+        designation: newEmp.designation, contactNumber: newEmp.contactNumber
+      }
     });
 
-    if (authError) {
-        toast.error('Auth Creation Failed', { description: authError.message });
-        return;
+    if (error || data?.error) {
+        toast.error('Registration Failed', { description: error?.message || data?.error }); return;
     }
 
-    const userId = authData.user.id;
-
-    // 2. Insert into the public employees directory
-    const { data, error } = await supabase.from('employees').insert([{ 
-        emp_id: newEmp.emp_id, 
-        name: newEmp.name, 
-        email: newEmp.email.trim(),
-        designation: newEmp.designation, 
-        department: newEmp.department, 
-        contact_number: newEmp.contactNumber 
-    }]).select();
-
-    if (error) {
-        toast.error('Directory Error', { description: error.message });
-        return;
-    }
-
-    // 3. Guarantee the profile is created and fully synced via UPSERT
-    const { error: profileError } = await supabaseAdmin.from('profiles').upsert({
-        id: userId,
-        full_name: newEmp.name,
-        emp_id: newEmp.emp_id,
-        department: newEmp.department,
-        designation: newEmp.designation,
-        contact_number: newEmp.contactNumber,
-        role: 'pho_staff'              // <-- Explicitly locks them into the Staff role
-    });
-
-    if (profileError) {
-        console.error("Profile Sync Error:", profileError);
-        toast.error('Profile warning', { description: 'Login created, but profile sync failed.' });
-    }
-
-    if (data) setEmployees([data[0], ...employees]);
+    queryClient.invalidateQueries({ queryKey: ['adminData'] });
     closeEmpModal(); 
-    toast.success('Employee registered successfully', { description: 'The new user can log in immediately.' });
+    toast.success('Employee registered successfully');
     logAuditAction(`Registered new employee: ${newEmp.emp_id}`);
   };
 
   const confirmDeleteEmployee = async () => {
       if (!deleteEmpConfirm) return;
       const { id, name, emp_id } = deleteEmpConfirm;
-
       const { error } = await supabase.from('employees').delete().eq('id', id);
-      if (error) {
-          toast.error('Failed to permanently delete employee');
-      } else {
-          setEmployees(employees.filter(e => e.id !== id));
-          toast.success('Employee permanently deleted');
+      
+      if (error) { toast.error('Failed to delete employee'); } 
+      else {
+          queryClient.invalidateQueries({ queryKey: ['adminData'] });
+          toast.success('Employee deleted');
           logAuditAction(`Deleted employee: ${emp_id} (${name})`);
       }
       closeEmpDeleteModal();
@@ -455,23 +269,9 @@ export default function SystemAdmin() {
 
     if (error) toast.error('Failed to update settings');
     else {
-        toast.success('System Settings Updated', { description: 'Global configurations have been applied.'});
+        toast.success('System Settings Updated');
         logAuditAction(`Updated global settings (Maintenance: ${globalSettings.maintenanceMode})`);
     }
-  };
-
-  const logAuditAction = async (action: string) => {
-      try {
-          await supabase.from('audit_logs').insert([{
-              user_name: 'System Admin', 
-              action: action,
-              ip_address: 'Internal'
-          }]);
-          const { data } = await supabase.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(50);
-          if (data) setAuditLogs(data);
-      } catch (err) {
-          console.error("Audit log error:", err);
-      }
   };
 
   const sessionOptions = [

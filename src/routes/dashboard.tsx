@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   Search, Activity, AlertCircle, MapPin, Clock, 
   ChevronRight, CheckCircle, FileText, XCircle, Eye, X, Plus,
@@ -8,6 +8,9 @@ import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { useUiStore } from '../store/uiStore';
 import DigitalTrailModal from '../components/system/DigitalTrailModal';
+
+// --- Import React Query ---
+import { useQuery } from '@tanstack/react-query';
 
 // --- Shared Animation Styles ---
 const modalAnimationStyles = `
@@ -45,14 +48,6 @@ interface DocumentItem {
     updated_at?: string;
 }
 
-interface DocumentsState {
-    assigned: DocumentItem[];
-    myDocuments: DocumentItem[];
-    processing: DocumentItem[];
-    rejected: DocumentItem[];
-    completed: DocumentItem[];
-}
-
 interface StatCardProps {
     title: string;
     value: number | string;
@@ -86,90 +81,79 @@ const formatPHDateTime = (isoString?: string) => {
 
 export default function Dashboard() {
   const openCreateModal = useUiStore((state) => state.openCreateModal);
-
-  const [isLoading, setIsLoading] = useState(true);
-  const [userName, setUserName] = useState("");
-  const [stats, setStats] = useState({ active: 0, urgent: 0, actionNeeded: 0, completed: 0 });
-  const [documents, setDocuments] = useState<DocumentsState>({ 
-      assigned: [], myDocuments: [], processing: [], rejected: [], completed: [] 
-  });
   
   const [activeTab, setActiveTab] = useState<'assigned' | 'myDocuments' | 'processing' | 'rejected' | 'completed'>('assigned');
   const [searchQuery, setSearchQuery] = useState("");
   const [trailDoc, setTrailDoc] = useState<DocumentItem | null>(null);
 
-  // FIX: Hoist function definition above the useEffect
-  const fetchDashboardData = async () => {
-      setIsLoading(true);
-      try {
-          const { data: { session } } = await supabase.auth.getSession();
-          if (!session) return;
-          const currentUserId = session.user.id;
+  // =========================================
+  // 🚀 REACT QUERY: FETCH DASHBOARD DATA
+  // =========================================
+  const { data: dashboardData, isLoading, isError } = useQuery({
+    queryKey: ['dashboardData'],
+    queryFn: async () => {
+      // 1. Get Session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !session) throw new Error("Authentication required");
+      const currentUserId = session.user.id;
 
-          // Fetch the user's full name so we can match it against assigned_clerk
-          const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', currentUserId).single();
-          const currentUserName = profile?.full_name || '';
-          
-          const firstName = currentUserName.split(' ')[0];
-          setUserName(firstName);
+      // 2. Fetch Profile and Documents in parallel to avoid waterfall delays
+      const [profileRes, docsRes] = await Promise.all([
+          supabase.from('profiles').select('full_name').eq('id', currentUserId).single(),
+          supabase.from('documents').select('*').order('updated_at', { ascending: false })
+      ]);
 
-          const { data: docs, error } = await supabase
-            .from('documents')
-            .select('*')
-            .order('updated_at', { ascending: false }); // Sort by newest updates
+      if (docsRes.error) throw docsRes.error;
 
-          if (error) throw error;
+      const currentUserName = profileRes.data?.full_name || '';
+      const firstName = currentUserName.split(' ')[0];
+      const safeDocs = docsRes.data || [];
 
-          if (docs) {
-              // 1. Inbox: Documents explicitly assigned to your name OR where you are the custodian
-              const assigned = docs.filter((d: DocumentItem) => 
-                  (d.assigned_clerk === currentUserName || d.custodian_id === currentUserId) && 
-                  d.status !== 'sealed' &&
-                  !d.remarks // <-- Prevents returned docs from cluttering the Inbox
-              );
-              
-              // 2. My Documents: Active documents you originally created
-              const myDocuments = docs.filter((d: DocumentItem) => 
-                  d.created_by === currentUserId && d.status !== 'sealed'
-              );
+      // 3. Process the buckets
+      const assigned = safeDocs.filter((d: DocumentItem) => 
+          (d.assigned_clerk === currentUserName || d.custodian_id === currentUserId) && 
+          d.status !== 'sealed' &&
+          !d.remarks
+      );
+      
+      const myDocuments = safeDocs.filter((d: DocumentItem) => 
+          d.created_by === currentUserId && d.status !== 'sealed'
+      );
 
-              // 3. Processing (Outbox): Documents you created or routed, but are now assigned to someone else
-              const processing = docs.filter((d: DocumentItem) => 
-                  d.assigned_clerk !== currentUserName && 
-                  d.custodian_id !== currentUserId && 
-                  (d.status === 'routing' || (d.status === 'pending' && !d.remarks))
-                  // Removed the redundant d.status !== 'sealed' check here!
-              );
+      const processing = safeDocs.filter((d: DocumentItem) => 
+          d.assigned_clerk !== currentUserName && 
+          d.custodian_id !== currentUserId && 
+          (d.status === 'routing' || (d.status === 'pending' && !d.remarks))
+      );
 
-              // 4. Returned: Documents that have been kicked back with remarks
-              const rejected = docs.filter((d: DocumentItem) => 
-                  d.status === 'pending' && !!d.remarks && 
-                  (d.assigned_clerk === currentUserName || d.created_by === currentUserId)
-              );
+      const rejected = safeDocs.filter((d: DocumentItem) => 
+          d.status === 'pending' && !!d.remarks && 
+          (d.assigned_clerk === currentUserName || d.created_by === currentUserId)
+      );
 
-              // 5. Completed: Sealed documents
-              const completed = docs.filter((d: DocumentItem) => d.status === 'sealed');
+      const completed = safeDocs.filter((d: DocumentItem) => d.status === 'sealed');
 
-              setDocuments({ assigned, myDocuments, processing, rejected, completed });
-              
-              setStats({
-                  active: processing.length + assigned.length, 
-                  urgent: docs.filter((d: DocumentItem) => d.is_urgent && d.status !== 'sealed').length, 
-                  actionNeeded: assigned.length, 
-                  completed: completed.length
-              });
+      return {
+          userName: firstName,
+          documents: { assigned, myDocuments, processing, rejected, completed },
+          stats: {
+              active: processing.length + assigned.length, 
+              urgent: safeDocs.filter((d: DocumentItem) => d.is_urgent && d.status !== 'sealed').length, 
+              actionNeeded: assigned.length, 
+              completed: completed.length
           }
-      } catch (err: unknown) {
-          console.error("Dashboard Fetch Error:", err);
-          toast.error("Failed to load dashboard data.");
-      } finally {
-          setIsLoading(false);
-      }
-  };
+      };
+    }
+  });
 
-  useEffect(() => {
-      fetchDashboardData();
-  }, []);
+  // Safe fallbacks while loading or if data is missing
+  const documents = dashboardData?.documents || { assigned: [], myDocuments: [], processing: [], rejected: [], completed: [] };
+  const stats = dashboardData?.stats || { active: 0, urgent: 0, actionNeeded: 0, completed: 0 };
+  const userName = dashboardData?.userName || '';
+
+  if (isError) {
+      toast.error("Failed to sync dashboard data.");
+  }
 
   const filteredDocs = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();

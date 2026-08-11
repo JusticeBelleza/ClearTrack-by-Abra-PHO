@@ -4,6 +4,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 
 // --- Shared Modal Animation Styles ---
 const modalAnimationStyles = `
@@ -141,15 +142,12 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false 
 }
 
 export default function Settings() {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   
   // Edit Mode States
   const [isEditing, setIsEditing] = useState(false);
   const [isClosingEdit, setIsClosingEdit] = useState(false);
-  const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({
       full_name: '',
       emp_id: '',
@@ -158,47 +156,90 @@ export default function Settings() {
       department: ''
   });
 
-  const fetchData = async () => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return;
+  // 🚀 REACT QUERY: FETCH PROFILE & DEPARTMENTS
+  const { data, isLoading } = useQuery({
+      queryKey: ['userSettingsData'],
+      queryFn: async () => {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) throw new Error("No authenticated session");
 
-      const [profileRes, deptRes] = await Promise.all([
-          supabase.from('profiles').select('*').eq('id', session.user.id).single(),
-          supabase.from('departments').select('name').order('name')
-      ]);
+          const [profileRes, deptRes] = await Promise.all([
+              supabase.from('profiles').select('*').eq('id', session.user.id).single(),
+              supabase.from('departments').select('name').order('name')
+          ]);
 
-      if (profileRes.data) {
-          setProfile({ ...profileRes.data, email: session.user.email });
+          if (profileRes.error) throw profileRes.error;
+
+          return {
+              profile: { ...profileRes.data, email: session.user.email } as UserProfile,
+              departments: (deptRes.data as Department[]) || []
+          };
+      }
+  });
+
+  // Sync React Query cache to local editable state
+  useEffect(() => {
+      if (data?.profile) {
           setFormData({
-              full_name: profileRes.data.full_name || '',
-              emp_id: profileRes.data.emp_id || '',
-              contact_number: profileRes.data.contact_number || '',
-              designation: profileRes.data.designation || '',
-              department: profileRes.data.department || ''
+              full_name: data.profile.full_name || '',
+              emp_id: data.profile.emp_id || '',
+              contact_number: data.profile.contact_number || '',
+              designation: data.profile.designation || '',
+              department: data.profile.department || ''
           });
       }
-      if (deptRes.data) setDepartments(deptRes.data);
+  }, [data?.profile]);
 
-    } catch (error) {
-      console.error('Error fetching data:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const profile = data?.profile;
+  const departments = data?.departments || [];
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  // 🚀 REACT QUERY: MUTATION TO SAVE PROFILE
+  const updateProfileMutation = useMutation({
+      mutationFn: async (updatedData: typeof formData) => {
+          if (!profile) throw new Error("Profile not loaded");
+
+          // 1. Update public profile
+          const { error } = await supabase.from('profiles').update({
+              full_name: updatedData.full_name.trim(),
+              emp_id: updatedData.emp_id.trim(),
+              contact_number: updatedData.contact_number.trim(),
+              designation: updatedData.designation.trim(),
+              department: updatedData.department.trim()
+          }).eq('id', profile.id);
+
+          if (error) throw error;
+
+          // 2. Attempt to sync to public employee directory 
+          try {
+              await supabase.from('employees').update({
+                  name: updatedData.full_name.trim(),
+                  contact_number: updatedData.contact_number.trim(),
+                  designation: updatedData.designation.trim(),
+                  department: updatedData.department.trim()
+              }).eq('emp_id', profile.emp_id);
+          } catch(e) { console.warn("Failed to sync to employees directory", e); }
+      },
+      onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ['userSettingsData'] });
+          handleCloseEdit(); 
+          toast.success("Profile updated successfully!");
+      },
+      onError: (err: any) => {
+          console.error(err);
+          toast.error("Failed to update profile", { description: err.message || 'An unknown error occurred' });
+      }
+  });
 
   const handleEditClick = () => {
-      setFormData({
-        full_name: profile?.full_name || '',
-        emp_id: profile?.emp_id || '',
-        contact_number: profile?.contact_number || '',
-        designation: profile?.designation || '',
-        department: profile?.department || ''
-      });
+      if (profile) {
+          setFormData({
+            full_name: profile.full_name || '',
+            emp_id: profile.emp_id || '',
+            contact_number: profile.contact_number || '',
+            designation: profile.designation || '',
+            department: profile.department || ''
+          });
+      }
       setIsEditing(true);
   };
 
@@ -210,44 +251,12 @@ export default function Settings() {
       }, 400); 
   };
 
-  const handleSaveProfile = async () => {
-      if (!profile) return;
+  const handleSaveProfile = () => {
       if (!formData.full_name.trim() || !formData.emp_id.trim() || !formData.department.trim()) {
           toast.error("Please fill out all required fields.");
           return;
       }
-
-      setIsSaving(true);
-      try {
-          const { error } = await supabase.from('profiles').update({
-              full_name: formData.full_name.trim(),
-              emp_id: formData.emp_id.trim(),
-              contact_number: formData.contact_number.trim(),
-              designation: formData.designation.trim(),
-              department: formData.department.trim()
-          }).eq('id', profile.id);
-
-          if (error) throw error;
-
-          try {
-             await supabase.from('employees').update({
-                 name: formData.full_name.trim(),
-                 contact_number: formData.contact_number.trim(),
-                 designation: formData.designation.trim(),
-                 department: formData.department.trim()
-             }).eq('emp_id', profile.emp_id);
-          } catch(e) { console.warn("Failed to sync to employees directory", e); }
-
-          setProfile({ ...profile, ...formData });
-          handleCloseEdit(); 
-          toast.success("Profile updated successfully!");
-      } catch (err: unknown) {
-          console.error(err);
-          const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
-          toast.error("Failed to update profile", { description: errorMessage });
-      } finally {
-          setIsSaving(false);
-      }
+      updateProfileMutation.mutate(formData);
   };
 
   const getInitials = (name?: string) => {
@@ -258,6 +267,8 @@ export default function Settings() {
       }
       return name[0].toUpperCase();
   };
+
+  const isSaving = updateProfileMutation.isPending;
 
   if (isLoading) {
     return (

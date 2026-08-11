@@ -4,14 +4,13 @@ import {
     Search, AlertCircle, MapPin, Eye, Clock, ChevronRight, X, Activity, CornerUpLeft, User
 } from 'lucide-react';
 
-// --- FIXED IMPORT PATHS ---
 import { supabase } from '../lib/supabase';
 import { formatPHDateTime } from '../lib/utils';
 import HandoverScreen from '../components/system/HandoverScreen';
 import DigitalTrailModal from '../components/system/DigitalTrailModal';
 import FilePreviewModal from '../components/system/FilePreviewModal';
 
-// --- Shared Animation Styles (UPDATED FOR INSTANT NATIVE SNAP) ---
+// --- Shared Animation Styles ---
 const modalAnimationStyles = `
     @keyframes customFadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes iosSlideUp { from { transform: translateY(100vh); } to { transform: translateY(0); } }
@@ -82,8 +81,9 @@ const fetchProcessingData = async (): Promise<ProcessingData> => {
     const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', currentUserId).single();
     const currentUserName = profile?.full_name || '';
 
+    // OPTIMIZATION: Filter out 'sealed' documents at the database level to reduce payload size.
     const [docsRes, deptRes] = await Promise.all([
-        supabase.from('documents').select('*'),
+        supabase.from('documents').select('*').neq('status', 'sealed'),
         supabase.from('departments').select('name').order('name')
     ]);
 
@@ -93,9 +93,7 @@ const fetchProcessingData = async (): Promise<ProcessingData> => {
 
     if (docsRes.data) {
         const myActiveDocs = (docsRes.data as DocumentItem[]).filter((d) => {
-            const isActive = d.status !== 'sealed';
-            const isMine = d.created_by === currentUserId || d.assigned_clerk === currentUserName;
-            return isActive && isMine;
+            return d.created_by === currentUserId || d.assigned_clerk === currentUserName;
         });
 
         const sortedDocs = myActiveDocs.sort((a, b) => 
@@ -120,7 +118,6 @@ export default function Processing() {
   const [searchQuery, setSearchQuery] = useState("");
   const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
 
-  // --- REACT QUERY MAGIC IN ACTION ---
   const { data, isLoading, refetch } = useQuery<ProcessingData>({
       queryKey: ['processingDocuments'],
       queryFn: fetchProcessingData
@@ -305,7 +302,6 @@ export default function Processing() {
           )}
       </div>
 
-      {/* --- RENDER MODALS --- */}
       {selectedDoc && <HandoverScreen doc={selectedDoc} departments={departments} onBack={() => setSelectedDoc(null)} onSuccess={() => refetch()} />}
       {trailDoc && <DigitalTrailModal doc={trailDoc} onBack={() => setTrailDoc(null)} />}
       {previewDocUrl && <FilePreviewModal url={previewDocUrl} onClose={() => setPreviewDocUrl(null)} />}
