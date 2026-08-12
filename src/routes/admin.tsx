@@ -45,6 +45,20 @@ interface CustomSelectProps {
     placeholder?: string;
 }
 
+interface NavButtonProps {
+    label: string;
+    icon?: React.ReactNode;
+    isActive?: boolean;
+    onClick?: () => void;
+}
+
+interface StatCardProps {
+    title: string;
+    value: string | number;
+    icon?: React.ReactNode;
+    color?: string;
+}
+
 export default function SystemAdmin() {
   const queryClient = useQueryClient();
   const [mainTab, setMainTab] = useState<'dashboard' | 'directory' | 'audit' | 'settings'>('dashboard');
@@ -758,6 +772,49 @@ export default function SystemAdmin() {
 }
 
 // --- Helper Components --- //
+
+function CustomSelect({ options, value, onChange, placeholder }: CustomSelectProps) {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+  
+    useEffect(() => {
+      function handleClickOutside(event: MouseEvent) {
+        if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) setIsOpen(false);
+      }
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+  
+    return (
+      <div className="relative w-full" ref={dropdownRef}>
+        <button type="button" onClick={() => setIsOpen(!isOpen)} className={`w-full px-4 py-3.5 bg-white border-2 rounded-xl flex justify-between items-center transition-all text-base outline-none active:scale-[0.99] ${isOpen ? 'border-blue-600 ring-4 ring-blue-600/10' : 'border-slate-300 hover:bg-slate-50 hover:border-slate-400'} ${!value ? 'text-slate-500' : 'text-slate-900 font-bold'}`}>
+          <span className="truncate">
+            {options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value)
+              ? (typeof options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value) === 'string' 
+                  ? options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value) as string
+                  : (options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value) as SelectOption).label)
+              : value || placeholder}
+          </span>
+          <ChevronDown size={20} className={`text-slate-600 transition-transform duration-300 ease-in-out ${isOpen ? 'rotate-180 text-slate-900' : ''}`} />
+        </button>
+        {isOpen && (
+          <div className="absolute z-20 w-full mt-2 bg-white border-2 border-slate-300 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="max-h-60 overflow-y-auto p-1.5 space-y-1 scrollbar-hide">
+              {options.map((option: OptionType, idx: number) => {
+                const optValue = typeof option === 'string' ? option : option.value;
+                const optLabel = typeof option === 'string' ? option : option.label;
+                return (
+                  <div key={idx} onClick={() => { onChange(optValue); setIsOpen(false); }} className={`px-4 py-3 text-base rounded-lg cursor-pointer transition-colors flex items-center active:scale-95 ${optValue === value ? 'bg-blue-600 text-white font-bold' : 'text-slate-800 hover:bg-slate-100 font-medium'}`}>
+                    {optLabel}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+}
 
 function MainNavButton({ label, icon, isActive, onClick }: NavButtonProps) {
     return (
