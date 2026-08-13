@@ -200,7 +200,20 @@ export default function Processing() {
           const previousClerk = reassignDoc.assigned_clerk || 'Unassigned';
           const nowIso = new Date().toISOString();
 
-          // 1. Update the document's assigned clerk and timestamp
+          // 1. WRITE THE LOG FIRST
+          // This proves to the database that you touched this document before you hand it away
+          const { error: trailError } = await supabase
+              .from('document_logs')
+              .insert([{
+                  document_id: reassignDoc.id,
+                  action: 'REASSIGNED',
+                  remarks: `Re-assigned from ${previousClerk} to ${selectedColleague} by ${data?.currentUserName || 'System User'}`,
+                  location: reassignDoc.current_location || 'Processing'
+              }]);
+
+          if (trailError) console.warn("Failed to write re-assignment trail log:", trailError.message);
+
+          // 2. NOW HAND OVER THE DOCUMENT
           const { error: updateError } = await supabase
               .from('documents')
               .update({ 
@@ -210,21 +223,6 @@ export default function Processing() {
               .eq('id', reassignDoc.id);
           
           if (updateError) throw updateError;
-
-          // 2. Insert an audit log entry so it reflects immediately in the digital trail history
-          const { error: trailError } = await supabase
-              .from('document_logs') // Ensures it writes to the correct log table
-              .insert([{
-                  document_id: reassignDoc.id,
-                  action: 'REASSIGNED',
-                  remarks: `Re-assigned from ${previousClerk} to ${selectedColleague} by ${data?.currentUserName || 'System User'}`,
-                  performed_by: data?.currentUserName || 'System User',
-                  location: reassignDoc.current_location || 'Processing'
-              }]);
-
-          if (trailError) {
-              console.warn("Failed to write re-assignment trail log:", trailError.message);
-          }
           
           toast.success(`Document re-assigned to ${selectedColleague}`);
           closeReassignModal();

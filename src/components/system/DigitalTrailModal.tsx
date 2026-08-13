@@ -1,6 +1,6 @@
 import { useState, useEffect, type SyntheticEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Archive, Check, ArrowRight, FileText } from 'lucide-react';
+import { X, Archive, Check, ArrowRight, FileText, UserPlus } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import FilePreviewModal from './FilePreviewModal';
 
@@ -133,6 +133,7 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
                             else if (log.action === 'Returned') { icon = <X size={14} strokeWidth={4} className="text-white" />; nodeBg = 'bg-red-500'; titleColor = 'text-red-700'; } 
                             else if (log.action === 'In transit') { icon = <ArrowRight size={14} strokeWidth={3} className="text-white" />; nodeBg = 'bg-blue-500'; titleColor = 'text-blue-700'; } 
                             else if (log.action === 'Document Logged') { icon = <Check size={14} strokeWidth={4} className="text-white" />; nodeBg = 'bg-slate-700'; titleColor = 'text-slate-800'; }
+                            else if (log.action === 'REASSIGNED') { icon = <UserPlus size={14} strokeWidth={3} className="text-white" />; nodeBg = 'bg-amber-500'; titleColor = 'text-amber-700'; }
 
                             const formatDescription = (text: string) => {
                                 if(!text) return null;
@@ -150,6 +151,7 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
                             if (log.action === 'In transit') desc = `Arrived at: ${log.location}\nReceived By: ${log.assigned_to}`;
                             if (log.action === 'Returned') desc = `Returned to: ${log.location}\nReason: ${log.remarks}`;
                             if (log.action === 'Delivered') { desc = `Secured At: ${log.location}`; if (log.remarks) desc += `\n${log.remarks}`; }
+                            if (log.action === 'REASSIGNED') desc = `Location: ${log.location}\nDetails: ${log.remarks}`;
 
                             return (
                                 <div key={index} className="flex gap-4 relative w-full animate-in fade-in duration-300" style={{ animationFillMode: 'both', animationDelay: `${index * 50}ms` }}>
