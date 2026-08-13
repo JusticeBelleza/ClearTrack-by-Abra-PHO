@@ -1,11 +1,11 @@
 [
   {
-    "tablename": "profiles",
-    "policyname": "Select all profiles",
-    "roles": "{public}",
-    "cmd": "SELECT",
-    "qual": "true",
-    "with_check": null
+    "tablename": "documents",
+    "policyname": "Optimized document update policy",
+    "roles": "{authenticated}",
+    "cmd": "UPDATE",
+    "qual": "((( SELECT auth.uid() AS uid) = created_by) OR (assigned_clerk = ( SELECT profiles.full_name\n   FROM profiles\n  WHERE (profiles.id = ( SELECT auth.uid() AS uid)))))",
+    "with_check": "true"
   },
   {
     "tablename": "document_logs",
@@ -41,14 +41,6 @@
   },
   {
     "tablename": "categories",
-    "policyname": "Cat_Select",
-    "roles": "{public}",
-    "cmd": "SELECT",
-    "qual": "(( SELECT auth.role() AS role) = 'authenticated'::text)",
-    "with_check": null
-  },
-  {
-    "tablename": "categories",
     "policyname": "Cat_Insert",
     "roles": "{public}",
     "cmd": "INSERT",
@@ -69,14 +61,6 @@
     "roles": "{public}",
     "cmd": "DELETE",
     "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))",
-    "with_check": null
-  },
-  {
-    "tablename": "departments",
-    "policyname": "Dept_Select",
-    "roles": "{public}",
-    "cmd": "SELECT",
-    "qual": "(( SELECT auth.role() AS role) = 'authenticated'::text)",
     "with_check": null
   },
   {
@@ -105,14 +89,6 @@
   },
   {
     "tablename": "employees",
-    "policyname": "Emp_Select",
-    "roles": "{public}",
-    "cmd": "SELECT",
-    "qual": "(( SELECT auth.role() AS role) = 'authenticated'::text)",
-    "with_check": null
-  },
-  {
-    "tablename": "employees",
     "policyname": "Emp_Insert",
     "roles": "{public}",
     "cmd": "INSERT",
@@ -133,14 +109,6 @@
     "roles": "{public}",
     "cmd": "DELETE",
     "qual": "(EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role))))",
-    "with_check": null
-  },
-  {
-    "tablename": "destination_offices",
-    "policyname": "Office_Select",
-    "roles": "{public}",
-    "cmd": "SELECT",
-    "qual": "(( SELECT auth.role() AS role) = 'authenticated'::text)",
     "with_check": null
   },
   {
@@ -185,14 +153,6 @@
   },
   {
     "tablename": "global_settings",
-    "policyname": "GS_Select",
-    "roles": "{public}",
-    "cmd": "SELECT",
-    "qual": "(( SELECT auth.role() AS role) = 'authenticated'::text)",
-    "with_check": null
-  },
-  {
-    "tablename": "global_settings",
     "policyname": "GS_Update",
     "roles": "{public}",
     "cmd": "UPDATE",
@@ -217,18 +177,58 @@
   },
   {
     "tablename": "documents",
-    "policyname": "Doc_Update",
-    "roles": "{public}",
-    "cmd": "UPDATE",
-    "qual": "((created_by = auth.uid()) OR (custodian_id = auth.uid()) OR (assigned_clerk = ( SELECT profiles.full_name\n   FROM profiles\n  WHERE (profiles.id = auth.uid()))) OR (EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::user_role)))))",
-    "with_check": "true"
-  },
-  {
-    "tablename": "documents",
     "policyname": "Doc_Select",
     "roles": "{public}",
     "cmd": "SELECT",
-    "qual": "((created_by = auth.uid()) OR (custodian_id = auth.uid()) OR (assigned_clerk = ( SELECT profiles.full_name\n   FROM profiles\n  WHERE (profiles.id = auth.uid()))) OR check_user_routed_doc(id) OR (EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = auth.uid()) AND (profiles.role = 'admin'::user_role)))))",
+    "qual": "((created_by = ( SELECT auth.uid() AS uid)) OR (custodian_id = ( SELECT auth.uid() AS uid)) OR (assigned_clerk = ( SELECT profiles.full_name\n   FROM profiles\n  WHERE (profiles.id = ( SELECT auth.uid() AS uid)))) OR check_user_routed_doc(id) OR (EXISTS ( SELECT 1\n   FROM profiles\n  WHERE ((profiles.id = ( SELECT auth.uid() AS uid)) AND (profiles.role = 'admin'::user_role)))))",
+    "with_check": null
+  },
+  {
+    "tablename": "profiles",
+    "policyname": "Select all profiles",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "true",
+    "with_check": null
+  },
+  {
+    "tablename": "categories",
+    "policyname": "Cat_Select",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "true",
+    "with_check": null
+  },
+  {
+    "tablename": "departments",
+    "policyname": "Dept_Select",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "true",
+    "with_check": null
+  },
+  {
+    "tablename": "employees",
+    "policyname": "Emp_Select",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "true",
+    "with_check": null
+  },
+  {
+    "tablename": "destination_offices",
+    "policyname": "Office_Select",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "true",
+    "with_check": null
+  },
+  {
+    "tablename": "global_settings",
+    "policyname": "GS_Select",
+    "roles": "{authenticated}",
+    "cmd": "SELECT",
+    "qual": "true",
     "with_check": null
   }
 ]

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ArrowRight, Loader2 } from 'lucide-react';
+import { Lock, Mail, ArrowRight, Loader2, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { Turnstile } from '@marsidev/react-turnstile';
@@ -14,6 +14,7 @@ export default function Login() {
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
@@ -70,7 +71,8 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col justify-center items-center p-4 sm:p-6 relative overflow-hidden">
+    // Changed to min-h-[100dvh] for perfect mobile keyboard handling
+    <div className="min-h-[100dvh] bg-slate-900 flex flex-col justify-center items-center p-4 sm:p-6 relative overflow-hidden">
       {/* Background Glow */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[30rem] h-[30rem] bg-blue-600/20 rounded-full blur-[100px] pointer-events-none"></div>
 
@@ -116,7 +118,9 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="name@abra.gov.ph"
                 required
-                className="w-full pl-12 pr-4 py-3.5 bg-slate-50/50 border-2 border-slate-200 focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-600/10 rounded-2xl outline-none font-semibold text-slate-900 transition-all text-base placeholder:text-slate-400 placeholder:font-normal"
+                autoComplete="email"
+                disabled={isLoading}
+                className="w-full pl-12 pr-4 py-3.5 bg-slate-50/50 border-2 border-slate-200 focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-600/10 rounded-2xl outline-none font-semibold text-slate-900 transition-all text-base placeholder:text-slate-400 placeholder:font-normal disabled:opacity-70"
               />
             </div>
           </div>
@@ -136,13 +140,24 @@ export default function Login() {
             <div className="relative group">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5 group-focus-within:text-blue-600 transition-colors duration-200" />
               <input 
-                type="password" 
+                type={showPassword ? 'text' : 'password'} 
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
                 required
-                className="w-full pl-12 pr-4 py-3.5 bg-slate-50/50 border-2 border-slate-200 focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-600/10 rounded-2xl outline-none font-semibold text-slate-900 transition-all text-base placeholder:text-slate-400 placeholder:font-normal"
+                autoComplete="current-password"
+                disabled={isLoading}
+                className="w-full pl-12 pr-14 py-3.5 bg-slate-50/50 border-2 border-slate-200 focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-600/10 rounded-2xl outline-none font-semibold text-slate-900 transition-all text-base placeholder:text-slate-400 placeholder:font-normal disabled:opacity-70"
               />
+              {/* Touch-optimized password toggle */}
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                tabIndex={-1}
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-blue-600 active:scale-90 transition-all"
+              >
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
             </div>
           </div>
 

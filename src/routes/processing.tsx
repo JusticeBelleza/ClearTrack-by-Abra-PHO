@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { 
-    Search, AlertCircle, MapPin, Eye, Clock, ChevronRight, X, Activity, CornerUpLeft, User, MessageSquareWarning, CheckCircle
+    Search, AlertCircle, MapPin, Eye, Clock, ChevronRight, X, Activity, CornerUpLeft, User, MessageSquareWarning, CheckCircle, UserPlus, ChevronDown
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import { formatPHDateTime } from '../lib/utils';
 import HandoverScreen from '../components/system/HandoverScreen';
@@ -59,6 +60,9 @@ interface ProcessingData {
     processing: DocumentItem[];
     returned: DocumentItem[];
     departments: DepartmentOption[];
+    currentUserName: string;
+    currentUserId: string;
+    colleagues: string[];
 }
 
 interface TabButtonProps {
@@ -71,6 +75,19 @@ interface TabButtonProps {
     badgeClass: string;
 }
 
+interface SelectOption { 
+    label: string; 
+    value: string; 
+}
+type OptionType = SelectOption | string;
+
+interface CustomSelectProps {
+    options: OptionType[];
+    value: string;
+    onChange: (val: string) => void;
+    placeholder?: string;
+}
+
 // --- DATA FETCHING FUNCTION FOR REACT QUERY ---
 const fetchProcessingData = async (): Promise<ProcessingData> => {
     const { data: { session } } = await supabase.auth.getSession();
@@ -79,6 +96,25 @@ const fetchProcessingData = async (): Promise<ProcessingData> => {
     const currentUserId = session.user.id;
     const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', currentUserId).single();
     const currentUserName = profile?.full_name || '';
+
+    let currentUserDept = '';
+    let colleagues: string[] = [];
+    
+    if (currentUserName) {
+        const { data: empData } = await supabase.from('employees').select('department').eq('name', currentUserName).single();
+        if (empData?.department) {
+            currentUserDept = empData.department;
+            const { data: deptEmps } = await supabase
+                .from('employees')
+                .select('name')
+                .eq('department', currentUserDept)
+                .neq('name', currentUserName);
+            
+            if (deptEmps) {
+                colleagues = deptEmps.map(e => e.name);
+            }
+        }
+    }
 
     const [docsRes, deptRes] = await Promise.all([
         supabase.from('documents').select('*').neq('status', 'sealed'),
@@ -106,7 +142,7 @@ const fetchProcessingData = async (): Promise<ProcessingData> => {
         departments = deptRes.data.map(d => ({ label: d.name, value: d.name }));
     }
 
-    return { processing, returned, departments };
+    return { processing, returned, departments, currentUserName, currentUserId, colleagues };
 };
 
 export default function Processing() {
@@ -115,6 +151,12 @@ export default function Processing() {
   const [trailDoc, setTrailDoc] = useState<DocumentItem | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
+  
+  // Re-assign Modal States
+  const [reassignDoc, setReassignDoc] = useState<DocumentItem | null>(null);
+  const [selectedColleague, setSelectedColleague] = useState<string>('');
+  const [isReassigning, setIsReassigning] = useState(false);
+  const [isClosingReassign, setIsClosingReassign] = useState(false);
 
   const { data, isLoading, refetch } = useQuery<ProcessingData>({
       queryKey: ['processingDocuments'],
@@ -140,6 +182,59 @@ export default function Processing() {
         (doc.assigned_clerk || '').toLowerCase().includes(query)
     );
   }, [searchQuery, documents, activeTab]);
+
+  const closeReassignModal = () => {
+      setIsClosingReassign(true);
+      setTimeout(() => {
+          setReassignDoc(null);
+          setSelectedColleague('');
+          setIsClosingReassign(false);
+      }, 250);
+  };
+
+  const handleReassignConfirm = async () => {
+      if (!reassignDoc || !selectedColleague) return;
+      setIsReassigning(true);
+      
+      try {
+          const previousClerk = reassignDoc.assigned_clerk || 'Unassigned';
+          const nowIso = new Date().toISOString();
+
+          // 1. Update the document's assigned clerk and timestamp
+          const { error: updateError } = await supabase
+              .from('documents')
+              .update({ 
+                  assigned_clerk: selectedColleague,
+                  updated_at: nowIso 
+              })
+              .eq('id', reassignDoc.id);
+          
+          if (updateError) throw updateError;
+
+          // 2. Insert an audit log entry so it reflects immediately in the digital trail history
+          const { error: trailError } = await supabase
+              .from('document_logs') // Ensures it writes to the correct log table
+              .insert([{
+                  document_id: reassignDoc.id,
+                  action: 'REASSIGNED',
+                  remarks: `Re-assigned from ${previousClerk} to ${selectedColleague} by ${data?.currentUserName || 'System User'}`,
+                  performed_by: data?.currentUserName || 'System User',
+                  location: reassignDoc.current_location || 'Processing'
+              }]);
+
+          if (trailError) {
+              console.warn("Failed to write re-assignment trail log:", trailError.message);
+          }
+          
+          toast.success(`Document re-assigned to ${selectedColleague}`);
+          closeReassignModal();
+          refetch();
+      } catch (error) {
+          toast.error("Failed to re-assign document. Please try again.");
+      } finally {
+          setIsReassigning(false);
+      }
+  };
 
   if (isLoading) {
       return (
@@ -222,14 +317,16 @@ export default function Processing() {
 
           {filteredDocs.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {filteredDocs.map((doc: DocumentItem) => (
-                    
-                    activeTab === 'returned' ? (
+                {filteredDocs.map((doc: DocumentItem) => {
+                    const isManager = doc.assigned_clerk === data?.currentUserName;
+                    const isCreator = doc.created_by === data?.currentUserId;
+                    const canReassign = isManager || isCreator;
+
+                    return activeTab === 'returned' ? (
                         // ==========================================
                         // PROFESSIONAL "ACTION NEEDED" CARD DESIGN
                         // ==========================================
                         <div key={doc.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden flex flex-col">
-                            {/* Enterprise Left Accent Border */}
                             <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-500"></div>
                             
                             <div className="p-5 flex-1 flex flex-col pl-6">
@@ -243,11 +340,10 @@ export default function Processing() {
                                 <h4 className="font-black text-lg text-slate-900 mb-1.5 leading-tight">{doc.title || doc.subject}</h4>
                                 
                                 <div className="flex items-center gap-1.5 mb-4">
-                                    <CornerUpLeft size={14} className="text-slate-400" />
-                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Returned by: <span className="text-slate-800">{doc.current_location}</span></p>
+                                    <User size={14} className="text-slate-400" />
+                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Managed by: <span className="text-amber-700">{doc.assigned_clerk}</span></p>
                                 </div>
                                 
-                                {/* Highlighted Remarks Box */}
                                 <div className="bg-amber-50/60 rounded-xl p-3.5 border border-amber-100 mb-5 relative">
                                     <div className="flex items-center gap-1.5 mb-1.5 text-amber-800">
                                         <MessageSquareWarning size={14} />
@@ -263,28 +359,45 @@ export default function Processing() {
                                     <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Returned {formatPHDateTime(doc.updated_at || doc.created_at)}</p>
                                 </div>
                                 
-                                <div className="flex gap-2">
-                                    {doc.attachment_url && (
+                                <div className="flex flex-col gap-2 mt-auto">
+                                    <div className="flex gap-2">
+                                        {doc.attachment_url && (
+                                            <button 
+                                                onClick={() => setPreviewDocUrl(doc.attachment_url as string)} 
+                                                className="shrink-0 py-2.5 px-3 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl flex items-center justify-center transition-all active:scale-95 border-2 border-slate-200"
+                                                title="View Attached File"
+                                            >
+                                                <Eye size={18} />
+                                            </button>
+                                        )}
                                         <button 
-                                            onClick={() => setPreviewDocUrl(doc.attachment_url as string)} 
-                                            className="shrink-0 py-2.5 px-3 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl flex items-center justify-center transition-all active:scale-95 border-2 border-slate-200"
-                                            title="View Attached File"
+                                            onClick={() => setTrailDoc(doc)}
+                                            className="flex-1 py-2.5 px-2 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 border-2 border-slate-200 text-sm"
                                         >
-                                            <Eye size={18} />
+                                            History
                                         </button>
+                                        {canReassign && (
+                                            <button 
+                                                onClick={() => setReassignDoc(doc)}
+                                                className="flex-1 py-2.5 px-2 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 border-2 border-slate-200 text-sm"
+                                            >
+                                                <UserPlus size={16} /> Re-assign
+                                            </button>
+                                        )}
+                                    </div>
+                                    
+                                    {isManager ? (
+                                        <button 
+                                            onClick={() => setSelectedDoc(doc)}
+                                            className="w-full py-2.5 px-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-sm border-2 border-amber-700 shadow-sm"
+                                        >
+                                            Resolve Issue
+                                        </button>
+                                    ) : (
+                                        <div className="w-full py-2.5 px-3 bg-amber-50/50 border-2 border-amber-100 rounded-xl text-center">
+                                            <p className="text-[11px] font-bold text-amber-700 uppercase tracking-wider">Pending resolution by {doc.assigned_clerk}</p>
+                                        </div>
                                     )}
-                                    <button 
-                                        onClick={() => setTrailDoc(doc)}
-                                        className="flex-1 py-2.5 px-2 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 border-2 border-slate-200 text-sm"
-                                    >
-                                        History
-                                    </button>
-                                    <button 
-                                        onClick={() => setSelectedDoc(doc)}
-                                        className="flex-[1.5] py-2.5 px-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-sm border-2 border-amber-700 shadow-sm"
-                                    >
-                                        Resolve Issue
-                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -321,35 +434,100 @@ export default function Processing() {
                                 </div>
                             </div>
                             
-                            <div className="flex gap-2 mt-auto">
-                                {doc.attachment_url && (
+                            <div className="flex flex-col gap-2 mt-auto">
+                                <div className="flex gap-2">
+                                    {doc.attachment_url && (
+                                        <button 
+                                            onClick={() => setPreviewDocUrl(doc.attachment_url as string)} 
+                                            className="shrink-0 py-2.5 px-3 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl flex items-center justify-center transition-all active:scale-95 border-2 border-slate-300"
+                                            title="View Attached File"
+                                        >
+                                            <Eye size={18} />
+                                        </button>
+                                    )}
                                     <button 
-                                        onClick={() => setPreviewDocUrl(doc.attachment_url as string)} 
-                                        className="shrink-0 py-2.5 px-3 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl flex items-center justify-center transition-all active:scale-95 border-2 border-slate-300"
-                                        title="View Attached File"
+                                        onClick={() => setTrailDoc(doc)}
+                                        className="flex-1 py-2.5 px-2 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 border-2 border-slate-300 text-sm"
                                     >
-                                        <Eye size={18} />
+                                        <Clock size={16} /> Track
                                     </button>
+                                    {canReassign && (
+                                        <button 
+                                            onClick={() => setReassignDoc(doc)}
+                                            className="flex-1 py-2.5 px-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 border-2 border-slate-300 text-sm"
+                                        >
+                                            <UserPlus size={16} /> Re-assign
+                                        </button>
+                                    )}
+                                </div>
+                                
+                                {isManager ? (
+                                    <button 
+                                        onClick={() => setSelectedDoc(doc)}
+                                        className="w-full py-2.5 px-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-sm border-2 border-blue-700 shadow-sm"
+                                    >
+                                        Action <ChevronRight size={16} />
+                                    </button>
+                                ) : (
+                                    <div className="w-full py-2.5 px-3 bg-slate-50 border-2 border-slate-200 rounded-xl text-center">
+                                        <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Pending action by {doc.assigned_clerk}</p>
+                                    </div>
                                 )}
-                                <button 
-                                    onClick={() => setTrailDoc(doc)}
-                                    className="flex-1 py-2.5 px-2 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 border-2 border-slate-300 text-sm"
-                                >
-                                    <Clock size={16} /> Track
-                                </button>
-                                <button 
-                                    onClick={() => setSelectedDoc(doc)}
-                                    className="flex-[1.5] py-2.5 px-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-sm border-2 border-blue-700 shadow-sm"
-                                >
-                                    Action <ChevronRight size={16} />
-                                </button>
                             </div>
                         </div>
-                    )
-                ))}
+                    );
+                })}
               </div>
           )}
       </div>
+
+      {/* RE-ASSIGN MODAL */}
+      {reassignDoc && (
+          <div className={`fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm ${isClosingReassign ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
+              <div className={`bg-white w-full max-w-md rounded-[24px] shadow-2xl border-2 border-slate-200 ${isClosingReassign ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
+                  <div className="bg-slate-900 p-5 flex justify-between items-center text-white rounded-t-[22px]">
+                      <h3 className="font-black text-xl flex items-center gap-2">
+                          <UserPlus size={22} className="text-blue-400" /> Re-assign Document
+                      </h3>
+                      <button onClick={closeReassignModal} className="p-1.5 hover:bg-white/20 rounded-full transition-colors">
+                          <X size={20} />
+                      </button>
+                  </div>
+                  <div className="p-6 space-y-5 rounded-b-[24px]">
+                      <div>
+                          <p className="text-sm font-bold text-slate-500 uppercase tracking-wider mb-1">Document ID</p>
+                          <p className="font-mono text-lg font-black text-slate-900">{reassignDoc.reference_no || reassignDoc.id}</p>
+                      </div>
+                      
+                      <div className="relative z-20">
+                          <label className="block text-sm font-bold text-slate-900 mb-2">Select Colleague (Same Department)</label>
+                          <CustomSelect 
+                              options={data?.colleagues || []}
+                              value={selectedColleague}
+                              onChange={(val: string) => setSelectedColleague(val)}
+                              placeholder={data?.colleagues.length === 0 ? "No colleagues available" : "Choose an employee..."}
+                          />
+                      </div>
+
+                      <div className="pt-2 flex gap-3 relative z-10">
+                          <button 
+                              onClick={closeReassignModal} 
+                              className="flex-1 py-3.5 bg-white border-2 border-slate-300 hover:bg-slate-50 rounded-xl font-bold text-slate-700 transition-all active:scale-95"
+                          >
+                              Cancel
+                          </button>
+                          <button 
+                              onClick={handleReassignConfirm} 
+                              disabled={!selectedColleague || isReassigning}
+                              className="flex-[1.5] py-3.5 bg-blue-600 border-2 border-blue-700 text-white rounded-xl font-bold shadow-md hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100 flex justify-center items-center gap-2"
+                          >
+                              {isReassigning ? 'Updating...' : 'Confirm Re-assign'}
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
 
       {selectedDoc && <HandoverScreen doc={selectedDoc} departments={departments} onBack={() => setSelectedDoc(null)} onSuccess={() => refetch()} />}
       {trailDoc && <DigitalTrailModal doc={trailDoc} onBack={() => setTrailDoc(null)} />}
@@ -357,6 +535,8 @@ export default function Processing() {
     </div>
   );
 }
+
+// --- HELPER COMPONENTS ---
 
 function TabButton({ label, icon, count, isActive, onClick, colorClass, badgeClass }: TabButtonProps) {
     return (
@@ -374,4 +554,63 @@ function TabButton({ label, icon, count, isActive, onClick, colorClass, badgeCla
             </span>
         </button>
     )
+}
+
+function CustomSelect({ options, value, onChange, placeholder }: CustomSelectProps) {
+    const [isOpen, setIsOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+  
+    useEffect(() => {
+      function handleClickOutside(event: MouseEvent) {
+        if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) setIsOpen(false);
+      }
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    const selectedOptionLabel = options.find(opt => (typeof opt === 'string' ? opt : opt.value) === value);
+    const displayLabel = selectedOptionLabel 
+        ? (typeof selectedOptionLabel === 'string' ? selectedOptionLabel : selectedOptionLabel.label)
+        : placeholder;
+  
+    return (
+      <div className="relative w-full" ref={dropdownRef}>
+        <button 
+            type="button" 
+            onClick={() => setIsOpen(!isOpen)} 
+            className={`w-full px-4 py-3.5 bg-slate-50 border-2 rounded-xl flex justify-between items-center transition-all text-base outline-none active:scale-[0.99] ${isOpen ? 'border-blue-600 ring-4 ring-blue-600/10 bg-white' : 'border-slate-300 hover:bg-white hover:border-slate-400'} ${!value ? 'text-slate-500 font-medium' : 'text-slate-900 font-bold'}`}
+        >
+          <span className="truncate">
+            {displayLabel}
+          </span>
+          <ChevronDown size={20} className={`text-slate-600 transition-transform duration-300 ease-in-out ${isOpen ? 'rotate-180 text-slate-900' : ''}`} />
+        </button>
+
+        {isOpen && (
+          <div className="absolute z-30 w-full mt-2 bg-white border-2 border-slate-300 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="max-h-60 overflow-y-auto p-1.5 space-y-1 scrollbar-hide">
+              {options.length === 0 ? (
+                  <div className="px-4 py-3 text-sm text-slate-500 font-medium text-center">
+                      No options available
+                  </div>
+              ) : (
+                  options.map((option: OptionType, idx: number) => {
+                    const optValue = typeof option === 'string' ? option : option.value;
+                    const optLabel = typeof option === 'string' ? option : option.label;
+                    return (
+                      <div 
+                        key={idx} 
+                        onClick={() => { onChange(optValue); setIsOpen(false); }} 
+                        className={`px-4 py-3 text-base rounded-lg cursor-pointer transition-colors flex items-center active:scale-95 ${optValue === value ? 'bg-blue-600 text-white font-bold' : 'text-slate-800 hover:bg-slate-100 font-medium'}`}
+                      >
+                        {optLabel}
+                      </div>
+                    );
+                  })
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    );
 }
