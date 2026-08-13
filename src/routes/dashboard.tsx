@@ -146,8 +146,11 @@ export default function Dashboard() {
     }
   });
 
-  // Safe fallbacks while loading or if data is missing
-  const documents = dashboardData?.documents || { assigned: [], myDocuments: [], processing: [], rejected: [], completed: [] };
+  // ESLint Fix: Wrap documents in useMemo to prevent unnecessary dependency re-evaluations
+  const documents = useMemo(() => {
+      return dashboardData?.documents || { assigned: [], myDocuments: [], processing: [], rejected: [], completed: [] };
+  }, [dashboardData?.documents]);
+
   const stats = dashboardData?.stats || { active: 0, urgent: 0, actionNeeded: 0, completed: 0 };
   const userName = dashboardData?.userName || '';
 

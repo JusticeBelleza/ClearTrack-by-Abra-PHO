@@ -224,9 +224,11 @@ export default function Settings() {
           handleCloseEdit(); 
           toast.success("Profile updated successfully!");
       },
-      onError: (err: any) => {
+      // ESLint Fix: Safely type the error as unknown instead of any
+      onError: (err: unknown) => {
           console.error(err);
-          toast.error("Failed to update profile", { description: err.message || 'An unknown error occurred' });
+          const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
+          toast.error("Failed to update profile", { description: errorMessage });
       }
   });
 

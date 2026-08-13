@@ -97,17 +97,16 @@ const fetchProcessingData = async (): Promise<ProcessingData> => {
     const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', currentUserId).single();
     const currentUserName = profile?.full_name || '';
 
-    let currentUserDept = '';
     let colleagues: string[] = [];
     
     if (currentUserName) {
         const { data: empData } = await supabase.from('employees').select('department').eq('name', currentUserName).single();
         if (empData?.department) {
-            currentUserDept = empData.department;
+            // ESLint Fix: Used empData.department directly without assigning it to a useless variable
             const { data: deptEmps } = await supabase
                 .from('employees')
                 .select('name')
-                .eq('department', currentUserDept)
+                .eq('department', empData.department)
                 .neq('name', currentUserName);
             
             if (deptEmps) {
@@ -200,8 +199,7 @@ export default function Processing() {
           const previousClerk = reassignDoc.assigned_clerk || 'Unassigned';
           const nowIso = new Date().toISOString();
 
-          // 1. WRITE THE LOG FIRST
-          // This proves to the database that you touched this document before you hand it away
+          // 1. WRITE THE LOG FIRST (Prevents the Disappearing Row Trap)
           const { error: trailError } = await supabase
               .from('document_logs')
               .insert([{
@@ -228,6 +226,8 @@ export default function Processing() {
           closeReassignModal();
           refetch();
       } catch (error) {
+          // ESLint Fix: Properly logging the error so the variable is used
+          console.error("Re-assign Error:", error);
           toast.error("Failed to re-assign document. Please try again.");
       } finally {
           setIsReassigning(false);

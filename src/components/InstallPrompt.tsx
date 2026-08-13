@@ -12,6 +12,11 @@ interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
 }
 
+// Extend Navigator interface to safely check for iOS standalone mode
+interface NavigatorWithStandalone extends Navigator {
+  standalone?: boolean;
+}
+
 export default function InstallPrompt() {
   const [isIos, setIsIos] = useState(false);
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
@@ -22,8 +27,9 @@ export default function InstallPrompt() {
     const isDismissed = localStorage.getItem('filetrackr_install_dismissed');
     
     // 2. Check if the app is already installed / running in standalone mode
-    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || 
-                         (window.navigator as any).standalone === true;
+    // ESLint Fix: Removed the 'any' cast and used the extended interface
+    const nav = window.navigator as NavigatorWithStandalone;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || nav.standalone === true;
 
     if (isDismissed || isStandalone) {
       return; // Hide completely if already installed or dismissed
