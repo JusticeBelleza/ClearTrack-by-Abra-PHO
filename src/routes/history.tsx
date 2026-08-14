@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { 
     Search, MapPin, Clock, CheckCircle, AlertCircle, 
-    Archive, FileText, X, Eye, CornerUpLeft, User, Ban, ChevronDown, FolderTree
+    Archive, FileText, X, Eye, CornerUpLeft, Ban, ChevronDown, FolderTree
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
