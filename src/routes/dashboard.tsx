@@ -109,38 +109,34 @@ export default function Dashboard() {
       const firstName = currentUserName.split(' ')[0];
       const safeDocs = docsRes.data || [];
 
-      // 3. SECURITY: Filter down to ONLY documents relevant to this specific user 
+      // 3. SECURITY & CANCELLATION FIX: Filter to relevant user AND globally exclude 'cancelled' documents here
       const myRelevantDocs = safeDocs.filter((d: DocumentItem) => 
           (d.created_by === currentUserId || 
            d.assigned_clerk === currentUserName || 
-           d.custodian_id === currentUserId)
+           d.custodian_id === currentUserId) &&
+          d.status !== 'cancelled'
       );
 
-      // 4. Process the buckets. Notice the strict d.status !== 'cancelled' checks!
+      // 4. Process the buckets. (Redundant cancelled checks removed for TS strict mode)
       const assigned = myRelevantDocs.filter((d: DocumentItem) => 
           (d.assigned_clerk === currentUserName || d.custodian_id === currentUserId) && 
           d.status !== 'sealed' &&
-          d.status !== 'cancelled' &&
           !d.remarks
       );
       
       const myDocuments = myRelevantDocs.filter((d: DocumentItem) => 
           d.created_by === currentUserId && 
-          d.status !== 'sealed' &&
-          d.status !== 'cancelled'
+          d.status !== 'sealed'
       );
 
       const processing = myRelevantDocs.filter((d: DocumentItem) => 
           d.assigned_clerk !== currentUserName && 
           d.custodian_id !== currentUserId && 
-          d.status !== 'cancelled' &&
           (d.status === 'routing' || (d.status === 'pending' && !d.remarks))
       );
 
-      // STRICT CHECK: Cannot be in rejected/returned tab if it has been cancelled!
       const rejected = myRelevantDocs.filter((d: DocumentItem) => 
           d.status === 'pending' && 
-          d.status !== 'cancelled' && 
           !!d.remarks
       );
 
@@ -151,7 +147,7 @@ export default function Dashboard() {
           documents: { assigned, myDocuments, processing, rejected, completed },
           stats: {
               active: processing.length + assigned.length, 
-              urgent: myRelevantDocs.filter((d: DocumentItem) => d.is_urgent && d.status !== 'sealed' && d.status !== 'cancelled').length, 
+              urgent: myRelevantDocs.filter((d: DocumentItem) => d.is_urgent && d.status !== 'sealed').length, 
               actionNeeded: assigned.length + rejected.length, 
               completed: completed.length
           }
