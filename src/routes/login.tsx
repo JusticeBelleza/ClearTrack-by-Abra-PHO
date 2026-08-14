@@ -161,9 +161,9 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Enhanced Captcha Container */}
+          {/* Enhanced Captcha Container - ADDED IFRAME CSS RESETS HERE */}
           <div className="flex justify-center pt-2">
-            <div className="w-full bg-slate-50/80 border-2 border-slate-100 rounded-2xl p-1.5 flex justify-center shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)]">
+            <div className="w-full bg-slate-50/80 border-2 border-slate-100 rounded-2xl p-1.5 flex justify-center shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] [&_iframe]:!border-none [&_iframe]:!outline-none overflow-hidden">
               <Turnstile
                 siteKey={env.VITE_TURNSTILE_SITE_KEY}
                 options={{ theme: 'light' }}
