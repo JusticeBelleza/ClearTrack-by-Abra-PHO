@@ -177,6 +177,9 @@ export default function AppLayout() {
             <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mt-1.5">
               {currentUserRole === 'admin' ? 'Admin Portal' : 'by Abra PHO'}
             </p>
+            {/* Displaying Version on Desktop */}
+            <p className="text-[9px] font-bold text-slate-500 tracking-wider mt-0.5">v{__APP_VERSION__}</p>
+            
             <div className="flex items-center gap-1.5 mt-3 text-slate-300 bg-slate-800/50 py-1.5 px-2.5 rounded-lg border border-slate-700/50 w-fit">
               <Calendar size={12} className="text-blue-400 shrink-0" />
               <span className="text-[10px] font-bold leading-none">{dateInfo.long}</span>
@@ -227,6 +230,8 @@ export default function AppLayout() {
               <span className="text-[10px] font-black text-blue-300 uppercase tracking-widest mt-1">
                 {currentUserRole === 'admin' ? 'Admin Portal' : 'by Abra PHO'}
               </span>
+              {/* Displaying Version on Mobile */}
+              <span className="text-[9px] font-bold text-slate-400 tracking-wider mt-0.5">v{__APP_VERSION__}</span>
             </div>
           </div>
 

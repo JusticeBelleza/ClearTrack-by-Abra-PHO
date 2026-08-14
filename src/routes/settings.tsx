@@ -434,6 +434,13 @@ export default function Settings() {
 
       </div>
 
+      {/* App Version Display */}
+      <div className="pt-8 pb-4 text-center">
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+            FileTrackr. • v{__APP_VERSION__}
+        </p>
+      </div>
+
       {/* Password Change Modal */}
       {isPasswordModalOpen && (
         <ChangePasswordModal 
