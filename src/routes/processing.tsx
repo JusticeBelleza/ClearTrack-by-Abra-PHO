@@ -1,11 +1,12 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { 
-    Search, AlertCircle, MapPin, Eye, Clock, ChevronRight, X, Activity, CornerUpLeft, User, MessageSquareWarning, CheckCircle, UserPlus, ChevronDown
+    Search, AlertCircle, MapPin, Eye, Clock, ChevronRight, X, Activity, CornerUpLeft, User, MessageSquareWarning, CheckCircle, UserPlus, ChevronDown, Camera, Paperclip, UploadCloud, Ban
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import { formatPHDateTime } from '../lib/utils';
+import { jsPDF } from 'jspdf';
 import HandoverScreen from '../components/system/HandoverScreen';
 import DigitalTrailModal from '../components/system/DigitalTrailModal';
 import FilePreviewModal from '../components/system/FilePreviewModal';
@@ -46,6 +47,7 @@ interface DocumentItem {
     remarks?: string;
     is_urgent?: boolean;
     current_location?: string;
+    final_destination?: string;
     attachment_url?: string;
     created_at: string;
     updated_at?: string;
@@ -115,7 +117,7 @@ const fetchProcessingData = async (): Promise<ProcessingData> => {
     }
 
     const [docsRes, deptRes] = await Promise.all([
-        supabase.from('documents').select('*').neq('status', 'sealed'),
+        supabase.from('documents').select('*').neq('status', 'sealed').neq('status', 'cancelled'),
         supabase.from('departments').select('name').order('name')
     ]);
 
@@ -124,8 +126,8 @@ const fetchProcessingData = async (): Promise<ProcessingData> => {
     let departments: DepartmentOption[] = [];
 
     if (docsRes.data) {
-        // Returned documents must be visible to the creator or assigned clerk so they can revise them
         const myActiveDocs = (docsRes.data as DocumentItem[]).filter((d) => {
+            if (d.status === 'cancelled') return false;
             return d.created_by === currentUserId || d.assigned_clerk === currentUserName;
         });
 
@@ -157,6 +159,10 @@ export default function Processing() {
   const [isReassigning, setIsReassigning] = useState(false);
   const [isClosingReassign, setIsClosingReassign] = useState(false);
 
+  // Revise & Cancel Modal States
+  const [reviseDoc, setReviseDoc] = useState<DocumentItem | null>(null);
+  const [cancelDoc, setCancelDoc] = useState<DocumentItem | null>(null);
+
   const { data, isLoading, refetch } = useQuery<ProcessingData>({
       queryKey: ['processingDocuments'],
       queryFn: fetchProcessingData
@@ -181,6 +187,12 @@ export default function Processing() {
         (doc.assigned_clerk || '').toLowerCase().includes(query)
     );
   }, [searchQuery, documents, activeTab]);
+
+  // FIXED: Dynamically remove the current assignee from the dropdown choices
+  const availableColleagues = useMemo(() => {
+      if (!data || !reassignDoc) return [];
+      return data.colleagues.filter((name) => name !== reassignDoc.assigned_clerk && name !== data.currentUserName);
+  }, [data, reassignDoc]);
 
   const closeReassignModal = () => {
       setIsClosingReassign(true);
@@ -320,7 +332,7 @@ export default function Processing() {
 
                     return activeTab === 'returned' ? (
                         // ==========================================
-                        // "ACTION NEEDED" CARD DESIGN (REVISE & RESUBMIT)
+                        // "ACTION NEEDED" CARD DESIGN 
                         // ==========================================
                         <div key={doc.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden flex flex-col">
                             <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-500"></div>
@@ -337,7 +349,7 @@ export default function Processing() {
                                 
                                 <div className="flex items-center gap-1.5 mb-4">
                                     <User size={14} className="text-slate-400" />
-                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Managed by: <span className="text-amber-700">{doc.assigned_clerk}</span></p>
+                                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Managed by: <span className="text-amber-700">{doc.assigned_clerk || 'Unassigned'}</span></p>
                                 </div>
                                 
                                 <div className="bg-amber-50/60 rounded-xl p-3.5 border border-amber-100 mb-5 relative">
@@ -383,12 +395,20 @@ export default function Processing() {
                                     </div>
                                     
                                     {canRevise ? (
-                                        <button 
-                                            onClick={() => setSelectedDoc(doc)}
-                                            className="w-full py-2.5 px-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-sm border-2 border-amber-700 shadow-sm"
-                                        >
-                                            Revise & Resubmit
-                                        </button>
+                                        <div className="flex gap-2 w-full">
+                                            <button 
+                                                onClick={() => setCancelDoc(doc)}
+                                                className="flex-[1] py-2.5 px-2 bg-red-50 hover:bg-red-100 text-red-700 font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-sm border-2 border-red-200 shadow-sm"
+                                            >
+                                                <Ban size={16}/> Cancel
+                                            </button>
+                                            <button 
+                                                onClick={() => setReviseDoc(doc)}
+                                                className="flex-[2.5] py-2.5 px-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-sm border-2 border-amber-700 shadow-sm"
+                                            >
+                                                Revise & Resubmit
+                                            </button>
+                                        </div>
                                     ) : (
                                         <div className="w-full py-2.5 px-3 bg-amber-50/50 border-2 border-amber-100 rounded-xl text-center">
                                             <p className="text-[11px] font-bold text-amber-700 uppercase tracking-wider">Pending revision by {doc.assigned_clerk}</p>
@@ -498,10 +518,10 @@ export default function Processing() {
                       <div className="relative z-20">
                           <label className="block text-sm font-bold text-slate-900 mb-2">Select Colleague (Same Department)</label>
                           <CustomSelect 
-                              options={data?.colleagues || []}
+                              options={availableColleagues}
                               value={selectedColleague}
                               onChange={(val: string) => setSelectedColleague(val)}
-                              placeholder={data?.colleagues.length === 0 ? "No colleagues available" : "Choose an employee..."}
+                              placeholder={availableColleagues.length === 0 ? "No other colleagues available" : "Choose an employee..."}
                           />
                       </div>
 
@@ -525,7 +545,10 @@ export default function Processing() {
           </div>
       )}
 
+      {/* RENDER MODALS */}
       {selectedDoc && <HandoverScreen doc={selectedDoc} departments={departments} onBack={() => setSelectedDoc(null)} onSuccess={() => refetch()} />}
+      {reviseDoc && <ReviseModal doc={reviseDoc} departments={departments} onClose={() => setReviseDoc(null)} onSuccess={() => refetch()} />}
+      {cancelDoc && <CancelModal doc={cancelDoc} onClose={() => setCancelDoc(null)} onSuccess={() => refetch()} />}
       {trailDoc && <DigitalTrailModal doc={trailDoc} onBack={() => setTrailDoc(null)} />}
       {previewDocUrl && <FilePreviewModal url={previewDocUrl} onClose={() => setPreviewDocUrl(null)} />}
     </div>
@@ -608,5 +631,310 @@ function CustomSelect({ options, value, onChange, placeholder }: CustomSelectPro
           </div>
         )}
       </div>
+    );
+}
+
+// --- REVISE MODAL ---
+interface ReviseModalProps {
+    doc: DocumentItem;
+    departments: OptionType[];
+    onClose: () => void;
+    onSuccess: () => void;
+}
+
+function ReviseModal({ doc, departments, onClose, onSuccess }: ReviseModalProps) {
+    const [isClosing, setIsClosing] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    
+    const [destination, setDestination] = useState(doc.final_destination || '');
+    const [isProcessingFile, setIsProcessingFile] = useState(false);
+    const [attachment, setAttachment] = useState<File | Blob | null>(null);
+    const [attachmentName, setAttachmentName] = useState<string>('');
+    const [remarks, setRemarks] = useState(''); 
+
+    const handleClose = () => {
+        setIsClosing(true);
+        setTimeout(onClose, 250);
+    };
+
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        setIsProcessingFile(true); setAttachmentName("Processing file...");
+        try {
+            if (file.type === 'application/pdf') { setAttachment(file); setAttachmentName(file.name); } 
+            else if (file.type.startsWith('image/')) {
+                const pdfBlob = await processImageToScannedPDF(file);
+                setAttachment(pdfBlob); setAttachmentName(`Revised_${doc.reference_no}.pdf`);
+            } else { toast.error("Unsupported file type."); setAttachmentName(""); }
+        } catch { toast.error("Failed to process the document."); setAttachmentName(""); } 
+        finally { setIsProcessingFile(false); }
+    };
+
+    const processImageToScannedPDF = (file: File): Promise<Blob> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
+                    if (!ctx) return reject("Canvas error");
+                    canvas.width = img.width; canvas.height = img.height;
+                    ctx.filter = 'grayscale(100%) contrast(150%) brightness(110%)';
+                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                    const processedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                    const pdf = new jsPDF({ orientation: img.width > img.height ? 'landscape' : 'portrait', unit: 'px', format: [img.width, img.height] });
+                    pdf.addImage(processedDataUrl, 'JPEG', 0, 0, img.width, img.height);
+                    resolve(pdf.output('blob'));
+                };
+                img.onerror = reject; img.src = event.target?.result as string;
+            };
+            reader.onerror = reject; reader.readAsDataURL(file);
+        });
+    };
+
+    const handleSubmit = async () => {
+        if (!destination) { 
+            toast.error("Validation Error", { description: "Please provide a destination." }); 
+            return; 
+        }
+
+        setIsSubmitting(true);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+            let newUrl = doc.attachment_url;
+
+            if (attachment) {
+                const fileName = `revised-${doc.reference_no}-${Date.now()}.pdf`;
+                const { error: uploadError } = await supabase.storage.from('attachments').upload(fileName, attachment, { contentType: 'application/pdf' });
+                if (uploadError) throw uploadError;
+                const { data } = supabase.storage.from('attachments').getPublicUrl(fileName);
+                newUrl = data.publicUrl;
+            }
+
+            const { error: updateError } = await supabase.from('documents').update({
+                current_location: destination,
+                assigned_clerk: null, 
+                status: 'routing',
+                remarks: null, 
+                attachment_url: newUrl,
+                updated_at: new Date().toISOString()
+            }).eq('id', doc.id);
+            if (updateError) throw updateError;
+
+            const logRemarks = remarks.trim() 
+                ? `Document revised and routed to ${destination}\nRemarks: ${remarks.trim()}`
+                : `Document revised and routed to ${destination}`;
+
+            const { error: logError } = await supabase.from('document_logs').insert([{
+                document_id: doc.id,
+                action: 'Resubmitted',
+                location: destination, 
+                assigned_to: 'Office Queue', 
+                remarks: logRemarks,
+                created_by: session?.user?.id || null
+            }]);
+            if (logError) throw logError;
+
+            toast.success("Document Successfully Revised & Resubmitted!");
+            onSuccess();
+            handleClose();
+        } catch (err: unknown) {
+            console.error(err);
+            toast.error("Failed to resubmit the document.");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <div className={`fixed inset-0 z-[999] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosing ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
+            <div className={`bg-white w-full max-w-xl max-h-[90vh] flex flex-col shadow-2xl rounded-t-[2rem] sm:rounded-[24px] overflow-hidden ${isClosing ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
+                
+                <div className="bg-blue-600 p-5 sm:p-6 flex justify-between items-center text-white relative shrink-0">
+                    <div className="w-12 h-1.5 bg-white/30 rounded-full absolute top-2 left-1/2 -translate-x-1/2 sm:hidden"></div>
+                    <div>
+                        <h3 className="font-black text-xl flex items-center gap-2 mt-2 sm:mt-0">
+                            <UploadCloud size={24} /> Revise & Resubmit
+                        </h3>
+                        <p className="text-blue-100 text-sm font-medium mt-1">Make adjustments and re-route document.</p>
+                    </div>
+                    <button onClick={handleClose} disabled={isSubmitting} className="p-2 -mr-2 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-full transition-colors mt-2 sm:mt-0 disabled:opacity-50">
+                        <X size={24} />
+                    </button>
+                </div>
+
+                <div className="p-5 sm:p-8 overflow-y-auto space-y-6 bg-slate-50 flex-1">
+                    
+                    <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Document</p>
+                        <p className="text-base font-black text-slate-900">{doc.title || doc.subject}</p>
+                        <p className="text-xs font-mono text-slate-500 mt-1">{doc.reference_no}</p>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-bold text-slate-900 mb-2">Upload Corrected Document (Optional)</label>
+                        <div className="flex items-center gap-3">
+                            <label className={`hidden sm:flex flex-1 items-center justify-center gap-2 p-5 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${attachment ? 'bg-blue-50 border-blue-400 text-blue-700' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
+                                <input type="file" accept="image/*,application/pdf" className="hidden" onChange={handleFileChange} disabled={isProcessingFile || isSubmitting} />
+                                {isProcessingFile ? <span className="animate-pulse font-bold">Processing PDF...</span> : attachment ? <><CheckCircle size={20}/> <span className="font-bold truncate max-w-[200px]">{attachmentName}</span></> : <><Paperclip size={20}/> <span className="font-bold">Attach New PDF</span></>}
+                            </label>
+                            <label className={`flex sm:hidden flex-1 items-center justify-center gap-2 p-5 border-2 border-dashed rounded-xl cursor-pointer transition-colors active:scale-95 ${attachment ? 'bg-blue-50 border-blue-400 text-blue-700' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
+                                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} disabled={isProcessingFile || isSubmitting} />
+                                {isProcessingFile ? <span className="animate-pulse font-bold">Processing PDF...</span> : attachment ? <><CheckCircle size={20}/> <span className="font-bold truncate max-w-[150px]">{attachmentName}</span></> : <><Camera size={20}/> <span className="font-bold">Re-Scan Document</span></>}
+                            </label>
+                            {attachment && !isProcessingFile && (
+                                <button type="button" onClick={() => { setAttachment(null); setAttachmentName(''); }} className="p-5 bg-red-50 text-red-600 rounded-xl border-2 border-red-200 hover:bg-red-100 active:scale-95 transition-all"><X size={20} strokeWidth={3} /></button>
+                            )}
+                        </div>
+                    </div>
+                    
+                    <div className="relative z-10">
+                        <label className="block text-sm font-bold text-slate-900 mb-2">Remarks / Notes</label>
+                        <textarea 
+                            value={remarks} 
+                            onChange={(e) => setRemarks(e.target.value)} 
+                            placeholder="What was revised? Or provide additional notes..." 
+                            className="w-full p-3.5 bg-white border-2 border-slate-300 focus:border-blue-600 rounded-xl outline-none font-bold text-slate-900 text-base min-h-[100px] resize-y transition-colors"
+                        ></textarea>
+                    </div>
+
+                    <div className="relative z-20">
+                        <label className="block text-sm font-bold text-slate-900 mb-2">Next Destination Office *</label>
+                        <CustomSelect options={departments} value={destination} onChange={setDestination} placeholder="Select destination office..." />
+                    </div>
+
+                </div>
+
+                <div className="p-4 sm:p-6 bg-white border-t border-slate-200 flex gap-3 shrink-0">
+                    <button 
+                        onClick={handleClose} 
+                        className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all active:scale-95 border border-slate-200"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={handleSubmit} 
+                        disabled={isSubmitting || isProcessingFile || !destination}
+                        className="flex-[2] py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 border-2 border-blue-700 shadow-md disabled:opacity-50"
+                    >
+                        {isSubmitting ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : 'Submit Revision'}
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// --- NEW CANCEL MODAL ---
+interface CancelModalProps {
+    doc: DocumentItem;
+    onClose: () => void;
+    onSuccess: () => void;
+}
+
+function CancelModal({ doc, onClose, onSuccess }: CancelModalProps) {
+    const [isClosing, setIsClosing] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [reason, setReason] = useState('');
+
+    const handleClose = () => {
+        setIsClosing(true);
+        setTimeout(onClose, 250);
+    };
+
+    const handleSubmit = async () => {
+        if (!reason.trim()) { 
+            toast.error("Validation Error", { description: "Please provide a reason for cancellation." }); 
+            return; 
+        }
+
+        setIsSubmitting(true);
+        try {
+            const { data: { session } } = await supabase.auth.getSession();
+
+            // 1. Mark document as cancelled
+            const { error: updateError } = await supabase.from('documents').update({
+                status: 'cancelled',
+                assigned_clerk: null, // Clear assignment
+                remarks: reason.trim(), // Save the cancellation reason here
+                updated_at: new Date().toISOString()
+            }).eq('id', doc.id);
+            if (updateError) throw updateError;
+
+            // 2. Log it to the digital trail
+            const { error: logError } = await supabase.from('document_logs').insert([{
+                document_id: doc.id,
+                action: 'Cancelled',
+                location: doc.current_location || 'Origin',
+                remarks: `Document cancelled by creator. Reason: ${reason.trim()}`,
+                created_by: session?.user?.id || null
+            }]);
+            if (logError) throw logError;
+
+            toast.success("Document Cancelled", { description: "It has been moved to your cancelled history." });
+            onSuccess();
+            handleClose();
+        } catch (err) {
+            console.error(err);
+            toast.error("Failed to cancel the document.");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
+    return (
+        <div className={`fixed inset-0 z-[999] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosing ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
+            <div className={`bg-white w-full max-w-md flex flex-col shadow-2xl rounded-t-[2rem] sm:rounded-[24px] overflow-hidden ${isClosing ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
+                
+                <div className="bg-rose-600 p-5 flex justify-between items-center text-white relative shrink-0">
+                    <div className="w-12 h-1.5 bg-white/30 rounded-full absolute top-2 left-1/2 -translate-x-1/2 sm:hidden"></div>
+                    <h3 className="font-black text-xl flex items-center gap-2 mt-2 sm:mt-0">
+                        <Ban size={22} /> Cancel Document
+                    </h3>
+                    <button onClick={handleClose} disabled={isSubmitting} className="p-1.5 -mr-1.5 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-full transition-colors mt-2 sm:mt-0 disabled:opacity-50">
+                        <X size={20} />
+                    </button>
+                </div>
+
+                <div className="p-6 overflow-y-auto space-y-4 bg-slate-50 flex-1">
+                    <p className="text-slate-600 font-medium text-sm">
+                        Cancelling will permanently stop this document from routing and move it to your archives as a voided record.
+                    </p>
+                    
+                    <div className="bg-white p-4 rounded-xl border border-rose-200 shadow-sm">
+                        <p className="text-[11px] font-bold text-rose-500 uppercase tracking-wider mb-0.5">Target Document</p>
+                        <p className="text-base font-black text-slate-900">{doc.title || doc.subject}</p>
+                        <p className="text-xs font-mono text-slate-500 mt-1">{doc.reference_no}</p>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-bold text-slate-900 mb-2">Reason for Cancellation *</label>
+                        <textarea 
+                            value={reason} 
+                            onChange={(e) => setReason(e.target.value)} 
+                            placeholder="E.g., Made a mistake, duplicate record, no longer needed..." 
+                            className="w-full p-3.5 bg-white border-2 border-slate-300 focus:border-rose-600 rounded-xl outline-none font-bold text-slate-900 text-base min-h-[100px] resize-y transition-colors"
+                        ></textarea>
+                    </div>
+                </div>
+
+                <div className="p-4 sm:p-5 bg-white border-t border-slate-200 flex gap-3 shrink-0">
+                    <button 
+                        onClick={handleClose} 
+                        className="flex-1 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all active:scale-95 border border-slate-200"
+                    >
+                        Go Back
+                    </button>
+                    <button 
+                        onClick={handleSubmit} 
+                        disabled={isSubmitting || !reason.trim()}
+                        className="flex-[1.5] py-3.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 border-2 border-rose-700 shadow-md disabled:opacity-50"
+                    >
+                        {isSubmitting ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : 'Confirm Cancel'}
+                    </button>
+                </div>
+            </div>
+        </div>
     );
 }

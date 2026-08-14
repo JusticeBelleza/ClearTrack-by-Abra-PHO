@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Mail, ArrowRight, Loader2, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { Turnstile } from '@marsidev/react-turnstile';
+import type { TurnstileInstance } from '@marsidev/react-turnstile';
 import { env } from '../lib/env';
 
 // Both logos are back!
@@ -17,6 +18,9 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+
+  // FIXED: Added a reference to the Turnstile widget so we can reset it on failure
+  const turnstileRef = useRef<TurnstileInstance>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,6 +63,11 @@ export default function Login() {
       console.error("Supabase Auth Error:", err);
       const errorMessage = err instanceof Error ? err.message : "Invalid credentials.";
       toast.error("Login Failed", { description: errorMessage });
+      
+      // FIXED: Reset the CAPTCHA token so the user can try again without refreshing!
+      setTurnstileToken(null);
+      turnstileRef.current?.reset();
+      
     } finally {
       setIsLoading(false);
     }
@@ -161,10 +170,11 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Enhanced Captcha Container - Mobile Border & Rounding Removed */}
+          {/* Enhanced Captcha Container */}
           <div className="flex justify-center pt-2">
             <div className="w-full flex justify-center sm:rounded-2xl sm:bg-slate-50/80 sm:border-2 sm:border-slate-100 sm:p-1.5 sm:shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] [&_iframe]:!border-none [&_iframe]:!outline-none [&_iframe]:!rounded-none [&>div]:!border-none overflow-hidden">
               <Turnstile
+                ref={turnstileRef}
                 siteKey={env.VITE_TURNSTILE_SITE_KEY}
                 options={{ theme: 'light' }}
                 onSuccess={(token) => setTurnstileToken(token)}

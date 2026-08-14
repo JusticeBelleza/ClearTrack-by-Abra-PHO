@@ -1,6 +1,6 @@
 import { useState, useEffect, type SyntheticEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Archive, Check, ArrowRight, FileText, UserPlus, PenTool } from 'lucide-react';
+import { X, Archive, Check, ArrowRight, FileText, UserPlus, PenTool, Ban, RefreshCcw } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import FilePreviewModal from './FilePreviewModal';
 
@@ -159,13 +159,16 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
                             let nodeBg = 'bg-slate-200';
                             let titleColor = 'text-slate-900';
 
-                            // ADDED "Created" as a fallback catch
+                            // --- ASSIGN COLORS & ICONS BASED ON ACTION ---
                             if (log.action === 'Delivered') { icon = <Check size={14} strokeWidth={4} className="text-white" />; nodeBg = 'bg-emerald-500'; titleColor = 'text-emerald-700'; } 
+                            else if (log.action === 'Cancelled') { icon = <Ban size={14} strokeWidth={3} className="text-white" />; nodeBg = 'bg-rose-500'; titleColor = 'text-rose-700'; }
                             else if (log.action === 'Returned') { icon = <X size={14} strokeWidth={4} className="text-white" />; nodeBg = 'bg-red-500'; titleColor = 'text-red-700'; } 
+                            else if (log.action === 'Resubmitted') { icon = <RefreshCcw size={14} strokeWidth={3} className="text-white" />; nodeBg = 'bg-indigo-500'; titleColor = 'text-indigo-700'; }
                             else if (log.action === 'In transit') { icon = <ArrowRight size={14} strokeWidth={3} className="text-white" />; nodeBg = 'bg-blue-500'; titleColor = 'text-blue-700'; } 
                             else if (log.action === 'Document Logged' || log.action === 'Created') { icon = <Check size={14} strokeWidth={4} className="text-white" />; nodeBg = 'bg-slate-700'; titleColor = 'text-slate-800'; }
                             else if (log.action === 'REASSIGNED') { icon = <UserPlus size={14} strokeWidth={3} className="text-white" />; nodeBg = 'bg-amber-500'; titleColor = 'text-amber-700'; }
 
+                            // Formats lines with colons (e.g. "Reason: Because...") to be bold
                             const formatDescription = (text: string) => {
                                 if(!text) return null;
                                 return text.split('\n').map((line, i) => {
@@ -179,12 +182,14 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
 
                             let desc = '';
                             
-                            // Added "Created" check here as well
+                            // --- COMPILE DESCRIPTIONS ---
                             if (log.action === 'Document Logged' || log.action === 'Created') desc = `Location: ${log.location}\nCreated By: ${creatorName}`;
                             if (log.action === 'In transit') desc = `Arrived at: ${log.location}\nReceived By: ${log.assigned_to}`;
                             if (log.action === 'Returned') desc = `Returned to: ${log.location}\nReason: ${log.remarks}`;
                             if (log.action === 'Delivered') { desc = `Secured At: ${log.location}`; if (log.remarks) desc += `\n${log.remarks}`; }
                             if (log.action === 'REASSIGNED') desc = `Location: ${log.location}\nDetails: ${log.remarks}`;
+                            if (log.action === 'Cancelled') desc = `Location: ${log.location}\n${log.remarks}`;
+                            if (log.action === 'Resubmitted') desc = `Location: ${log.location}\n${log.remarks}`;
 
                             return (
                                 <div key={index} className="flex gap-4 relative w-full animate-in fade-in duration-300" style={{ animationFillMode: 'both', animationDelay: `${index * 50}ms` }}>
@@ -245,7 +250,6 @@ function SignatureModal({ url, onClose }: { url: string, onClose: () => void }) 
         ? "animate-out fade-out duration-200 ease-in fill-mode-forwards" 
         : "animate-in fade-in duration-200 ease-out fill-mode-forwards";
         
-    // FIXED THE TYPO HERE
     const modalAnimation = isClosing 
         ? "animate-out slide-out-to-bottom-[100%] sm:slide-out-to-bottom-0 sm:zoom-out-95 duration-300 ease-in fill-mode-forwards" 
         : "animate-in slide-in-from-bottom-[100%] sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-300 ease-out fill-mode-forwards";

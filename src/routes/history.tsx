@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { 
-    Search, MapPin, Clock, CheckCircle, XCircle, AlertCircle, 
-    Archive, FileText, X, Eye, CornerUpLeft, User
+    Search, MapPin, Clock, CheckCircle, AlertCircle, 
+    Archive, FileText, X, Eye, CornerUpLeft, User, Ban
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -53,7 +53,7 @@ interface DocumentItem {
 
 interface HistoryData {
     completed: DocumentItem[];
-    returned: DocumentItem[];
+    cancelled: DocumentItem[];
 }
 
 interface TabButtonProps {
@@ -72,7 +72,7 @@ const fetchHistoryData = async (): Promise<HistoryData> => {
     if (!session) throw new Error("No authenticated session");
     const currentUserId = session.user.id;
 
-    // Fetch Documents (No need to fetch profile name since we only filter by ID now)
+    // Fetch Documents - Only pulling permanently closed statuses: 'sealed' and 'cancelled'
     const { data: docsRes, error } = await supabase.from('documents')
         .select(`
             *,
@@ -81,14 +81,14 @@ const fetchHistoryData = async (): Promise<HistoryData> => {
                 created_at
             )
         `)
-        .in('status', ['sealed', 'pending']);
+        .in('status', ['sealed', 'cancelled']);
 
     if (error) throw error;
 
     const rawDocs = docsRes || [];
 
     let completed: DocumentItem[] = [];
-    let returned: DocumentItem[] = [];
+    let cancelled: DocumentItem[] = [];
 
     if (rawDocs.length > 0) {
         // SECURITY FIX: History is ONLY visible to the original creator of the document
@@ -103,10 +103,10 @@ const fetchHistoryData = async (): Promise<HistoryData> => {
                 const deliveryLog = logs.filter((l) => l.action === 'Delivered')
                                         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
                 doc.action_time = deliveryLog ? deliveryLog.created_at : doc.created_at;
-            } else {
-                const returnLog = logs.filter((l) => l.action === 'Returned')
-                                      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
-                doc.action_time = returnLog ? returnLog.created_at : doc.created_at;
+            } else if (doc.status === 'cancelled') {
+                const cancelLog = logs.filter((l) => l.action === 'Cancelled')
+                                        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+                doc.action_time = cancelLog ? cancelLog.created_at : (doc.updated_at || doc.created_at);
             }
             return doc;
         });
@@ -114,17 +114,17 @@ const fetchHistoryData = async (): Promise<HistoryData> => {
         completed = processedDocs
           .filter((d) => d.status === 'sealed')
           .sort((a, b) => new Date(b.action_time || '').getTime() - new Date(a.action_time || '').getTime());
-        
-        returned = processedDocs
-          .filter((d) => d.status === 'pending' && d.remarks)
+
+        cancelled = processedDocs
+          .filter((d) => d.status === 'cancelled')
           .sort((a, b) => new Date(b.action_time || '').getTime() - new Date(a.action_time || '').getTime());
     }
 
-    return { completed, returned };
+    return { completed, cancelled };
 };
 
 export default function History() {
-  const [activeTab, setActiveTab] = useState<'completed' | 'returned'>('completed');
+  const [activeTab, setActiveTab] = useState<'completed' | 'cancelled'>('completed');
   const [searchQuery, setSearchQuery] = useState("");
   const [trailDoc, setTrailDoc] = useState<DocumentItem | null>(null);
   const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
@@ -135,12 +135,15 @@ export default function History() {
   });
 
   const documents = useMemo<HistoryData>(() => {
-      return data ? { completed: data.completed, returned: data.returned } : { completed: [], returned: [] };
+      return { 
+          completed: data?.completed || [], 
+          cancelled: data?.cancelled || [] 
+      };
   }, [data]);
 
   const filteredDocs = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
-    const sourceList = documents[activeTab];
+    const sourceList = documents[activeTab] || []; 
     
     if (!query) return sourceList;
     
@@ -172,7 +175,7 @@ export default function History() {
           <h2 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
               <Archive className="text-emerald-600" size={32} /> Document History
           </h2>
-          <p className="text-base text-slate-600 mt-1">Search through your completed and returned documents.</p>
+          <p className="text-base text-slate-600 mt-1">Search through your completed and voided documents.</p>
         </div>
       </div>
 
@@ -208,13 +211,13 @@ export default function History() {
                 badgeClass="bg-emerald-500 text-white border-emerald-400"
               />
               <TabButton 
-                label="Returned / Rejected" 
-                icon={<CornerUpLeft size={20} strokeWidth={activeTab === 'returned' ? 3 : 2} />}
-                count={documents.returned.length} 
-                isActive={activeTab === 'returned'} 
-                onClick={() => { setActiveTab('returned'); setSearchQuery(''); }} 
-                colorClass="bg-red-600 text-white"
-                badgeClass="bg-red-500 text-white border-red-400"
+                label="Cancelled" 
+                icon={<Ban size={20} strokeWidth={activeTab === 'cancelled' ? 3 : 2} />}
+                count={documents.cancelled.length} 
+                isActive={activeTab === 'cancelled'} 
+                onClick={() => { setActiveTab('cancelled'); setSearchQuery(''); }} 
+                colorClass="bg-rose-600 text-white"
+                badgeClass="bg-rose-500 text-white border-rose-400"
               />
           </div>
       </div>
@@ -235,17 +238,17 @@ export default function History() {
           {filteredDocs.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {filteredDocs.map((doc: DocumentItem) => (
-                    <div key={doc.id} className={`bg-white rounded-3xl border-2 ${activeTab === 'completed' ? 'border-emerald-200 hover:border-emerald-400' : 'border-red-200 hover:border-red-400'} shadow-sm p-5 flex flex-col transition-colors relative overflow-hidden`}>
+                    <div key={doc.id} className={`bg-white rounded-3xl border-2 ${activeTab === 'completed' ? 'border-emerald-200 hover:border-emerald-400' : 'border-rose-200 hover:border-rose-400'} shadow-sm p-5 flex flex-col transition-colors relative overflow-hidden`}>
                         
-                        <div className={`absolute top-0 left-0 w-full h-1.5 ${activeTab === 'completed' ? 'bg-emerald-500' : 'bg-red-500'}`}></div>
+                        <div className={`absolute top-0 left-0 w-full h-1.5 ${activeTab === 'completed' ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
                         
                         <div className="flex justify-between items-start mb-4 mt-1">
                             <span className="text-sm font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md font-mono border border-slate-200">{doc.reference_no || doc.id}</span>
                             <span className={`flex items-center gap-1 text-xs font-black px-2.5 py-1 rounded-full border-2 uppercase tracking-wider ${
-                                activeTab === 'completed' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-red-700 bg-red-50 border-red-200'
+                                activeTab === 'completed' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-rose-700 bg-rose-50 border-rose-200'
                             }`}>
-                                {activeTab === 'completed' ? <CheckCircle size={14} strokeWidth={3}/> : <XCircle size={14} strokeWidth={3}/>}
-                                {activeTab === 'completed' ? 'Completed' : 'Returned'}
+                                {activeTab === 'completed' ? <CheckCircle size={14} strokeWidth={3}/> : <Ban size={14} strokeWidth={3}/>}
+                                {activeTab === 'completed' ? 'Completed' : 'Cancelled'}
                             </span>
                         </div>
                         
@@ -253,10 +256,14 @@ export default function History() {
 
                         <div className="flex items-center gap-1.5 mb-4 px-0.5">
                             <User size={14} className="text-slate-400" />
-                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Managed by: <span className="text-blue-600">{doc.assigned_clerk || 'Unassigned'}</span></p>
+                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                {activeTab === 'cancelled' ? 'Originator:' : 'Managed by:'} <span className="text-blue-600">{activeTab === 'cancelled' ? 'You' : (doc.assigned_clerk || 'Unassigned')}</span>
+                            </p>
                         </div>
                         
-                        <div className={`p-4 rounded-xl border-2 mb-5 flex-1 space-y-3 ${activeTab === 'completed' ? 'bg-emerald-50/50 border-emerald-100' : 'bg-red-50/50 border-red-100'}`}>
+                        <div className={`p-4 rounded-xl border-2 mb-5 flex-1 space-y-3 ${
+                            activeTab === 'completed' ? 'bg-emerald-50/50 border-emerald-100' : 'bg-rose-50/50 border-rose-100'
+                        }`}>
                             {activeTab === 'completed' ? (
                                 <>
                                     <div className="flex items-start gap-3">
@@ -271,16 +278,12 @@ export default function History() {
                             ) : (
                                 <>
                                     <div className="flex items-start gap-3">
-                                        <MapPin size={18} className="text-red-600 mt-0.5 shrink-0" />
-                                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Returned By</span>{doc.current_location}</p>
+                                        <Clock size={18} className="text-rose-600 mt-0.5 shrink-0" />
+                                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Cancelled On</span>{formatPHDateTime(doc.action_time)}</p>
                                     </div>
                                     <div className="flex items-start gap-3">
-                                        <Clock size={18} className="text-red-600 mt-0.5 shrink-0" />
-                                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Returned On</span>{formatPHDateTime(doc.action_time)}</p>
-                                    </div>
-                                    <div className="flex items-start gap-3">
-                                        <AlertCircle size={18} className="text-red-600 mt-0.5 shrink-0" />
-                                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Reason</span>{doc.remarks}</p>
+                                        <AlertCircle size={18} className="text-rose-600 mt-0.5 shrink-0" />
+                                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Cancellation Reason</span>{doc.remarks}</p>
                                     </div>
                                 </>
                             )}

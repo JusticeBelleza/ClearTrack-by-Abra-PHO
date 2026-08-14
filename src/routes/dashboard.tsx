@@ -109,32 +109,39 @@ export default function Dashboard() {
       const firstName = currentUserName.split(' ')[0];
       const safeDocs = docsRes.data || [];
 
-      // 3. SECURITY FIX: Filter down to ONLY documents relevant to this specific user FIRST
+      // 3. SECURITY: Filter down to ONLY documents relevant to this specific user 
       const myRelevantDocs = safeDocs.filter((d: DocumentItem) => 
-          d.created_by === currentUserId || 
-          d.assigned_clerk === currentUserName || 
-          d.custodian_id === currentUserId
+          (d.created_by === currentUserId || 
+           d.assigned_clerk === currentUserName || 
+           d.custodian_id === currentUserId)
       );
 
-      // 4. Process the buckets using ONLY myRelevantDocs
+      // 4. Process the buckets. Notice the strict d.status !== 'cancelled' checks!
       const assigned = myRelevantDocs.filter((d: DocumentItem) => 
           (d.assigned_clerk === currentUserName || d.custodian_id === currentUserId) && 
           d.status !== 'sealed' &&
+          d.status !== 'cancelled' &&
           !d.remarks
       );
       
       const myDocuments = myRelevantDocs.filter((d: DocumentItem) => 
-          d.created_by === currentUserId && d.status !== 'sealed'
+          d.created_by === currentUserId && 
+          d.status !== 'sealed' &&
+          d.status !== 'cancelled'
       );
 
       const processing = myRelevantDocs.filter((d: DocumentItem) => 
           d.assigned_clerk !== currentUserName && 
           d.custodian_id !== currentUserId && 
+          d.status !== 'cancelled' &&
           (d.status === 'routing' || (d.status === 'pending' && !d.remarks))
       );
 
+      // STRICT CHECK: Cannot be in rejected/returned tab if it has been cancelled!
       const rejected = myRelevantDocs.filter((d: DocumentItem) => 
-          d.status === 'pending' && !!d.remarks
+          d.status === 'pending' && 
+          d.status !== 'cancelled' && 
+          !!d.remarks
       );
 
       const completed = myRelevantDocs.filter((d: DocumentItem) => d.status === 'sealed');
@@ -144,8 +151,8 @@ export default function Dashboard() {
           documents: { assigned, myDocuments, processing, rejected, completed },
           stats: {
               active: processing.length + assigned.length, 
-              urgent: myRelevantDocs.filter((d: DocumentItem) => d.is_urgent && d.status !== 'sealed').length, 
-              actionNeeded: assigned.length, 
+              urgent: myRelevantDocs.filter((d: DocumentItem) => d.is_urgent && d.status !== 'sealed' && d.status !== 'cancelled').length, 
+              actionNeeded: assigned.length + rejected.length, 
               completed: completed.length
           }
       };
@@ -300,7 +307,7 @@ export default function Dashboard() {
                   </div>
                   <h3 className="text-xl font-black text-slate-900 mb-2">No records found</h3>
                   <p className="text-base font-medium text-slate-600 max-w-md">
-                     You don't have any documents in this tab matching your criteria.
+                      You don't have any documents in this tab matching your criteria.
                   </p>
               </div>
           )}
