@@ -197,8 +197,11 @@ export default function Login() {
         </form>
 
         <div className="mt-8 text-center border-t border-slate-100 pt-6">
-          <p className="text-xs text-slate-400 font-medium">
+          <p className="text-xs text-slate-400 font-medium mb-3">
             Authorized personnel only. All access attempts are monitored and logged.
+          </p>
+          <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">
+            v{__APP_VERSION__}
           </p>
         </div>
 
