@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { 
     Search, MapPin, Clock, CheckCircle, AlertCircle, 
-    Archive, FileText, X, Eye, CornerUpLeft, User, Ban
+    Archive, FileText, X, Eye, CornerUpLeft, User, Ban, ChevronDown, FolderTree
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -37,6 +37,7 @@ interface DocumentItem {
     id: string;
     reference_no?: string;
     title?: string;
+    category?: string;
     status: string;
     assigned_clerk?: string;
     created_by?: string;
@@ -72,7 +73,6 @@ const fetchHistoryData = async (): Promise<HistoryData> => {
     if (!session) throw new Error("No authenticated session");
     const currentUserId = session.user.id;
 
-    // Fetch Documents - Only pulling permanently closed statuses: 'sealed' and 'cancelled'
     const { data: docsRes, error } = await supabase.from('documents')
         .select(`
             *,
@@ -91,7 +91,6 @@ const fetchHistoryData = async (): Promise<HistoryData> => {
     let cancelled: DocumentItem[] = [];
 
     if (rawDocs.length > 0) {
-        // SECURITY FIX: History is ONLY visible to the original creator of the document
         const myRelevantDocs = (rawDocs as DocumentItem[]).filter((d) => 
             d.created_by === currentUserId
         );
@@ -129,6 +128,10 @@ export default function History() {
   const [trailDoc, setTrailDoc] = useState<DocumentItem | null>(null);
   const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
 
+  // --- Accordion & Pagination State for Document Categories ---
+  const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
+  const [categoryPages, setCategoryPages] = useState<Record<string, number>>({});
+
   const { data, isLoading } = useQuery<HistoryData>({
       queryKey: ['historyDocuments'],
       queryFn: fetchHistoryData
@@ -152,9 +155,32 @@ export default function History() {
         (doc.reference_no || '').toLowerCase().includes(query) ||
         (doc.final_destination || '').toLowerCase().includes(query) ||
         (doc.current_location || '').toLowerCase().includes(query) ||
-        (doc.assigned_clerk || '').toLowerCase().includes(query)
+        (doc.assigned_clerk || '').toLowerCase().includes(query) ||
+        (doc.category || '').toLowerCase().includes(query)
     );
   }, [searchQuery, documents, activeTab]);
+
+  // --- Group Documents by Category ---
+  const groupedDocs = useMemo(() => {
+      const grouped: Record<string, DocumentItem[]> = {};
+      
+      filteredDocs.forEach(doc => {
+          const category = doc.category || 'Uncategorized';
+          if (!grouped[category]) grouped[category] = [];
+          grouped[category].push(doc);
+      });
+
+      return Object.entries(grouped)
+          .map(([category, docs]) => ({ category, docs }))
+          .sort((a, b) => a.category.localeCompare(b.category));
+  }, [filteredDocs]);
+
+  const toggleCategoryAccordion = (categoryName: string) => {
+      setExpandedCategories(prev => ({
+          ...prev,
+          [categoryName]: !prev[categoryName]
+      }));
+  };
 
   if (isLoading) {
       return (
@@ -187,7 +213,7 @@ export default function History() {
                 type="text" 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search archives by Title, ID, Assigned Name, or Location..." 
+                placeholder="Search archives by Title, ID, Category, or Location..." 
                 className="w-full pl-11 sm:pl-14 pr-11 sm:pr-14 py-3 sm:py-4 rounded-xl border-2 border-slate-300 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 outline-none font-bold text-slate-900 placeholder:text-slate-500 transition-all text-base sm:text-lg shadow-sm" 
               />
               {searchQuery && (
@@ -223,7 +249,7 @@ export default function History() {
       </div>
 
       <div key={activeTab} className="animate-in fade-in zoom-in-[0.97] duration-300 ease-out fill-mode-both">
-          {filteredDocs.length === 0 && (
+          {filteredDocs.length === 0 ? (
               <div className="bg-white border-2 border-dashed border-slate-300 rounded-3xl p-10 flex flex-col items-center justify-center text-center">
                   <div className="bg-slate-50 p-4 rounded-full mb-4">
                     <FileText size={36} className="text-slate-400" />
@@ -233,81 +259,129 @@ export default function History() {
                      We couldn't find any {activeTab} documents matching your search criteria.
                   </p>
               </div>
-          )}
+          ) : (
+              <div className="bg-white rounded-3xl border-2 border-slate-300 shadow-sm overflow-hidden animate-in fade-in">
+                  <div className="bg-slate-50 px-6 py-4 border-b-2 border-slate-200 flex justify-between items-center">
+                      <h3 className="text-lg font-black text-slate-900">
+                          {activeTab === 'completed' ? 'Completed Archives' : 'Voided Archives'}
+                      </h3>
+                  </div>
+                  
+                  <div className="p-4 sm:p-6 space-y-4">
+                      {groupedDocs.map(({ category, docs }) => {
+                          const isExpanded = expandedCategories[category];
+                          const currentPage = categoryPages[category] || 1;
+                          const itemsPerPage = 5;
+                          const totalPages = Math.ceil(docs.length / itemsPerPage);
+                          const paginatedDocs = docs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-          {filteredDocs.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                {filteredDocs.map((doc: DocumentItem) => (
-                    <div key={doc.id} className={`bg-white rounded-3xl border-2 ${activeTab === 'completed' ? 'border-emerald-200 hover:border-emerald-400' : 'border-rose-200 hover:border-rose-400'} shadow-sm p-5 flex flex-col transition-colors relative overflow-hidden`}>
-                        
-                        <div className={`absolute top-0 left-0 w-full h-1.5 ${activeTab === 'completed' ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
-                        
-                        <div className="flex justify-between items-start mb-4 mt-1">
-                            <span className="text-sm font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md font-mono border border-slate-200">{doc.reference_no || doc.id}</span>
-                            <span className={`flex items-center gap-1 text-xs font-black px-2.5 py-1 rounded-full border-2 uppercase tracking-wider ${
-                                activeTab === 'completed' ? 'text-emerald-700 bg-emerald-50 border-emerald-200' : 'text-rose-700 bg-rose-50 border-rose-200'
-                            }`}>
-                                {activeTab === 'completed' ? <CheckCircle size={14} strokeWidth={3}/> : <Ban size={14} strokeWidth={3}/>}
-                                {activeTab === 'completed' ? 'Completed' : 'Cancelled'}
-                            </span>
-                        </div>
-                        
-                        <h4 className="font-black text-xl text-slate-900 mb-2 leading-tight">{doc.title}</h4>
+                          return (
+                              <div key={category} className="bg-white border-2 border-slate-200 rounded-xl overflow-hidden hover:border-slate-300 transition-colors shadow-sm">
+                                  {/* MINIMAL FOLDER HEADER */}
+                                  <button 
+                                      onClick={() => toggleCategoryAccordion(category)}
+                                      className={`w-full py-4 px-4 flex items-start sm:items-center justify-between transition-colors focus:outline-none group ${isExpanded ? 'bg-slate-50' : 'bg-transparent'}`}
+                                  >
+                                      <div className="flex flex-col text-left flex-1 min-w-0 pr-4 gap-1">
+                                          <div className="flex items-center gap-2">
+                                              <FolderTree size={16} className={activeTab === 'completed' ? 'text-emerald-500' : 'text-rose-500'} />
+                                              <h4 className="font-bold text-slate-800 text-sm sm:text-base leading-snug break-words">{category}</h4>
+                                          </div>
+                                          <span className="text-[10px] font-bold px-2 py-0.5 rounded text-slate-500 bg-slate-200 w-fit mt-0.5">
+                                              {docs.length} document{docs.length !== 1 ? 's' : ''}
+                                          </span>
+                                      </div>
+                                      <ChevronDown 
+                                          size={18} 
+                                          className={`shrink-0 text-slate-400 transition-transform duration-200 mt-1 sm:mt-0 ${isExpanded ? 'rotate-180 text-slate-800' : 'group-hover:text-slate-600'}`} 
+                                      />
+                                  </button>
 
-                        <div className="flex items-center gap-1.5 mb-4 px-0.5">
-                            <User size={14} className="text-slate-400" />
-                            <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                                {activeTab === 'cancelled' ? 'Originator:' : 'Managed by:'} <span className="text-blue-600">{activeTab === 'cancelled' ? 'You' : (doc.assigned_clerk || 'Unassigned')}</span>
-                            </p>
-                        </div>
-                        
-                        <div className={`p-4 rounded-xl border-2 mb-5 flex-1 space-y-3 ${
-                            activeTab === 'completed' ? 'bg-emerald-50/50 border-emerald-100' : 'bg-rose-50/50 border-rose-100'
-                        }`}>
-                            {activeTab === 'completed' ? (
-                                <>
-                                    <div className="flex items-start gap-3">
-                                        <MapPin size={18} className="text-emerald-600 mt-0.5 shrink-0" />
-                                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Final Location</span>{doc.final_destination || 'Archived'}</p>
-                                    </div>
-                                    <div className="flex items-start gap-3">
-                                        <Clock size={18} className="text-emerald-600 mt-0.5 shrink-0" />
-                                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Completed On</span>{formatPHDateTime(doc.action_time)}</p>
-                                    </div>
-                                </>
-                            ) : (
-                                <>
-                                    <div className="flex items-start gap-3">
-                                        <Clock size={18} className="text-rose-600 mt-0.5 shrink-0" />
-                                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Cancelled On</span>{formatPHDateTime(doc.action_time)}</p>
-                                    </div>
-                                    <div className="flex items-start gap-3">
-                                        <AlertCircle size={18} className="text-rose-600 mt-0.5 shrink-0" />
-                                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Cancellation Reason</span>{doc.remarks}</p>
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                        
-                        <div className="flex gap-2 mt-auto">
-                            {doc.attachment_url && (
-                                <button 
-                                    onClick={() => setPreviewDocUrl(doc.attachment_url as string)}
-                                    className="shrink-0 py-2.5 px-3 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl flex items-center justify-center transition-all active:scale-95 border-2 border-slate-300"
-                                    title="View Attached File"
-                                >
-                                    <Eye size={18} />
-                                </button>
-                            )}
-                            <button 
-                                onClick={() => setTrailDoc(doc)}
-                                className="flex-1 py-2.5 px-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 border-2 border-blue-700 text-sm"
-                            >
-                                View Record <CornerUpLeft size={16} />
-                            </button>
-                        </div>
-                    </div>
-                ))}
+                                  {/* MINIMAL FOLDER CONTENT (DOCUMENTS) */}
+                                  {isExpanded && (
+                                      <div className="animate-in fade-in slide-in-from-top-1 duration-200 bg-white border-t-2 border-slate-100 flex flex-col">
+                                          <div className="flex flex-col">
+                                              {paginatedDocs.map((doc) => (
+                                                  <div key={doc.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 sm:p-5 gap-4 group hover:bg-slate-50/50 transition-colors border-b border-slate-200 last:border-b-0">
+                                                      
+                                                      {/* SMART VERTICAL STACK */}
+                                                      <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                                                          <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest">{doc.reference_no || doc.id}</span>
+                                                          <h4 className="font-black text-slate-900 text-sm sm:text-base leading-tight break-words">{doc.title}</h4>
+                                                          
+                                                          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-xs sm:text-sm font-medium text-slate-600 mt-0.5">
+                                                              {activeTab === 'completed' ? (
+                                                                  <span className="flex items-start gap-1.5 break-words">
+                                                                      <MapPin size={14} className="text-emerald-500 shrink-0 mt-0.5"/>
+                                                                      <span className="truncate">Final: {doc.final_destination || 'Archived'}</span>
+                                                                  </span>
+                                                              ) : (
+                                                                  <span className="flex items-start gap-1.5 break-words">
+                                                                      <AlertCircle size={14} className="text-rose-500 shrink-0 mt-0.5"/>
+                                                                      <span className="truncate">Reason: {doc.remarks}</span>
+                                                                  </span>
+                                                              )}
+                                                              <span className="hidden sm:inline text-slate-300">•</span>
+                                                              <span className="flex items-start gap-1.5 break-words text-slate-500">
+                                                                  <Clock size={14} className="text-slate-400 shrink-0 mt-0.5"/>
+                                                                  {formatPHDateTime(doc.action_time)}
+                                                              </span>
+                                                          </div>
+                                                      </div>
+
+                                                      {/* RIGHT BORDERED ACTION BUTTONS */}
+                                                      <div className="flex gap-2 shrink-0 mt-2 sm:mt-0 w-full sm:w-auto">
+                                                          {doc.attachment_url && (
+                                                              <button 
+                                                                  onClick={() => setPreviewDocUrl(doc.attachment_url as string)} 
+                                                                  className="p-2 sm:p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 bg-white rounded-xl transition-all border-2 border-slate-200 hover:border-blue-200 active:scale-95 shadow-sm"
+                                                                  title="View Document"
+                                                              >
+                                                                  <Eye size={18} className="w-4 h-4 sm:w-5 sm:h-5" />
+                                                              </button>
+                                                          )}
+                                                          <button 
+                                                              onClick={() => setTrailDoc(doc)} 
+                                                              className="flex-1 sm:flex-none py-2 px-3 sm:p-2.5 text-slate-700 hover:text-blue-700 hover:bg-blue-50 bg-slate-50 rounded-xl font-bold transition-all border-2 border-slate-200 hover:border-blue-300 active:scale-95 shadow-sm flex items-center justify-center gap-1.5 text-xs sm:text-sm"
+                                                          >
+                                                              Track <CornerUpLeft size={16} className="w-4 h-4 sm:w-4 sm:h-4" />
+                                                          </button>
+                                                      </div>
+                                                      
+                                                  </div>
+                                              ))}
+                                          </div>
+
+                                          {/* PAGINATION CONTROLS */}
+                                          {totalPages > 1 && (
+                                              <div className="p-3 sm:p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+                                                  <span className="text-[10px] sm:text-xs font-bold text-slate-500">
+                                                      Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, docs.length)} of {docs.length}
+                                                  </span>
+                                                  <div className="flex gap-2">
+                                                      <button 
+                                                          disabled={currentPage === 1}
+                                                          onClick={() => setCategoryPages(prev => ({...prev, [category]: currentPage - 1}))}
+                                                          className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg text-[11px] sm:text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100 active:scale-95 transition-all shadow-sm"
+                                                      >
+                                                          Prev
+                                                      </button>
+                                                      <button 
+                                                          disabled={currentPage === totalPages}
+                                                          onClick={() => setCategoryPages(prev => ({...prev, [category]: currentPage + 1}))}
+                                                          className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg text-[11px] sm:text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100 active:scale-95 transition-all shadow-sm"
+                                                      >
+                                                          Next
+                                                      </button>
+                                                  </div>
+                                              </div>
+                                          )}
+                                      </div>
+                                  )}
+                              </div>
+                          );
+                      })}
+                  </div>
               </div>
           )}
       </div>

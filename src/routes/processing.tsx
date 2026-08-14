@@ -104,11 +104,11 @@ const fetchProcessingData = async (): Promise<ProcessingData> => {
     if (currentUserName) {
         const { data: empData } = await supabase.from('employees').select('department').eq('name', currentUserName).single();
         if (empData?.department) {
+            // FIXED: Removed the filter that excluded the current user from the list
             const { data: deptEmps } = await supabase
                 .from('employees')
                 .select('name')
-                .eq('department', empData.department)
-                .neq('name', currentUserName);
+                .eq('department', empData.department);
             
             if (deptEmps) {
                 colleagues = deptEmps.map(e => e.name);
@@ -188,10 +188,11 @@ export default function Processing() {
     );
   }, [searchQuery, documents, activeTab]);
 
-  // FIXED: Dynamically remove the current assignee from the dropdown choices
+  // FIXED: Only hide the CURRENT assignee so you can't assign it to the person who already holds it. 
+  // This allows the creator to re-assign it to themselves!
   const availableColleagues = useMemo(() => {
       if (!data || !reassignDoc) return [];
-      return data.colleagues.filter((name) => name !== reassignDoc.assigned_clerk && name !== data.currentUserName);
+      return data.colleagues.filter((name) => name !== reassignDoc.assigned_clerk);
   }, [data, reassignDoc]);
 
   const closeReassignModal = () => {

@@ -82,7 +82,7 @@ const formatPHDateTime = (isoString?: string) => {
 export default function Dashboard() {
   const openCreateModal = useUiStore((state) => state.openCreateModal);
   
-  const [activeTab, setActiveTab] = useState<'assigned' | 'myDocuments' | 'processing' | 'rejected' | 'completed'>('assigned');
+  const [activeTab, setActiveTab] = useState<'assigned' | 'myDocuments' | 'processing' | 'rejected'>('assigned');
   const [searchQuery, setSearchQuery] = useState("");
   const [trailDoc, setTrailDoc] = useState<DocumentItem | null>(null);
 
@@ -117,7 +117,7 @@ export default function Dashboard() {
           d.status !== 'cancelled'
       );
 
-      // 4. Process the buckets. (Redundant cancelled checks removed for TS strict mode)
+      // 4. Process the buckets
       const assigned = myRelevantDocs.filter((d: DocumentItem) => 
           (d.assigned_clerk === currentUserName || d.custodian_id === currentUserId) && 
           d.status !== 'sealed' &&
@@ -144,7 +144,7 @@ export default function Dashboard() {
 
       return {
           userName: firstName,
-          documents: { assigned, myDocuments, processing, rejected, completed },
+          documents: { assigned, myDocuments, processing, rejected },
           stats: {
               active: processing.length + assigned.length, 
               urgent: myRelevantDocs.filter((d: DocumentItem) => d.is_urgent && d.status !== 'sealed').length, 
@@ -156,7 +156,7 @@ export default function Dashboard() {
   });
 
   const documents = useMemo(() => {
-      return dashboardData?.documents || { assigned: [], myDocuments: [], processing: [], rejected: [], completed: [] };
+      return dashboardData?.documents || { assigned: [], myDocuments: [], processing: [], rejected: [] };
   }, [dashboardData?.documents]);
 
   const stats = dashboardData?.stats || { active: 0, urgent: 0, actionNeeded: 0, completed: 0 };
@@ -282,15 +282,6 @@ export default function Dashboard() {
                 colorClass="bg-red-600 text-white"
                 badgeClass="bg-red-500 text-white border-red-400"
               />
-              <TabButton 
-                label="Completed" 
-                icon={<CheckCircle size={20} strokeWidth={activeTab === 'completed' ? 3 : 2} />}
-                count={documents.completed.length} 
-                isActive={activeTab === 'completed'} 
-                onClick={() => { setActiveTab('completed'); setSearchQuery(''); }} 
-                colorClass="bg-emerald-600 text-white"
-                badgeClass="bg-emerald-500 text-white border-emerald-400"
-              />
           </div>
       </div>
 
@@ -312,16 +303,14 @@ export default function Dashboard() {
           {filteredDocs.length > 0 && (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                 {filteredDocs.map((doc: DocumentItem) => (
-                    <div key={doc.id} className={`bg-white rounded-3xl border-2 ${activeTab === 'rejected' ? 'border-red-300 shadow-md shadow-red-100 hover:border-red-500' : (activeTab === 'completed' ? 'border-emerald-200 hover:border-emerald-400' : (doc.is_urgent ? 'border-red-400 shadow-md shadow-red-100 hover:border-red-500' : 'border-slate-300 hover:border-slate-500'))} shadow-sm p-5 flex flex-col transition-colors relative overflow-hidden`}>
+                    <div key={doc.id} className={`bg-white rounded-3xl border-2 ${activeTab === 'rejected' ? 'border-red-300 shadow-md shadow-red-100 hover:border-red-500' : (doc.is_urgent ? 'border-red-400 shadow-md shadow-red-100 hover:border-red-500' : 'border-slate-300 hover:border-slate-500')} shadow-sm p-5 flex flex-col transition-colors relative overflow-hidden`}>
                         
-                        <div className={`absolute top-0 left-0 w-full h-1.5 ${activeTab === 'completed' ? 'bg-emerald-500' : (doc.is_urgent || activeTab === 'rejected' ? 'bg-red-500' : 'bg-transparent')} `}></div>
+                        <div className={`absolute top-0 left-0 w-full h-1.5 ${doc.is_urgent || activeTab === 'rejected' ? 'bg-red-500' : 'bg-transparent'} `}></div>
                         
                         <div className="flex justify-between items-start mb-4 mt-1">
                             <span className="text-sm font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md font-mono border border-slate-200">{doc.reference_no || doc.id}</span>
                             
-                            {activeTab === 'completed' ? (
-                                 <span className="flex items-center gap-1 text-xs font-black px-2.5 py-1 rounded-full border-2 uppercase tracking-wider text-emerald-700 bg-emerald-50 border-emerald-200"><CheckCircle size={14} strokeWidth={3}/> Completed</span>
-                            ) : activeTab === 'rejected' ? (
+                            {activeTab === 'rejected' ? (
                                  <span className="flex items-center gap-1 text-xs font-black text-red-700 bg-red-50 px-2.5 py-1 rounded-full border-2 border-red-200 uppercase tracking-wider"><AlertCircle size={14} strokeWidth={3}/> Returned</span>
                             ) : doc.is_urgent ? (
                                  <span className="flex items-center gap-1 text-xs font-black text-red-700 bg-red-50 px-2.5 py-1 rounded-full border-2 border-red-200 uppercase tracking-wider animate-pulse"><AlertCircle size={14} strokeWidth={3}/> Rush</span>
@@ -336,7 +325,7 @@ export default function Dashboard() {
                             <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Managed by: <span className="text-blue-600">{doc.assigned_clerk || 'Unassigned'}</span></p>
                         </div>
                         
-                        <div className={`p-4 rounded-xl border-2 mb-5 flex-1 space-y-3 ${activeTab === 'completed' ? 'bg-emerald-50/50 border-emerald-100' : (activeTab === 'rejected' ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200')}`}>
+                        <div className={`p-4 rounded-xl border-2 mb-5 flex-1 space-y-3 ${activeTab === 'rejected' ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'}`}>
                             {activeTab === 'rejected' ? (
                                 <>
                                     <div className="flex items-start gap-3">
@@ -355,11 +344,11 @@ export default function Dashboard() {
                             ) : (
                                 <>
                                     <div className="flex items-start gap-3">
-                                        <MapPin size={18} className={activeTab === 'completed' ? "text-emerald-600 mt-0.5 shrink-0" : "text-slate-500 mt-0.5 shrink-0"} />
-                                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">{activeTab === 'completed' ? 'Final Location' : 'Current Location'}</span>{activeTab === 'completed' ? doc.final_destination : (doc.current_location || 'Processing')}</p>
+                                        <MapPin size={18} className="text-slate-500 mt-0.5 shrink-0" />
+                                        <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Current Location</span>{doc.current_location || 'Processing'}</p>
                                     </div>
                                     <div className="flex items-start gap-3">
-                                        <Clock size={18} className={activeTab === 'completed' ? "text-emerald-600 mt-0.5 shrink-0" : "text-slate-500 mt-0.5 shrink-0"} />
+                                        <Clock size={18} className="text-slate-500 mt-0.5 shrink-0" />
                                         <p className="text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-xs block font-bold uppercase tracking-wider mb-0.5">Last Update</span>{formatPHDateTime(doc.updated_at || doc.created_at)}</p>
                                     </div>
                                 </>
