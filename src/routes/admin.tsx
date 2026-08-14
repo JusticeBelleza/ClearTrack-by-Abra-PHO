@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Building2, FolderTree, Users, Shield, Plus, 
   Trash2, X, Activity, AlertTriangle, 
@@ -73,6 +73,10 @@ export default function SystemAdmin() {
     department: '', contactNumber: '', password: '', confirmPassword: '' 
   });
 
+  // --- Accordion & Pagination State for Employee Directory ---
+  const [expandedDepts, setExpandedDepts] = useState<Record<string, boolean>>({});
+  const [folderPages, setFolderPages] = useState<Record<string, number>>({});
+
   // --- Modal Open/Close States ---
   const [isDeptModalOpen, setIsDeptModalOpen] = useState(false);
   const [isClosingDept, setIsClosingDept] = useState(false);
@@ -135,6 +139,29 @@ export default function SystemAdmin() {
   const employees = adminData?.employees || [];
   const auditLogs = adminData?.auditLogs || [];
 
+  // --- Group Employees by Department (Minimalist Folder Prep) ---
+  const employeesByDepartment = useMemo(() => {
+      const grouped: Record<string, typeof employees> = {};
+      
+      departments.forEach(dept => { grouped[dept.name] = []; });
+
+      employees.forEach(emp => {
+          if (!grouped[emp.department]) grouped[emp.department] = []; 
+          grouped[emp.department].push(emp);
+      });
+
+      return Object.entries(grouped)
+          .map(([department, emps]) => ({ department, emps }))
+          .sort((a, b) => a.department.localeCompare(b.department));
+  }, [employees, departments]);
+
+  const toggleDeptAccordion = (deptName: string) => {
+      setExpandedDepts(prev => ({
+          ...prev,
+          [deptName]: !prev[deptName]
+      }));
+  };
+
   // --- Action Handlers ---
   const openOfficeModal = () => {
       const generatedId = 'OFC-' + Math.floor(1000 + Math.random() * 9000);
@@ -162,10 +189,9 @@ export default function SystemAdmin() {
       setNewEmp({...newEmp, password: pass, confirmPassword: pass});
   };
 
-  // --- Audit Log Helper ---
   const logAuditAction = async (action: string) => {
       await supabase.from('audit_logs').insert([{ user_name: 'System Admin', action: action, ip_address: 'Internal' }]);
-      queryClient.invalidateQueries({ queryKey: ['adminData'] }); // Refresh logs
+      queryClient.invalidateQueries({ queryKey: ['adminData'] }); 
   };
 
   // Departments Handlers
@@ -184,7 +210,7 @@ export default function SystemAdmin() {
 
     if (error) { toast.error('Failed to add office'); return; }
     
-    queryClient.invalidateQueries({ queryKey: ['adminData'] }); // <-- Auto Refresh!
+    queryClient.invalidateQueries({ queryKey: ['adminData'] }); 
     closeDeptModal(); 
     toast.success('Office added successfully');
     logAuditAction(`Added new office: ${newOffice.office_name.trim()}`);
@@ -254,6 +280,8 @@ export default function SystemAdmin() {
     if (error || data?.error) {
         toast.error('Registration Failed', { description: error?.message || data?.error }); return;
     }
+
+    setExpandedDepts(prev => ({ ...prev, [newEmp.department]: true }));
 
     queryClient.invalidateQueries({ queryKey: ['adminData'] });
     closeEmpModal(); 
@@ -361,21 +389,25 @@ export default function SystemAdmin() {
                             <Plus size={16} strokeWidth={3} /> Add Office
                         </button>
                     </div>
-                    <div className="p-6">
+                    <div className="p-4 sm:p-6">
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                             {departments.map((dept) => (
-                                <div key={dept.id} className="flex items-start justify-between p-5 bg-white rounded-2xl border-2 border-slate-200 shadow-sm">
-                                    <div>
-                                        <div className="flex items-center gap-2 mb-1.5">
-                                            <span className="text-xs font-bold font-mono bg-slate-100 px-2 py-0.5 rounded border border-slate-200 text-slate-600">{dept.office_id || 'OFC-LEGACY'}</span>
-                                            <h4 className="font-black text-slate-900 text-lg leading-tight">{dept.name}</h4>
-                                        </div>
-                                        <p className="text-sm font-bold text-slate-500 flex items-start gap-1.5 mt-2">
-                                            <MapPin size={16} className="shrink-0 mt-0.5 text-slate-400" />
+                                <div key={dept.id} className="flex flex-row items-start sm:items-center justify-between p-4 sm:p-5 bg-white rounded-xl border-2 border-slate-200 shadow-sm hover:border-slate-300 transition-colors gap-4">
+                                    <div className="flex flex-col gap-1 flex-1 min-w-0">
+                                        <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest">{dept.office_id || 'OFC-LEGACY'}</span>
+                                        <h4 className="font-black text-slate-900 text-sm sm:text-base leading-tight break-words">{dept.name}</h4>
+                                        <span className="text-[11px] sm:text-xs font-medium text-slate-500 flex items-start gap-1.5 break-words mt-0.5">
+                                            <MapPin size={12} className="text-slate-400 shrink-0 mt-0.5" />
                                             {dept.office_address || 'No address provided'}
-                                        </p>
+                                        </span>
                                     </div>
-                                    <button onClick={() => setDeleteConfirm({ id: dept.id, name: dept.name })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors shrink-0"><Trash2 size={18} /></button>
+                                    <button 
+                                        onClick={() => setDeleteConfirm({ id: dept.id, name: dept.name })} 
+                                        className="p-2 sm:p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 bg-white rounded-xl transition-all shrink-0 border-2 border-slate-200 hover:border-red-200 active:scale-95 shadow-sm mt-1 sm:mt-0"
+                                        title="Remove Office"
+                                    >
+                                        <Trash2 size={18} className="w-4 h-4 sm:w-5 sm:h-5" />
+                                    </button>
                                 </div>
                             ))}
                         </div>
@@ -392,17 +424,21 @@ export default function SystemAdmin() {
                             <Plus size={16} strokeWidth={3} /> Add Category
                         </button>
                     </div>
-                    <div className="p-6">
+                    <div className="p-4 sm:p-6">
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                             {categories.map((cat) => (
-                                <div key={cat.id} className="flex items-start justify-between p-5 bg-white rounded-2xl border-2 border-slate-200 shadow-sm">
-                                    <div>
-                                        <div className="flex items-center gap-2 mb-1.5">
-                                            <span className="text-xs font-bold font-mono bg-slate-100 px-2 py-0.5 rounded border border-slate-200 text-slate-600">{cat.category_id || 'CAT-LEGACY'}</span>
-                                            <h4 className="font-black text-slate-900 text-lg leading-tight">{cat.name}</h4>
-                                        </div>
+                                <div key={cat.id} className="flex flex-row items-start sm:items-center justify-between p-4 sm:p-5 bg-white rounded-xl border-2 border-slate-200 shadow-sm hover:border-slate-300 transition-colors gap-4">
+                                    <div className="flex flex-col gap-1 flex-1 min-w-0">
+                                        <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest">{cat.category_id || 'CAT-LEGACY'}</span>
+                                        <h4 className="font-black text-slate-900 text-sm sm:text-base leading-tight break-words">{cat.name}</h4>
                                     </div>
-                                    <button onClick={() => setDeleteCatConfirm({ id: cat.id, name: cat.name })} className="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors shrink-0"><Trash2 size={18} /></button>
+                                    <button 
+                                        onClick={() => setDeleteCatConfirm({ id: cat.id, name: cat.name })} 
+                                        className="p-2 sm:p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 bg-white rounded-xl transition-all shrink-0 border-2 border-slate-200 hover:border-red-200 active:scale-95 shadow-sm mt-1 sm:mt-0"
+                                        title="Remove Category"
+                                    >
+                                        <Trash2 size={18} className="w-4 h-4 sm:w-5 sm:h-5" />
+                                    </button>
                                 </div>
                             ))}
                         </div>
@@ -410,31 +446,114 @@ export default function SystemAdmin() {
                 </div>
             )}
 
-            {/* EMPLOYEES */}
+            {/* EMPLOYEES DIRECTORY (BORDERED FOLDERS WITH PAGINATION) */}
             {dirTab === 'employees' && (
                 <div className="bg-white rounded-3xl border-2 border-slate-300 shadow-sm overflow-hidden animate-in fade-in">
                     <div className="bg-slate-50 px-6 py-4 border-b-2 border-slate-200 flex justify-between items-center">
                         <h3 className="text-lg font-black text-slate-900">Employee Directory</h3>
                         <button onClick={openEmployeeModal} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl text-sm flex items-center gap-1.5 transition-all active:scale-95 shadow-md">
-                            <Plus size={16} strokeWidth={3} /> Register Employee
+                            <Plus size={16} strokeWidth={3} /> Register
                         </button>
                     </div>
-                    <div className="p-6 space-y-4">
-                        {employees.map((emp) => (
-                            <div key={emp.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-5 bg-white rounded-2xl border-2 border-slate-200 shadow-sm gap-4">
-                                <div>
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <span className="text-xs font-bold font-mono bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200 text-slate-700">{emp.emp_id}</span>
-                                        <h4 className="font-black text-lg text-slate-900">{emp.name}</h4>
-                                    </div>
-                                    <p className="text-sm font-bold text-slate-600">{emp.designation} <span className="mx-2 text-slate-300">|</span> <span className="text-blue-600">{emp.department}</span></p>
-                                    {emp.email && <p className="text-sm text-slate-500 mt-1 flex items-center gap-1.5"><Mail size={14}/>{emp.email}</p>}
+                    
+                    <div className="p-4 sm:p-6">
+                        {employeesByDepartment.map(({ department, emps }) => {
+                            const isExpanded = expandedDepts[department];
+                            
+                            // Pagination logic (5 per folder)
+                            const currentPage = folderPages[department] || 1;
+                            const itemsPerPage = 5;
+                            const totalPages = Math.ceil(emps.length / itemsPerPage);
+                            const paginatedEmps = emps.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+                            return (
+                                <div key={department} className="mb-4 last:mb-0 bg-white border-2 border-slate-200 rounded-xl overflow-hidden hover:border-slate-300 transition-colors shadow-sm">
+                                    {/* MINIMAL FOLDER HEADER */}
+                                    <button 
+                                        onClick={() => toggleDeptAccordion(department)}
+                                        className={`w-full py-4 px-4 flex items-start sm:items-center justify-between transition-colors focus:outline-none group ${isExpanded ? 'bg-slate-50' : 'bg-transparent'}`}
+                                    >
+                                        <div className="flex flex-col text-left flex-1 min-w-0 pr-4 gap-1">
+                                            <h4 className="font-bold text-slate-800 text-xs sm:text-sm leading-snug break-words">{department}</h4>
+                                            <span className="text-[10px] font-bold px-2 py-0.5 rounded text-slate-500 bg-slate-200 w-fit">
+                                                {emps.length} registered
+                                            </span>
+                                        </div>
+                                        <ChevronDown 
+                                            size={18} 
+                                            className={`shrink-0 text-slate-400 transition-transform duration-200 mt-1 sm:mt-0 ${isExpanded ? 'rotate-180 text-blue-600' : 'group-hover:text-slate-600'}`} 
+                                        />
+                                    </button>
+
+                                    {/* MINIMAL FOLDER CONTENT (EMPLOYEES) */}
+                                    {isExpanded && (
+                                        <div className="animate-in fade-in slide-in-from-top-1 duration-200 bg-white border-t-2 border-slate-100 flex flex-col">
+                                            {emps.length === 0 ? (
+                                                <div className="py-6 text-center text-sm text-slate-400 italic">
+                                                    No personnel registered in this office.
+                                                </div>
+                                            ) : (
+                                                <div className="divide-y divide-slate-100">
+                                                    {paginatedEmps.map((emp) => (
+                                                        <div key={emp.id} className="flex flex-row items-start sm:items-center justify-between p-4 sm:p-5 gap-4 group hover:bg-slate-50/50 transition-colors border-b border-slate-200 last:border-b-0">
+                                                            
+                                                            {/* SMART VERTICAL STACK */}
+                                                            <div className="flex flex-col gap-1 flex-1 min-w-0">
+                                                                <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest">{emp.emp_id}</span>
+                                                                <h4 className="font-black text-slate-900 text-sm sm:text-base leading-tight break-words">{emp.name}</h4>
+                                                                <span className="text-xs sm:text-sm font-bold text-slate-600 break-words">{emp.designation}</span>
+                                                                
+                                                                {emp.email && (
+                                                                    <span className="text-[11px] sm:text-xs font-medium text-slate-500 flex items-start gap-1.5 break-all mt-0.5">
+                                                                        <Mail size={12} className="text-slate-400 shrink-0 mt-0.5"/> 
+                                                                        {emp.email}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+
+                                                            {/* RIGHT BORDERED DELETE BUTTON */}
+                                                            <button 
+                                                                onClick={() => setDeleteEmpConfirm({ id: emp.id, name: emp.name, emp_id: emp.emp_id })} 
+                                                                className="p-2 sm:p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 bg-white rounded-xl transition-all shrink-0 border-2 border-slate-200 hover:border-red-200 active:scale-95 shadow-sm mt-1 sm:mt-0"
+                                                                title="Remove Employee"
+                                                            >
+                                                                <Trash2 size={18} className="w-4 h-4 sm:w-5 sm:h-5" />
+                                                            </button>
+                                                            
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+
+                                            {/* PAGINATION CONTROLS (Only shows if > 5 employees) */}
+                                            {totalPages > 1 && (
+                                                <div className="p-3 sm:p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+                                                    <span className="text-[10px] sm:text-xs font-bold text-slate-500">
+                                                        Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, emps.length)} of {emps.length}
+                                                    </span>
+                                                    <div className="flex gap-2">
+                                                        <button 
+                                                            disabled={currentPage === 1}
+                                                            onClick={() => setFolderPages(prev => ({...prev, [department]: currentPage - 1}))}
+                                                            className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg text-[11px] sm:text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100 active:scale-95 transition-all shadow-sm"
+                                                        >
+                                                            Prev
+                                                        </button>
+                                                        <button 
+                                                            disabled={currentPage === totalPages}
+                                                            onClick={() => setFolderPages(prev => ({...prev, [department]: currentPage + 1}))}
+                                                            className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg text-[11px] sm:text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100 active:scale-95 transition-all shadow-sm"
+                                                        >
+                                                            Next
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
-                                <button onClick={() => setDeleteEmpConfirm({ id: emp.id, name: emp.name, emp_id: emp.emp_id })} className="p-3 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors shrink-0 self-end sm:self-center">
-                                    <Trash2 size={20} />
-                                </button>
-                            </div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             )}
