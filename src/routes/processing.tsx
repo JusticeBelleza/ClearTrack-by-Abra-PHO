@@ -102,7 +102,6 @@ const fetchProcessingData = async (): Promise<ProcessingData> => {
     if (currentUserName) {
         const { data: empData } = await supabase.from('employees').select('department').eq('name', currentUserName).single();
         if (empData?.department) {
-            // ESLint Fix: Used empData.department directly without assigning it to a useless variable
             const { data: deptEmps } = await supabase
                 .from('employees')
                 .select('name')
@@ -125,6 +124,7 @@ const fetchProcessingData = async (): Promise<ProcessingData> => {
     let departments: DepartmentOption[] = [];
 
     if (docsRes.data) {
+        // Returned documents must be visible to the creator or assigned clerk so they can revise them
         const myActiveDocs = (docsRes.data as DocumentItem[]).filter((d) => {
             return d.created_by === currentUserId || d.assigned_clerk === currentUserName;
         });
@@ -199,7 +199,6 @@ export default function Processing() {
           const previousClerk = reassignDoc.assigned_clerk || 'Unassigned';
           const nowIso = new Date().toISOString();
 
-          // 1. WRITE THE LOG FIRST (Prevents the Disappearing Row Trap)
           const { error: trailError } = await supabase
               .from('document_logs')
               .insert([{
@@ -211,7 +210,6 @@ export default function Processing() {
 
           if (trailError) console.warn("Failed to write re-assignment trail log:", trailError.message);
 
-          // 2. NOW HAND OVER THE DOCUMENT
           const { error: updateError } = await supabase
               .from('documents')
               .update({ 
@@ -226,7 +224,6 @@ export default function Processing() {
           closeReassignModal();
           refetch();
       } catch (error) {
-          // ESLint Fix: Properly logging the error so the variable is used
           console.error("Re-assign Error:", error);
           toast.error("Failed to re-assign document. Please try again.");
       } finally {
@@ -306,7 +303,7 @@ export default function Processing() {
                       {activeTab === 'processing' ? 'No documents found' : 'Inbox Zero!'}
                   </h3>
                   <p className="text-base font-medium text-slate-600 max-w-md">
-                     {activeTab === 'processing' 
+                       {activeTab === 'processing' 
                         ? 'You currently have no active documents assigned to you.' 
                         : 'You have no returned documents requiring your attention. Great job!'}
                   </p>
@@ -319,10 +316,11 @@ export default function Processing() {
                     const isManager = doc.assigned_clerk === data?.currentUserName;
                     const isCreator = doc.created_by === data?.currentUserId;
                     const canReassign = isManager || isCreator;
+                    const canRevise = isManager || isCreator;
 
                     return activeTab === 'returned' ? (
                         // ==========================================
-                        // PROFESSIONAL "ACTION NEEDED" CARD DESIGN
+                        // "ACTION NEEDED" CARD DESIGN (REVISE & RESUBMIT)
                         // ==========================================
                         <div key={doc.id} className="bg-white rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-shadow relative overflow-hidden flex flex-col">
                             <div className="absolute top-0 left-0 w-1.5 h-full bg-amber-500"></div>
@@ -331,7 +329,7 @@ export default function Processing() {
                                 <div className="flex justify-between items-start mb-3">
                                     <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded font-mono border border-slate-200">{doc.reference_no || doc.id}</span>
                                     <span className="flex items-center gap-1 text-[10px] font-black text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200 uppercase tracking-wider">
-                                        <AlertCircle size={12} strokeWidth={3}/> Action Required
+                                        <AlertCircle size={12} strokeWidth={3}/> Needs Revision
                                     </span>
                                 </div>
                                 
@@ -384,16 +382,16 @@ export default function Processing() {
                                         )}
                                     </div>
                                     
-                                    {isManager ? (
+                                    {canRevise ? (
                                         <button 
                                             onClick={() => setSelectedDoc(doc)}
                                             className="w-full py-2.5 px-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-sm border-2 border-amber-700 shadow-sm"
                                         >
-                                            Resolve Issue
+                                            Revise & Resubmit
                                         </button>
                                     ) : (
                                         <div className="w-full py-2.5 px-3 bg-amber-50/50 border-2 border-amber-100 rounded-xl text-center">
-                                            <p className="text-[11px] font-bold text-amber-700 uppercase tracking-wider">Pending resolution by {doc.assigned_clerk}</p>
+                                            <p className="text-[11px] font-bold text-amber-700 uppercase tracking-wider">Pending revision by {doc.assigned_clerk}</p>
                                         </div>
                                     )}
                                 </div>
@@ -557,7 +555,7 @@ function TabButton({ label, icon, count, isActive, onClick, colorClass, badgeCla
 function CustomSelect({ options, value, onChange, placeholder }: CustomSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
-  
+ 
     useEffect(() => {
       function handleClickOutside(event: MouseEvent) {
         if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) setIsOpen(false);
@@ -570,7 +568,7 @@ function CustomSelect({ options, value, onChange, placeholder }: CustomSelectPro
     const displayLabel = selectedOptionLabel 
         ? (typeof selectedOptionLabel === 'string' ? selectedOptionLabel : selectedOptionLabel.label)
         : placeholder;
-  
+ 
     return (
       <div className="relative w-full" ref={dropdownRef}>
         <button 

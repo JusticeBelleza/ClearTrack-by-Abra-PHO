@@ -86,10 +86,14 @@ function CustomSelect({ options, value, onChange, placeholder }: CustomSelectPro
 
 export default function HandoverScreen({ doc, departments, onBack, onSuccess }: HandoverScreenProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
+    const isDrawingRef = useRef(false); // FIXED: Using a silent ref instead of React state for rapid drawing
+    
     const [isClosing, setIsClosing] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [activeAction, setActiveAction] = useState<'route' | 'reject' | 'complete' | null>(null);
-    const [isDrawing, setIsDrawing] = useState(false);
+    
+    // Canvas States
+    const [hasSignature, setHasSignature] = useState(false);
     
     const [destination, setDestination] = useState('');
     const [receivingClerk, setReceivingClerk] = useState('');
@@ -124,37 +128,83 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
         if (e && e.preventDefault) e.preventDefault();
         if (isSubmitting) return;
         setActiveAction(null);
+        setHasSignature(false); // Reset signature state when going back
     };
 
+    // --- ACCURATE MOBILE CANVAS LOGIC ---
     useEffect(() => {
-        if (activeAction !== 'route') return;
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
+        if (activeAction !== 'route' && activeAction !== 'complete') return;
         
-        ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        // Small delay to ensure the UI has finished painting the canvas before attaching listeners
+        const timer = setTimeout(() => {
+            const canvas = canvasRef.current;
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+            
+            ctx.strokeStyle = '#0f172a'; 
+            ctx.lineWidth = 4; 
+            ctx.lineCap = 'round'; 
+            ctx.lineJoin = 'round';
+            
+            const getCoordinates = (e: MouseEvent | TouchEvent) => {
+                const rect = canvas.getBoundingClientRect();
+                const scaleX = canvas.width / rect.width;
+                const scaleY = canvas.height / rect.height;
+
+                let clientX, clientY;
+                if (e.type.includes('touch')) {
+                    clientX = (e as TouchEvent).touches[0].clientX;
+                    clientY = (e as TouchEvent).touches[0].clientY;
+                } else {
+                    clientX = (e as MouseEvent).clientX;
+                    clientY = (e as MouseEvent).clientY;
+                }
+
+                return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+            };
+
+            const startDrawing = (e: MouseEvent | TouchEvent) => { 
+                e.preventDefault(); 
+                isDrawingRef.current = true; // Use silent ref
+                setHasSignature(true); 
+                const { x, y } = getCoordinates(e); 
+                ctx.beginPath(); 
+                ctx.moveTo(x, y); 
+            };
+            
+            const draw = (e: MouseEvent | TouchEvent) => { 
+                if (!isDrawingRef.current) return; 
+                e.preventDefault(); 
+                const { x, y } = getCoordinates(e); 
+                ctx.lineTo(x, y); 
+                ctx.stroke(); 
+            };
+            
+            const stopDrawing = () => { 
+                isDrawingRef.current = false; 
+                ctx.closePath(); 
+            };
+
+            canvas.addEventListener('mousedown', startDrawing); canvas.addEventListener('mousemove', draw); canvas.addEventListener('mouseup', stopDrawing); canvas.addEventListener('mouseout', stopDrawing);
+            canvas.addEventListener('touchstart', startDrawing, { passive: false }); canvas.addEventListener('touchmove', draw, { passive: false }); canvas.addEventListener('touchend', stopDrawing);
+
+            return () => {
+                canvas.removeEventListener('mousedown', startDrawing); canvas.removeEventListener('mousemove', draw); canvas.removeEventListener('mouseup', stopDrawing); canvas.removeEventListener('mouseout', stopDrawing);
+                canvas.removeEventListener('touchstart', startDrawing); canvas.removeEventListener('touchmove', draw); canvas.removeEventListener('touchend', stopDrawing);
+            };
+        }, 50);
         
-        const getCoordinates = (e: MouseEvent | TouchEvent) => {
-            const rect = canvas.getBoundingClientRect();
-            if (e.type.includes('touch')) return { x: (e as TouchEvent).touches[0].clientX - rect.left, y: (e as TouchEvent).touches[0].clientY - rect.top };
-            return { x: (e as MouseEvent).clientX - rect.left, y: (e as MouseEvent).clientY - rect.top };
-        };
+        return () => clearTimeout(timer);
+    }, [activeAction]); // ONLY depends on activeAction so listeners aren't wiped mid-stroke
 
-        const startDrawing = (e: MouseEvent | TouchEvent) => { e.preventDefault(); setIsDrawing(true); const { x, y } = getCoordinates(e); ctx.beginPath(); ctx.moveTo(x, y); };
-        const draw = (e: MouseEvent | TouchEvent) => { if (!isDrawing) return; e.preventDefault(); const { x, y } = getCoordinates(e); ctx.lineTo(x, y); ctx.stroke(); };
-        const stopDrawing = () => { setIsDrawing(false); ctx.closePath(); };
-
-        canvas.addEventListener('mousedown', startDrawing); canvas.addEventListener('mousemove', draw); canvas.addEventListener('mouseup', stopDrawing); canvas.addEventListener('mouseout', stopDrawing);
-        canvas.addEventListener('touchstart', startDrawing, { passive: false }); canvas.addEventListener('touchmove', draw, { passive: false }); canvas.addEventListener('touchend', stopDrawing);
-
-        return () => {
-            canvas.removeEventListener('mousedown', startDrawing); canvas.removeEventListener('mousemove', draw); canvas.removeEventListener('mouseup', stopDrawing); canvas.removeEventListener('mouseout', stopDrawing);
-            canvas.removeEventListener('touchstart', startDrawing); canvas.removeEventListener('touchmove', draw); canvas.removeEventListener('touchend', stopDrawing);
-        };
-    }, [activeAction, isDrawing]); 
-
-    const clearSignature = () => { const canvas = canvasRef.current; if(canvas) canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height); };
+    const clearSignature = () => { 
+        const canvas = canvasRef.current; 
+        if(canvas) {
+            canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height); 
+            setHasSignature(false);
+        }
+    };
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -192,31 +242,58 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
         });
     };
 
+    // --- SUBMISSION: ROUTE ---
     const handleSaveRouting = async () => {
         if (!destination || !receivingClerk.trim()) { toast.error("Validation Error", { description: "Please provide a destination and receiving clerk." }); return; }
+        if (!hasSignature) { toast.error("Signature Required", { description: "The receiving clerk must sign the pad to confirm receipt." }); return; }
+
         setIsSubmitting(true);
         try {
             const { data: { session } } = await supabase.auth.getSession();
-            const { error: logError } = await supabase.from('document_logs').insert([{ document_id: doc.id, action: 'In transit', location: destination, assigned_to: receivingClerk.trim(), created_by: session?.user?.id || null }]);
+            let signatureUrl = null;
+
+            if (canvasRef.current) {
+                const blob = await new Promise<Blob | null>((resolve) => canvasRef.current!.toBlob(resolve, 'image/png'));
+                if (blob) {
+                    const fileName = `signature-${doc.reference_no || doc.id}-${Date.now()}.png`;
+                    const { error: uploadError } = await supabase.storage.from('attachments').upload(fileName, blob, { contentType: 'image/png' });
+                    if (uploadError) throw uploadError;
+                    
+                    const { data } = supabase.storage.from('attachments').getPublicUrl(fileName);
+                    signatureUrl = data.publicUrl;
+                }
+            }
+
+            const { error: logError } = await supabase.from('document_logs').insert([{ 
+                document_id: doc.id, action: 'In transit', location: destination, assigned_to: receivingClerk.trim(), 
+                created_by: session?.user?.id || null, signature_url: signatureUrl 
+            }]);
             if (logError) throw logError;
+
             const { error } = await supabase.from('documents').update({ current_location: destination, status: 'routing', remarks: null }).eq('id', doc.id);
             if (error) throw error;
+            
             toast.success("Document Routed Successfully!", { description: `Forwarded to ${destination}.`});
             onSuccess(); handleClose();
         } catch (err: unknown) { 
             const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
             toast.error("Failed to route document", { description: errorMessage }); 
-        } 
-        finally { setIsSubmitting(false); }
+        } finally { setIsSubmitting(false); }
     };
 
+    // --- SUBMISSION: COMPLETE ---
     const confirmComplete = async () => {
         if (!releasedBy.trim()) { toast.error("Validation Error", { description: "Please specify who released the document." }); return; }
         if (!retentionFate) { toast.error("Validation Error", { description: "Please select where the document will be retained." }); return; }
+        if (!hasSignature) { toast.error("Signature Required", { description: "The releasing official must sign to finalize this document." }); return; }
+        
         setIsSubmitting(true);
         try {
             const { data: { session } } = await supabase.auth.getSession();
             let attachmentUrl = null;
+            let signatureUrl = null;
+
+            // 1. Upload Scanned PDF (if any)
             if (attachment) {
                 const fileName = `completed-${doc.reference_no}-${Math.random()}.pdf`;
                 const { error: uploadError } = await supabase.storage.from('attachments').upload(fileName, attachment, { contentType: 'application/pdf' });
@@ -224,21 +301,42 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
                 const { data } = supabase.storage.from('attachments').getPublicUrl(fileName);
                 attachmentUrl = data.publicUrl;
             }
+
+            // 2. Upload Signature
+            if (canvasRef.current) {
+                const blob = await new Promise<Blob | null>((resolve) => canvasRef.current!.toBlob(resolve, 'image/png'));
+                if (blob) {
+                    const fileName = `signature-complete-${doc.reference_no || doc.id}-${Date.now()}.png`;
+                    const { error: uploadError } = await supabase.storage.from('attachments').upload(fileName, blob, { contentType: 'image/png' });
+                    if (uploadError) throw uploadError;
+                    const { data } = supabase.storage.from('attachments').getPublicUrl(fileName);
+                    signatureUrl = data.publicUrl;
+                }
+            }
+
             const updateData: { status: string; remarks: string | null; completed_attachment_url?: string } = { status: 'sealed', remarks: completionRemarks.trim() || null };
             if (attachmentUrl) { updateData.completed_attachment_url = attachmentUrl; }
+            
             const fateString = retentionFate === 'originator' ? 'Returned to Originator' : 'Retained at Final Destination';
             const detailedRemarks = `Released By: ${releasedBy.trim()}\nDocument Retention: ${fateString}${completionRemarks ? `\nRemarks: ${completionRemarks.trim()}` : ''}`;
 
-            const { error: logError } = await supabase.from('document_logs').insert([{ document_id: doc.id, action: 'Delivered', location: doc.final_destination || doc.current_location, remarks: detailedRemarks, attachment_url: attachmentUrl, created_by: session?.user?.id || null }]);
+            const { error: logError } = await supabase.from('document_logs').insert([{ 
+                document_id: doc.id, action: 'Delivered', location: doc.final_destination || doc.current_location, 
+                remarks: detailedRemarks, attachment_url: attachmentUrl, signature_url: signatureUrl,
+                created_by: session?.user?.id || null 
+            }]);
             if (logError) throw logError;
+
             const { error } = await supabase.from('documents').update(updateData).eq('id', doc.id);
             if (error) throw error;
+            
             toast.success("Document Completed!", { description: "It has been moved to history." });
             onSuccess(); handleClose();
         } catch { toast.error("Failed to complete document"); } 
         finally { setIsSubmitting(false); }
     };
 
+    // --- SUBMISSION: REJECT ---
     const handleReject = async () => {
         if (!rejectOffice || !rejectReason.trim()) { toast.error("Validation Error", { description: "Please provide the returning office and reason." }); return; }
         setIsSubmitting(true);
@@ -283,27 +381,9 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
 
                     {!activeAction ? (
                         <div className="flex flex-col gap-3">
-                            <ActionCard 
-                                title="Add Step" 
-                                description="Route this document to its next destination."
-                                icon={<MapPin size={22} />}
-                                colorTheme="blue"
-                                onClick={() => setActiveAction('route')}
-                            />
-                            <ActionCard 
-                                title="Complete Document" 
-                                description="Finalize, log remarks, and secure the record."
-                                icon={<CheckCircle size={22} />}
-                                colorTheme="emerald"
-                                onClick={() => setActiveAction('complete')}
-                            />
-                            <ActionCard 
-                                title="Return / Reject" 
-                                description="Bounce this document back to a previous office."
-                                icon={<AlertCircle size={22} />}
-                                colorTheme="rose"
-                                onClick={() => setActiveAction('reject')}
-                            />
+                            <ActionCard title="Add Step" description="Route this document to its next destination." icon={<MapPin size={22} />} colorTheme="blue" onClick={() => setActiveAction('route')} />
+                            <ActionCard title="Complete Document" description="Finalize, log remarks, and secure the record." icon={<CheckCircle size={22} />} colorTheme="emerald" onClick={() => setActiveAction('complete')} />
+                            <ActionCard title="Return / Reject" description="Bounce this document back to a previous office." icon={<AlertCircle size={22} />} colorTheme="rose" onClick={() => setActiveAction('reject')} />
                         </div>
                     ) : null}
 
@@ -312,7 +392,19 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
                         <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
                             <div><label className="block text-base font-bold text-slate-900 mb-2">Next Destination Office *</label><CustomSelect options={departments} value={destination} onChange={setDestination} placeholder="Select receiving office..." /></div>
                             <div><label className="block text-base font-bold text-slate-900 mb-2">Receiving Clerk *</label><input type="text" value={receivingClerk} onChange={(e) => setReceivingClerk(e.target.value)} placeholder="Enter name of receiving clerk..." className="w-full p-3.5 bg-white border-2 border-slate-300 focus:border-blue-600 rounded-xl outline-none font-bold text-slate-900 text-base transition-colors" /></div>
-                            <div><div className="flex justify-between items-end mb-2"><label className="block text-base font-bold text-slate-900 flex items-center gap-2"><PenTool size={20}/> Signature *</label><button onClick={clearSignature} type="button" className="text-sm text-slate-600 font-bold hover:text-slate-900 transition-colors bg-white px-3 py-1.5 rounded-lg border-2 border-slate-300 active:scale-95">Clear Pad</button></div><div className="border-4 border-slate-300 rounded-2xl bg-white overflow-hidden touch-none relative"><div className="absolute top-1/2 left-4 right-4 h-0 border-b-2 border-dashed border-slate-300 pointer-events-none"></div><canvas ref={canvasRef} width={600} height={200} className="w-full h-[200px] cursor-crosshair bg-transparent relative z-10" style={{ touchAction: 'none' }} /></div><p className="text-center text-sm text-slate-500 mt-3 font-bold">Sign clearly within the box above</p></div>
+                            
+                            {/* SIGNATURE PAD */}
+                            <div>
+                                <div className="flex justify-between items-end mb-2">
+                                    <label className="block text-base font-bold text-slate-900 flex items-center gap-2"><PenTool size={20}/> Signature *</label>
+                                    <button onClick={clearSignature} type="button" className="text-sm text-slate-600 font-bold hover:text-slate-900 transition-colors bg-white px-3 py-1.5 rounded-lg border-2 border-slate-300 active:scale-95">Clear Pad</button>
+                                </div>
+                                <div className="border-4 border-slate-300 rounded-2xl bg-white overflow-hidden touch-none relative">
+                                    <div className="absolute top-1/2 left-4 right-4 h-0 border-b-2 border-dashed border-slate-300 pointer-events-none"></div>
+                                    <canvas ref={canvasRef} width={600} height={200} className="w-full h-[200px] cursor-crosshair bg-transparent relative z-10" style={{ touchAction: 'none' }} />
+                                </div>
+                                <p className="text-center text-sm text-slate-500 mt-3 font-bold">Sign clearly within the box above</p>
+                            </div>
                         </div>
                     )}
 
@@ -321,6 +413,20 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
                         <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
                             <div><label className="block text-sm font-bold text-slate-900 mb-1.5">Scanned Signed Copy (Optional)</label><div className="flex items-center gap-3"><label className={`hidden sm:flex flex-1 items-center justify-center gap-2 p-4 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${attachment ? 'bg-emerald-50 border-emerald-400 text-emerald-700' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`}><input type="file" accept="image/*,application/pdf" className="hidden" onChange={handleFileChange} disabled={isProcessingFile} />{isProcessingFile ? <span className="animate-pulse font-bold">Processing PDF...</span> : attachment ? <><CheckCircle size={18}/> <span className="font-bold truncate max-w-[200px]">{attachmentName}</span></> : <><Paperclip size={18}/> <span className="font-bold">Attach Final PDF</span></>}</label><label className={`flex sm:hidden flex-1 items-center justify-center gap-2 p-4 border-2 border-dashed rounded-xl cursor-pointer transition-colors active:scale-95 ${attachment ? 'bg-emerald-50 border-emerald-400 text-emerald-700' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`}><input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} disabled={isProcessingFile} />{isProcessingFile ? <span className="animate-pulse font-bold">Processing PDF...</span> : attachment ? <><CheckCircle size={18}/> <span className="font-bold truncate max-w-[150px]">{attachmentName}</span></> : <><Camera size={18}/> <span className="font-bold">Scan Signed Document</span></>}</label>{attachment && !isProcessingFile && (<button type="button" onClick={() => { setAttachment(null); setAttachmentName(''); }} className="p-4 bg-red-50 text-red-600 rounded-xl border-2 border-red-200 hover:bg-red-100 active:scale-95 transition-all"><X size={18} /></button>)}</div></div>
                             <div><label className="block text-base font-bold text-slate-900 mb-2">Released By *</label><input type="text" value={releasedBy} onChange={(e) => setReleasedBy(e.target.value)} placeholder="Name of official releasing the document..." className="w-full p-3.5 bg-white border-2 border-slate-300 focus:border-emerald-600 rounded-xl outline-none font-bold text-slate-900 text-base transition-colors" /></div>
+                            
+                            {/* NEW SIGNATURE PAD FOR RELEASE */}
+                            <div>
+                                <div className="flex justify-between items-end mb-2">
+                                    <label className="block text-base font-bold text-slate-900 flex items-center gap-2"><PenTool size={20}/> Signature *</label>
+                                    <button onClick={clearSignature} type="button" className="text-sm text-slate-600 font-bold hover:text-slate-900 transition-colors bg-white px-3 py-1.5 rounded-lg border-2 border-slate-300 active:scale-95">Clear Pad</button>
+                                </div>
+                                <div className="border-4 border-slate-300 rounded-2xl bg-white overflow-hidden touch-none relative">
+                                    <div className="absolute top-1/2 left-4 right-4 h-0 border-b-2 border-dashed border-slate-300 pointer-events-none"></div>
+                                    <canvas ref={canvasRef} width={600} height={200} className="w-full h-[200px] cursor-crosshair bg-transparent relative z-10" style={{ touchAction: 'none' }} />
+                                </div>
+                                <p className="text-center text-sm text-slate-500 mt-3 font-bold">Sign clearly within the box above</p>
+                            </div>
+
                             <div><label className="block text-base font-bold text-slate-900 mb-2">Document Retention *</label><div className="grid grid-cols-1 sm:grid-cols-2 gap-3"><div onClick={() => setRetentionFate('originator')} className={`p-4 border-2 rounded-xl cursor-pointer transition-all active:scale-[0.98] ${retentionFate === 'originator' ? 'bg-emerald-50 border-emerald-500' : 'bg-white border-slate-300 hover:border-slate-400'}`}><div className="flex items-center gap-3"><div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${retentionFate === 'originator' ? 'border-emerald-600 bg-emerald-600' : 'border-slate-400 bg-white'}`}>{retentionFate === 'originator' && <div className="w-2 h-2 bg-white rounded-full"></div>}</div><div><p className={`font-bold text-base ${retentionFate === 'originator' ? 'text-emerald-900' : 'text-slate-700'}`}>Return to Originator</p></div></div></div><div onClick={() => setRetentionFate('destination')} className={`p-4 border-2 rounded-xl cursor-pointer transition-all active:scale-[0.98] ${retentionFate === 'destination' ? 'bg-emerald-50 border-emerald-500' : 'bg-white border-slate-300 hover:border-slate-400'}`}><div className="flex items-center gap-3"><div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${retentionFate === 'destination' ? 'border-emerald-600 bg-emerald-600' : 'border-slate-400 bg-white'}`}>{retentionFate === 'destination' && <div className="w-2 h-2 bg-white rounded-full"></div>}</div><div><p className={`font-bold text-base ${retentionFate === 'destination' ? 'text-emerald-900' : 'text-slate-700'}`}>Retain at Office</p></div></div></div></div></div>
                             <div><label className="block text-base font-bold text-slate-900 mb-2">Completion Remarks (Optional)</label><textarea value={completionRemarks} onChange={(e) => setCompletionRemarks(e.target.value)} placeholder="Add final notes or context for the archive..." className="w-full p-3.5 bg-white border-2 border-slate-300 focus:border-emerald-600 rounded-xl outline-none font-bold text-slate-900 text-base min-h-[100px] resize-y transition-colors" ></textarea></div>
                         </div>
@@ -360,7 +466,6 @@ interface ActionCardProps {
 }
 
 function ActionCard({ title, description, icon, colorTheme, onClick }: ActionCardProps) {
-    // Tailwind classes mapped to specific enterprise themes
     const themeStyles = {
         blue: "hover:border-blue-400 hover:shadow-blue-100",
         emerald: "hover:border-emerald-400 hover:shadow-emerald-100",

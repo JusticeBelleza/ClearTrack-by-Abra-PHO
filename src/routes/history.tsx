@@ -39,6 +39,8 @@ interface DocumentItem {
     title?: string;
     status: string;
     assigned_clerk?: string;
+    created_by?: string;
+    custodian_id?: string;
     final_destination?: string;
     current_location?: string;
     remarks?: string;
@@ -68,26 +70,33 @@ interface TabButtonProps {
 const fetchHistoryData = async (): Promise<HistoryData> => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error("No authenticated session");
+    const currentUserId = session.user.id;
 
-    // OPTIMIZATION: Only fetch documents that are sealed or pending, ignoring active routing
-    const { data: docs, error } = await supabase
-      .from('documents')
-      .select(`
-          *,
-          document_logs (
-              action,
-              created_at
-          )
-      `)
-      .in('status', ['sealed', 'pending']); 
+    // Fetch Documents (No need to fetch profile name since we only filter by ID now)
+    const { data: docsRes, error } = await supabase.from('documents')
+        .select(`
+            *,
+            document_logs (
+                action,
+                created_at
+            )
+        `)
+        .in('status', ['sealed', 'pending']);
 
     if (error) throw error;
+
+    const rawDocs = docsRes || [];
 
     let completed: DocumentItem[] = [];
     let returned: DocumentItem[] = [];
 
-    if (docs) {
-        const processedDocs = (docs as DocumentItem[]).map((doc) => {
+    if (rawDocs.length > 0) {
+        // SECURITY FIX: History is ONLY visible to the original creator of the document
+        const myRelevantDocs = (rawDocs as DocumentItem[]).filter((d) => 
+            d.created_by === currentUserId
+        );
+
+        const processedDocs = myRelevantDocs.map((doc) => {
             const logs = doc.document_logs || [];
             
             if (doc.status === 'sealed') {
@@ -163,7 +172,7 @@ export default function History() {
           <h2 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
               <Archive className="text-emerald-600" size={32} /> Document History
           </h2>
-          <p className="text-base text-slate-600 mt-1">Search through completed and returned documents.</p>
+          <p className="text-base text-slate-600 mt-1">Search through your completed and returned documents.</p>
         </div>
       </div>
 

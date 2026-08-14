@@ -97,7 +97,7 @@ export default function Dashboard() {
       if (sessionError || !session) throw new Error("Authentication required");
       const currentUserId = session.user.id;
 
-      // 2. Fetch Profile and Documents in parallel to avoid waterfall delays
+      // 2. Fetch Profile and Documents
       const [profileRes, docsRes] = await Promise.all([
           supabase.from('profiles').select('full_name').eq('id', currentUserId).single(),
           supabase.from('documents').select('*').order('updated_at', { ascending: false })
@@ -109,36 +109,42 @@ export default function Dashboard() {
       const firstName = currentUserName.split(' ')[0];
       const safeDocs = docsRes.data || [];
 
-      // 3. Process the buckets
-      const assigned = safeDocs.filter((d: DocumentItem) => 
+      // 3. SECURITY FIX: Filter down to ONLY documents relevant to this specific user FIRST
+      const myRelevantDocs = safeDocs.filter((d: DocumentItem) => 
+          d.created_by === currentUserId || 
+          d.assigned_clerk === currentUserName || 
+          d.custodian_id === currentUserId
+      );
+
+      // 4. Process the buckets using ONLY myRelevantDocs
+      const assigned = myRelevantDocs.filter((d: DocumentItem) => 
           (d.assigned_clerk === currentUserName || d.custodian_id === currentUserId) && 
           d.status !== 'sealed' &&
           !d.remarks
       );
       
-      const myDocuments = safeDocs.filter((d: DocumentItem) => 
+      const myDocuments = myRelevantDocs.filter((d: DocumentItem) => 
           d.created_by === currentUserId && d.status !== 'sealed'
       );
 
-      const processing = safeDocs.filter((d: DocumentItem) => 
+      const processing = myRelevantDocs.filter((d: DocumentItem) => 
           d.assigned_clerk !== currentUserName && 
           d.custodian_id !== currentUserId && 
           (d.status === 'routing' || (d.status === 'pending' && !d.remarks))
       );
 
-      const rejected = safeDocs.filter((d: DocumentItem) => 
-          d.status === 'pending' && !!d.remarks && 
-          (d.assigned_clerk === currentUserName || d.created_by === currentUserId)
+      const rejected = myRelevantDocs.filter((d: DocumentItem) => 
+          d.status === 'pending' && !!d.remarks
       );
 
-      const completed = safeDocs.filter((d: DocumentItem) => d.status === 'sealed');
+      const completed = myRelevantDocs.filter((d: DocumentItem) => d.status === 'sealed');
 
       return {
           userName: firstName,
           documents: { assigned, myDocuments, processing, rejected, completed },
           stats: {
               active: processing.length + assigned.length, 
-              urgent: safeDocs.filter((d: DocumentItem) => d.is_urgent && d.status !== 'sealed').length, 
+              urgent: myRelevantDocs.filter((d: DocumentItem) => d.is_urgent && d.status !== 'sealed').length, 
               actionNeeded: assigned.length, 
               completed: completed.length
           }
@@ -146,7 +152,6 @@ export default function Dashboard() {
     }
   });
 
-  // ESLint Fix: Wrap documents in useMemo to prevent unnecessary dependency re-evaluations
   const documents = useMemo(() => {
       return dashboardData?.documents || { assigned: [], myDocuments: [], processing: [], rejected: [], completed: [] };
   }, [dashboardData?.documents]);

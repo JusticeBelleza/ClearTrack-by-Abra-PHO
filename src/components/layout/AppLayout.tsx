@@ -140,7 +140,10 @@ export default function AppLayout() {
 
   const confirmLogout = async () => {
       await supabase.auth.signOut();
-      navigate('/login', { replace: true });
+      
+      // Force a complete browser refresh to wipe all memory, cache, and state.
+      // Do NOT use navigate('/login') here.
+      window.location.href = '/login'; 
   };
 
   if (isLoading || !currentUserRole) {
