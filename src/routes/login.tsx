@@ -161,9 +161,9 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Enhanced Captcha Container - Mobile Border Removed */}
+          {/* Enhanced Captcha Container - Mobile Border & Rounding Removed */}
           <div className="flex justify-center pt-2">
-            <div className="w-full flex justify-center rounded-2xl sm:bg-slate-50/80 sm:border-2 sm:border-slate-100 sm:p-1.5 sm:shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] [&_iframe]:!border-none [&_iframe]:!outline-none [&>div]:!border-none overflow-hidden">
+            <div className="w-full flex justify-center sm:rounded-2xl sm:bg-slate-50/80 sm:border-2 sm:border-slate-100 sm:p-1.5 sm:shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] [&_iframe]:!border-none [&_iframe]:!outline-none [&_iframe]:!rounded-none [&>div]:!border-none overflow-hidden">
               <Turnstile
                 siteKey={env.VITE_TURNSTILE_SITE_KEY}
                 options={{ theme: 'light' }}
