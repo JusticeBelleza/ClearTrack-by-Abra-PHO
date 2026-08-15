@@ -205,28 +205,28 @@ export default function History() {
         </div>
       </div>
 
-      {/* Search & Filters */}
+      {/* Flat Search & Filters */}
       <div className="flex flex-col gap-4 mb-8">
           <div className="relative w-full">
-              <Search className="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 text-slate-500 w-5 h-5 sm:w-6 sm:h-6" />
+              <Search className="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5 sm:w-6 sm:h-6" />
               <input 
                 type="text" 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search archives by Title, ID, Category, or Location..." 
-                className="w-full pl-11 sm:pl-14 pr-11 sm:pr-14 py-3 sm:py-4 rounded-xl border-2 border-slate-300 focus:border-emerald-600 focus:ring-4 focus:ring-emerald-600/10 outline-none font-bold text-slate-900 placeholder:text-slate-500 transition-all text-base sm:text-lg shadow-sm" 
+                className="w-full pl-11 sm:pl-14 pr-11 sm:pr-14 py-3 sm:py-4 rounded-xl border-2 border-slate-300 focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none font-bold text-slate-900 placeholder:text-slate-400 transition-all text-base sm:text-lg shadow-sm bg-slate-50" 
               />
               {searchQuery && (
                   <button 
                     onClick={() => setSearchQuery("")} 
-                    className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 p-1 sm:p-1.5 text-slate-400 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-full transition-all active:scale-90"
+                    className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 p-1 sm:p-1.5 text-slate-400 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-full transition-all duration-200 active:scale-90"
                   >
                       <X className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={3} />
                   </button>
               )}
           </div>
 
-          <div className="flex flex-nowrap overflow-x-auto scrollbar-hide gap-2 sm:gap-3 bg-white p-2 rounded-2xl border-2 border-slate-300 shadow-sm w-full mt-2">
+          <div className="flex flex-nowrap overflow-x-auto scrollbar-hide gap-2 sm:gap-3 w-full mt-2">
               <TabButton 
                 label="Completed" 
                 icon={<CheckCircle size={20} strokeWidth={activeTab === 'completed' ? 3 : 2} />}
@@ -250,24 +250,24 @@ export default function History() {
 
       <div key={activeTab} className="animate-in fade-in zoom-in-[0.97] duration-300 ease-out fill-mode-both">
           {filteredDocs.length === 0 ? (
-              <div className="bg-white border-2 border-dashed border-slate-300 rounded-3xl p-10 flex flex-col items-center justify-center text-center">
-                  <div className="bg-slate-50 p-4 rounded-full mb-4">
+              <div className="bg-slate-50 border-2 border-slate-200 rounded-3xl p-10 flex flex-col items-center justify-center text-center">
+                  <div className="bg-white p-4 border-2 border-slate-100 rounded-full mb-4 shadow-sm">
                     <FileText size={36} className="text-slate-400" />
                   </div>
                   <h3 className="text-xl font-black text-slate-900 mb-2">No records found</h3>
-                  <p className="text-base font-medium text-slate-600 max-w-md">
+                  <p className="text-base font-medium text-slate-500 max-w-md">
                      We couldn't find any {activeTab} documents matching your search criteria.
                   </p>
               </div>
           ) : (
-              <div className="bg-white rounded-3xl border-2 border-slate-300 shadow-sm overflow-hidden animate-in fade-in">
+              <div className="bg-white rounded-3xl border-2 border-slate-200 shadow-sm overflow-hidden animate-in fade-in">
                   <div className="bg-slate-50 px-6 py-4 border-b-2 border-slate-200 flex justify-between items-center">
                       <h3 className="text-lg font-black text-slate-900">
                           {activeTab === 'completed' ? 'Completed Archives' : 'Voided Archives'}
                       </h3>
                   </div>
                   
-                  <div className="p-4 sm:p-6 space-y-4">
+                  <div className="p-4 sm:p-6 space-y-4 bg-white">
                       {groupedDocs.map(({ category, docs }) => {
                           const isExpanded = expandedCategories[category];
                           const currentPage = categoryPages[category] || 1;
@@ -280,7 +280,7 @@ export default function History() {
                                   {/* MINIMAL FOLDER HEADER */}
                                   <button 
                                       onClick={() => toggleCategoryAccordion(category)}
-                                      className={`w-full py-4 px-4 flex items-start sm:items-center justify-between transition-colors focus:outline-none group ${isExpanded ? 'bg-slate-50' : 'bg-transparent'}`}
+                                      className={`w-full py-4 px-4 flex items-start sm:items-center justify-between transition-all duration-200 ease-in-out focus:outline-none group active:bg-slate-100 ${isExpanded ? 'bg-slate-50' : 'bg-transparent hover:bg-slate-50/50'}`}
                                   >
                                       <div className="flex flex-col text-left flex-1 min-w-0 pr-4 gap-1">
                                           <div className="flex items-center gap-2">
@@ -306,8 +306,8 @@ export default function History() {
                                                       
                                                       {/* SMART VERTICAL STACK */}
                                                       <div className="flex flex-col gap-1.5 flex-1 min-w-0">
-                                                          <span className="text-[10px] font-mono font-bold text-slate-400 uppercase tracking-widest">{doc.reference_no || doc.id}</span>
-                                                          <h4 className="font-black text-slate-900 text-sm sm:text-base leading-tight break-words">{doc.title}</h4>
+                                                          <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-widest bg-slate-100 px-2 py-0.5 rounded w-fit border border-slate-200">{doc.reference_no || doc.id}</span>
+                                                          <h4 className="font-black text-slate-900 text-sm sm:text-base leading-tight break-words group-hover:text-blue-600 transition-colors">{doc.title}</h4>
                                                           
                                                           <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-xs sm:text-sm font-medium text-slate-600 mt-0.5">
                                                               {activeTab === 'completed' ? (
@@ -334,7 +334,7 @@ export default function History() {
                                                           {doc.attachment_url && (
                                                               <button 
                                                                   onClick={() => setPreviewDocUrl(doc.attachment_url as string)} 
-                                                                  className="p-2 sm:p-2.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 bg-white rounded-xl transition-all border-2 border-slate-200 hover:border-blue-200 active:scale-95 shadow-sm"
+                                                                  className="p-2 sm:p-2.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 bg-white rounded-xl transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-95 active:shadow-inner border-2 border-slate-300 hover:border-blue-300"
                                                                   title="View Document"
                                                               >
                                                                   <Eye size={18} className="w-4 h-4 sm:w-5 sm:h-5" />
@@ -342,7 +342,7 @@ export default function History() {
                                                           )}
                                                           <button 
                                                               onClick={() => setTrailDoc(doc)} 
-                                                              className="flex-1 sm:flex-none py-2 px-3 sm:p-2.5 text-slate-700 hover:text-blue-700 hover:bg-blue-50 bg-slate-50 rounded-xl font-bold transition-all border-2 border-slate-200 hover:border-blue-300 active:scale-95 shadow-sm flex items-center justify-center gap-1.5 text-xs sm:text-sm"
+                                                              className="flex-1 sm:flex-none py-2 px-3 sm:p-2.5 bg-blue-600 text-white hover:bg-blue-700 rounded-xl font-bold transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-95 active:shadow-inner border-2 border-blue-700 flex items-center justify-center gap-1.5 text-xs sm:text-sm"
                                                           >
                                                               Track <CornerUpLeft size={16} className="w-4 h-4 sm:w-4 sm:h-4" />
                                                           </button>
@@ -362,14 +362,14 @@ export default function History() {
                                                       <button 
                                                           disabled={currentPage === 1}
                                                           onClick={() => setCategoryPages(prev => ({...prev, [category]: currentPage - 1}))}
-                                                          className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg text-[11px] sm:text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100 active:scale-95 transition-all shadow-sm"
+                                                          className="px-3 py-1.5 bg-white border-2 border-slate-300 text-slate-700 rounded-lg text-[11px] sm:text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-95 active:shadow-inner transition-all duration-200 ease-in-out"
                                                       >
                                                           Prev
                                                       </button>
                                                       <button 
                                                           disabled={currentPage === totalPages}
                                                           onClick={() => setCategoryPages(prev => ({...prev, [category]: currentPage + 1}))}
-                                                          className="px-3 py-1.5 bg-white border border-slate-300 text-slate-700 rounded-lg text-[11px] sm:text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-100 active:scale-95 transition-all shadow-sm"
+                                                          className="px-3 py-1.5 bg-white border-2 border-slate-300 text-slate-700 rounded-lg text-[11px] sm:text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-95 active:shadow-inner transition-all duration-200 ease-in-out"
                                                       >
                                                           Next
                                                       </button>
@@ -398,13 +398,13 @@ function TabButton({ label, icon, count, isActive, onClick, colorClass, badgeCla
         <button 
             onClick={onClick}
             title={label}
-            className={`flex-none shrink-0 flex items-center justify-center gap-2 px-4 py-3 rounded-xl font-bold transition-all active:scale-95 text-sm whitespace-nowrap overflow-hidden border-2 ${
-                isActive ? `${colorClass} border-transparent` : 'bg-transparent text-slate-500 border-transparent hover:border-slate-200 hover:bg-slate-50'
+            className={`flex-none shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-95 active:shadow-inner text-sm whitespace-nowrap overflow-hidden border-2 ${
+                isActive ? `${colorClass} border-transparent shadow-sm` : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50 hover:text-slate-700'
             }`}
         >
             {icon}
             {isActive && <span className="animate-in fade-in slide-in-from-left-2 duration-200">{label}</span>}
-            <span className={`px-2 py-0.5 rounded-full text-xs border ${isActive ? badgeClass : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
+            <span className={`px-2 py-0.5 rounded-md text-[10px] border ${isActive ? badgeClass : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
                 {count}
             </span>
         </button>

@@ -14,18 +14,18 @@ const modalAnimationStyles = `
     @keyframes customFadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes customFadeOut { from { opacity: 1; } to { opacity: 0; } }
     
-    .animate-overlay-fade { animation: customFadeIn 0.4s ease-out forwards; }
-    .animate-overlay-fade-out { animation: customFadeOut 0.3s ease-in forwards; }
-    .animate-responsive-modal { animation: iosSlideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-    .animate-responsive-modal-close { animation: iosSlideDown 0.4s cubic-bezier(0.3, 0, 0.8, 0.15) forwards; }
+    .animate-overlay-fade { animation: customFadeIn 0.3s ease-out forwards; }
+    .animate-overlay-fade-out { animation: customFadeOut 0.2s ease-in forwards; }
+    .animate-responsive-modal { animation: iosSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+    .animate-responsive-modal-close { animation: iosSlideDown 0.3s cubic-bezier(0.3, 0, 0.8, 0.15) forwards; }
 
     .custom-scrollbar::-webkit-scrollbar { width: 6px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
     .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 20px; }
 
     @media (min-width: 640px) {
-        .animate-responsive-modal { animation: desktopZoomIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
-        .animate-responsive-modal-close { animation: desktopZoomOut 0.3s cubic-bezier(0.3, 0, 0.8, 0.15) forwards; }
+        .animate-responsive-modal { animation: desktopZoomIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .animate-responsive-modal-close { animation: desktopZoomOut 0.2s cubic-bezier(0.3, 0, 0.8, 0.15) forwards; }
     }
 `;
 
@@ -51,10 +51,11 @@ interface Employee {
     department: string;
 }
 
-// --- Custom Dropdown Component ---
+// --- Custom Dropdown Component (Clean Flat Version) ---
 function CustomSelect({ options, value, onChange, placeholder, disabled = false, emptyText = "Loading options..." }: CustomSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const menuRef = useRef<HTMLDivElement>(null); 
   
     useEffect(() => {
       function handleClickOutside(event: MouseEvent) {
@@ -65,6 +66,14 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false,
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
+
+    useEffect(() => {
+      if (isOpen && menuRef.current) {
+        setTimeout(() => {
+          menuRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 50);
+      }
+    }, [isOpen]);
   
     return (
       <div className="relative w-full" ref={dropdownRef}>
@@ -72,11 +81,11 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false,
           type="button"
           disabled={disabled}
           onClick={() => !disabled && setIsOpen(!isOpen)}
-          className={`w-full px-4 py-3.5 border-2 rounded-xl flex justify-between items-center transition-all text-base outline-none ${
+          className={`w-full px-3 py-3 border rounded-xl flex justify-between items-center transition-all text-sm sm:text-base outline-none ${
             disabled ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed' :
             isOpen
-              ? 'border-blue-600 ring-4 ring-blue-600/10 bg-white'
-              : 'bg-slate-50 border-slate-300 hover:bg-slate-100 hover:border-slate-400 active:scale-[0.99]'
+              ? 'border-blue-500 ring-4 ring-blue-500/10 bg-white'
+              : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-slate-300 active:scale-[0.99]'
           } ${!value && !disabled ? 'text-slate-500' : 'text-slate-900 font-bold'}`}
         >
           <span className="truncate">
@@ -88,15 +97,15 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false,
           </span>
           {!disabled && (
               <ChevronDown 
-                size={20} 
-                className={`text-slate-600 transition-transform duration-300 ease-in-out ${isOpen ? 'rotate-180 text-slate-900' : ''}`} 
+                size={18} 
+                className={`text-slate-400 transition-transform duration-300 ease-in-out sm:w-5 sm:h-5 ${isOpen ? 'rotate-180 text-slate-800' : ''}`} 
               />
           )}
         </button>
   
         {isOpen && !disabled && (
-          <div className="absolute z-20 w-full mt-2 bg-white border-2 border-slate-300 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-            <div className="max-h-60 overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
+          <div ref={menuRef} className="absolute z-20 w-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="max-h-48 sm:max-h-60 overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
               {options.length === 0 ? (
                   <div className="px-4 py-3 text-sm text-slate-500 text-center font-medium">{emptyText}</div>
               ) : (
@@ -112,10 +121,10 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false,
                           onChange(optValue);
                           setIsOpen(false);
                         }}
-                        className={`px-4 py-3 text-base rounded-lg cursor-pointer transition-colors flex items-center active:scale-95 ${
+                        className={`px-3 py-2.5 sm:px-4 sm:py-3 text-sm sm:text-base rounded-lg cursor-pointer transition-colors flex items-center active:scale-95 ${
                           isSelected
                             ? 'bg-blue-600 text-white font-bold'
-                            : 'text-slate-800 hover:bg-slate-100 font-medium'
+                            : 'text-slate-700 hover:bg-slate-100 font-medium'
                         }`}
                       >
                         {optLabel}
@@ -131,7 +140,6 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false,
 }
 
 export default function CreateDocumentModal() {
-    // Note: useUiStore state typing assumed to be handled at the store level or inferred
     const closeCreateModal = useUiStore((state: { closeCreateModal: () => void }) => state.closeCreateModal);
     
     const [isClosing, setIsClosing] = useState(false);
@@ -147,7 +155,6 @@ export default function CreateDocumentModal() {
     const [attachment, setAttachment] = useState<File | Blob | null>(null);
     const [attachmentName, setAttachmentName] = useState<string>('');
 
-    // FIX: Lazy initialization to satisfy React's purity rules
     const [formData, setFormData] = useState(() => ({
         trackingNumber: `DOC-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`,
         title: '',
@@ -158,7 +165,6 @@ export default function CreateDocumentModal() {
         remarks: ''
     }));
 
-    // FIX: Hoist function definition above the useEffect that calls it
     const fetchDropdownOptions = async () => {
         try {
             const { data: { session } } = await supabase.auth.getSession();
@@ -197,7 +203,7 @@ export default function CreateDocumentModal() {
 
     const handleClose = () => {
         setIsClosing(true);
-        setTimeout(() => closeCreateModal(), 350); 
+        setTimeout(() => closeCreateModal(), 300); 
     };
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -338,57 +344,59 @@ export default function CreateDocumentModal() {
     return (
         <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/60 backdrop-blur-sm ${isClosing ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
             <style>{modalAnimationStyles}</style>
-            <div className={`bg-white w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden shadow-2xl rounded-t-2xl sm:rounded-3xl ${isClosing ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
+            <div className={`bg-white w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] flex flex-col overflow-hidden shadow-2xl rounded-t-[1.5rem] sm:rounded-3xl ${isClosing ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
                 
+                {/* Clean Flat Header */}
                 <div className="bg-slate-900 text-white relative flex flex-col shrink-0">
                     <div className="w-16 h-1.5 bg-white/30 rounded-full mx-auto mt-3 sm:hidden shrink-0"></div>
                     <div className="p-5 pt-3 sm:p-6 flex items-center justify-between">
                         <h3 className="font-black text-xl flex items-center gap-2 mt-2 sm:mt-0">
                             <FileText size={22} className="text-blue-400" /> Route Document
                         </h3>
-                        <button onClick={handleClose} disabled={isSubmitting} className="p-2 -mr-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors active:scale-90 disabled:opacity-50">
+                        <button onClick={handleClose} disabled={isSubmitting} className="p-2 -mr-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors active:scale-95 disabled:opacity-50">
                             <X size={20} />
                         </button>
                     </div>
                 </div>
 
                 <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 sm:p-8 custom-scrollbar">
-                    <div className="space-y-6">
+                    <div className="space-y-5">
 
-                        <div className="bg-blue-50 border-2 border-blue-200 p-4 rounded-xl flex items-center justify-between">
+                        {/* Flat Tracking Number Badge */}
+                        <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl flex items-center justify-between">
                             <div>
-                                <p className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-0.5">Tracking Number</p>
-                                <p className="font-mono text-xl font-black text-slate-900 tracking-widest">{formData.trackingNumber}</p>
+                                <p className="text-[10px] sm:text-xs font-bold text-blue-600 uppercase tracking-wider mb-0.5">Tracking Number</p>
+                                <p className="font-mono text-lg sm:text-xl font-black text-slate-900 tracking-widest">{formData.trackingNumber}</p>
                             </div>
-                            <Hash className="text-blue-500" size={28} />
+                            <Hash className="text-blue-500 opacity-80" size={28} />
                         </div>
 
                         <div>
-                            <label className="block text-sm font-bold text-slate-900 mb-1.5">Document Subject / Title *</label>
+                            <label className="block text-xs sm:text-sm font-bold text-slate-900 mb-1.5">Document Subject / Title *</label>
                             <input 
                                 type="text" 
                                 value={formData.title}
                                 onChange={(e) => setFormData({...formData, title: e.target.value})}
                                 placeholder="e.g. Budget Request for Q3" 
-                                className="w-full p-3.5 bg-slate-50 border-2 border-slate-300 focus:border-blue-600 rounded-xl outline-none font-bold text-slate-900 text-base transition-colors" 
+                                className="w-full p-3 sm:p-3.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 rounded-xl outline-none font-bold text-slate-900 text-sm sm:text-base transition-all" 
                             />
                         </div>
 
                         <div>
-                            <label className="block text-sm font-bold text-slate-900 mb-1.5">Scanned Attachment (Optional)</label>
+                            <label className="block text-xs sm:text-sm font-bold text-slate-900 mb-1.5">Scanned Attachment (Optional)</label>
                             <div className="flex items-center gap-3">
-                                <label className={`hidden sm:flex flex-1 items-center justify-center gap-2 p-3.5 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${attachment ? 'bg-emerald-50 border-emerald-400 text-emerald-700' : 'bg-slate-50 border-slate-300 text-slate-600 hover:bg-slate-100'}`}>
+                                <label className={`hidden sm:flex flex-1 items-center justify-center gap-2 p-3 border border-dashed rounded-xl cursor-pointer transition-colors ${attachment ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-slate-50 border-slate-300 text-slate-600 hover:bg-white hover:border-slate-400'}`}>
                                     <input type="file" accept="image/*,application/pdf" className="hidden" onChange={handleFileChange} disabled={isProcessingFile} />
-                                    {isProcessingFile ? <span className="animate-pulse font-bold">Processing PDF...</span> : attachment ? <><CheckCircle size={18}/> <span className="font-bold truncate max-w-[200px]">{attachmentName}</span></> : <><Paperclip size={18}/> <span className="font-bold">Attach File / PDF</span></>}
+                                    {isProcessingFile ? <span className="animate-pulse font-bold text-sm">Processing...</span> : attachment ? <><CheckCircle size={18}/> <span className="font-bold text-sm truncate max-w-[200px]">{attachmentName}</span></> : <><Paperclip size={18}/> <span className="font-bold text-sm">Attach File / PDF</span></>}
                                 </label>
 
-                                <label className={`flex sm:hidden flex-1 items-center justify-center gap-2 p-3.5 border-2 border-dashed rounded-xl cursor-pointer transition-colors active:scale-95 ${attachment ? 'bg-emerald-50 border-emerald-400 text-emerald-700' : 'bg-slate-50 border-slate-300 text-slate-600 hover:bg-slate-100'}`}>
+                                <label className={`flex sm:hidden flex-1 items-center justify-center gap-2 p-3 border border-dashed rounded-xl cursor-pointer transition-colors active:scale-95 ${attachment ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-slate-50 border-slate-300 text-slate-600 hover:bg-white hover:border-slate-400'}`}>
                                     <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} disabled={isProcessingFile} />
-                                    {isProcessingFile ? <span className="animate-pulse font-bold">Processing PDF...</span> : attachment ? <><CheckCircle size={18}/> <span className="font-bold truncate max-w-[150px]">{attachmentName}</span></> : <><Camera size={18}/> <span className="font-bold">Scan Document</span></>}
+                                    {isProcessingFile ? <span className="animate-pulse font-bold text-sm">Processing...</span> : attachment ? <><CheckCircle size={18}/> <span className="font-bold text-sm truncate max-w-[150px]">{attachmentName}</span></> : <><Camera size={18}/> <span className="font-bold text-sm">Scan Document</span></>}
                                 </label>
 
                                 {attachment && !isProcessingFile && (
-                                    <button type="button" onClick={() => { setAttachment(null); setAttachmentName(''); }} className="p-3.5 bg-red-50 text-red-600 rounded-xl border-2 border-red-200 hover:bg-red-100 active:scale-95 transition-all">
+                                    <button type="button" onClick={() => { setAttachment(null); setAttachmentName(''); }} className="p-3 bg-red-50 text-red-600 rounded-xl border border-red-200 hover:bg-red-100 active:scale-95 transition-all">
                                         <X size={18} />
                                     </button>
                                 )}
@@ -396,14 +404,15 @@ export default function CreateDocumentModal() {
                         </div>
 
                         <div>
-                            <label className="block text-sm font-bold text-slate-900 mb-1.5 flex items-center gap-1.5">Document Category *</label>
+                            <label className="block text-xs sm:text-sm font-bold text-slate-900 mb-1.5 flex items-center gap-1.5">Document Category *</label>
                             <CustomSelect options={categories} value={formData.category} onChange={(val: string) => setFormData({...formData, category: val})} placeholder="Select Category..." />
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 p-4 rounded-xl border-2 border-blue-100 bg-blue-50/50">
+                        {/* Flat Routing Grouping Box */}
+                        <div className="p-4 rounded-xl border border-blue-100 bg-blue-50/40 space-y-4">
                             <div>
-                                <label className="block text-sm font-bold text-slate-900 mb-1.5 flex items-center gap-1.5">
-                                    <MapPin size={16} className="text-blue-600" /> Final Destination *
+                                <label className="block text-[11px] sm:text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                                    <MapPin size={14} className="text-blue-600" /> Final Destination *
                                 </label>
                                 <CustomSelect 
                                     options={departments} 
@@ -414,8 +423,8 @@ export default function CreateDocumentModal() {
                             </div>
 
                             <div>
-                                <label className="block text-sm font-bold text-slate-900 mb-1.5 flex items-center gap-1.5">
-                                    <User size={16} className="text-blue-600" /> Assign To (Internal Clerk) *
+                                <label className="block text-[11px] sm:text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                                    <User size={14} className="text-blue-600" /> Assign To (Internal Clerk) *
                                 </label>
                                 <CustomSelect 
                                     options={availableClerks} 
@@ -427,39 +436,41 @@ export default function CreateDocumentModal() {
                             </div>
                         </div>
 
-                        <div className={`p-4 border-2 rounded-xl flex items-center justify-between transition-colors cursor-pointer active:scale-[0.99] ${formData.isUrgent ? 'bg-red-50 border-red-300' : 'bg-slate-50 border-slate-200'}`} onClick={() => setFormData({...formData, isUrgent: !formData.isUrgent})}>
+                        {/* Flat Urgent Toggle */}
+                        <div className={`p-4 border rounded-xl flex items-center justify-between transition-colors cursor-pointer active:scale-[0.99] ${formData.isUrgent ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'}`} onClick={() => setFormData({...formData, isUrgent: !formData.isUrgent})}>
                             <div>
-                                <h4 className={`font-black text-base flex items-center gap-2 ${formData.isUrgent ? 'text-red-700' : 'text-slate-700'}`}>
-                                    <AlertCircle size={18} /> Mark as Priority / RUSH
+                                <h4 className={`font-black text-sm sm:text-base flex items-center gap-2 ${formData.isUrgent ? 'text-red-700' : 'text-slate-700'}`}>
+                                    <AlertCircle size={16} /> Mark as Priority / RUSH
                                 </h4>
-                                <p className={`text-xs font-medium mt-1 ${formData.isUrgent ? 'text-red-600' : 'text-slate-500'}`}>Flags this document in red for all receiving offices.</p>
+                                <p className={`text-[11px] sm:text-xs font-medium mt-0.5 ${formData.isUrgent ? 'text-red-600' : 'text-slate-500'}`}>Flags this document in red for all receiving offices.</p>
                             </div>
-                            <div className={`relative inline-flex h-7 w-12 shrink-0 cursor-pointer rounded-full border-2 transition-colors duration-200 ease-in-out focus:outline-none ${formData.isUrgent ? 'bg-red-600 border-red-700' : 'bg-slate-300 border-slate-400'}`}>
-                                <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out mt-[1px] ml-[1px] ${formData.isUrgent ? 'translate-x-5' : 'translate-x-0'}`} />
+                            <div className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors duration-200 ease-in-out focus:outline-none ${formData.isUrgent ? 'bg-red-600 border-red-700' : 'bg-slate-300 border-slate-400'}`}>
+                                <span className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-sm ring-0 transition duration-200 ease-in-out mt-[2px] ml-[2px] ${formData.isUrgent ? 'translate-x-5' : 'translate-x-0'}`} />
                             </div>
                         </div>
 
                         <div>
-                            <label className="block text-sm font-bold text-slate-900 mb-1.5">Initial Remarks / Notes (Optional)</label>
+                            <label className="block text-xs sm:text-sm font-bold text-slate-900 mb-1.5">Initial Remarks / Notes (Optional)</label>
                             <textarea 
                                 value={formData.remarks}
                                 onChange={(e) => setFormData({...formData, remarks: e.target.value})}
                                 placeholder="Add any instructions for the receiving office..." 
-                                className="w-full p-3.5 bg-slate-50 border-2 border-slate-300 focus:border-blue-600 rounded-xl outline-none font-bold text-slate-900 text-base min-h-[100px] resize-y transition-colors" 
+                                className="w-full p-3 sm:p-3.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 rounded-xl outline-none font-bold text-slate-900 text-sm sm:text-base min-h-[100px] resize-y transition-all" 
                             ></textarea>
                         </div>
                     </div>
                 </form>
 
-                <div className="bg-slate-50 p-5 sm:p-6 border-t-2 border-slate-200 flex gap-3 shrink-0 pb-8 sm:pb-6">
-                    <button type="button" disabled={isSubmitting || isProcessingFile} onClick={handleClose} className="flex-1 py-3.5 bg-white border-2 border-slate-300 text-slate-700 font-bold rounded-xl active:scale-95 transition-transform text-base disabled:opacity-50">
+                {/* Flat Footer Buttons */}
+                <div className="bg-slate-50 p-4 sm:p-5 border-t border-slate-100 flex gap-3 shrink-0 pb-6 sm:pb-5">
+                    <button type="button" disabled={isSubmitting || isProcessingFile} onClick={handleClose} className="flex-1 py-3 sm:py-3.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-xl active:scale-95 transition-all text-sm sm:text-base disabled:opacity-50 shadow-sm">
                         Cancel
                     </button>
-                    <button type="submit" disabled={isSubmitting || isProcessingFile} onClick={handleSubmit} className="flex-[1.5] py-3.5 bg-blue-600 text-white font-bold rounded-xl border-2 border-blue-700 active:scale-95 transition-all text-base flex justify-center items-center gap-2 disabled:opacity-50 shadow-md hover:bg-blue-700">
+                    <button type="submit" disabled={isSubmitting || isProcessingFile} onClick={handleSubmit} className="flex-[1.5] py-3 sm:py-3.5 bg-blue-600 border border-blue-600 text-white font-bold rounded-xl active:scale-95 transition-all text-sm sm:text-base flex justify-center items-center gap-2 disabled:opacity-50 shadow-sm hover:bg-blue-700 hover:border-blue-700">
                         {isSubmitting ? (
-                            <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
                         ) : (
-                            <><Send size={18} /> Route Document</>
+                            <><Send size={16} /> Route Document</>
                         )}
                     </button>
                 </div>

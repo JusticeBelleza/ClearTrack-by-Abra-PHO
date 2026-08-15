@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { useUiStore } from '../../store/uiStore';
 import CreateDocumentModal from '../system/CreateDocumentModal';
 import { supabase } from '../../lib/supabase';
+import { useQuery, useQueryClient } from '@tanstack/react-query'; // Added React Query
 
 // --- IMPORT YOUR NEW INSTALL PROMPT ---
 import InstallPrompt from '../InstallPrompt'; 
@@ -43,11 +44,13 @@ interface NavItemProps {
     label: string;
     to: string;
     isActive: boolean;
+    notificationCount?: number; // Added Notification Support
 }
 
 export default function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const activeTab = location.pathname.replace('/', '') || 'dashboard';
 
   const isCreateModalOpen = useUiStore((state) => state.isCreateModalOpen);
@@ -114,6 +117,49 @@ export default function AppLayout() {
 
     fetchUserAndSettings();
   }, [navigate]);
+
+  // --- GLOBAL NOTIFICATION QUERY ---
+  const { data: unreadCount } = useQuery({
+      queryKey: ['globalNavNotifications'],
+      queryFn: async () => {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (!session) return 0;
+
+          const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', session.user.id).single();
+          const fullName = profile?.full_name || '';
+
+          const { data: docs } = await supabase.from('documents')
+              .select('updated_at, created_at, status, remarks')
+              .neq('status', 'sealed')
+              .neq('status', 'cancelled')
+              .or(`created_by.eq.${session.user.id},assigned_clerk.eq.${fullName}`);
+
+          if (!docs) return 0;
+
+          const lastProc = Number(localStorage.getItem('filetrackr_viewed_processing') || '0');
+          const lastRet = Number(localStorage.getItem('filetrackr_viewed_returned') || '0');
+
+          let count = 0;
+          docs.forEach(d => {
+              const time = new Date(d.updated_at || d.created_at).getTime();
+              const isReturned = d.status === 'pending' && !!d.remarks;
+              if (isReturned && time > lastRet) count++;
+              else if (!isReturned && time > lastProc) count++;
+          });
+
+          return count;
+      },
+      refetchInterval: 15000, // Poll every 15s in background
+      enabled: currentUserRole === 'pho_staff'
+  });
+
+  // When activeTab changes, invalidate query so dot doesn't return falsely
+  useEffect(() => {
+      queryClient.invalidateQueries({ queryKey: ['globalNavNotifications'] });
+  }, [activeTab, queryClient]);
+
+  // Instantly clear the badge if the user is currently on the Processing tab
+  const processingNotificationCount = activeTab === 'processing' ? 0 : (unreadCount || 0);
 
   // --- ROLE-BASED ROUTING ENFORCEMENT ---
   useEffect(() => {
@@ -194,7 +240,13 @@ export default function AppLayout() {
           {currentUserRole === 'pho_staff' && (
             <>
               <NavItem icon={<Activity />} label="Dashboard" to="/dashboard" isActive={activeTab === 'dashboard'} />
-              <NavItem icon={<FileText />} label="Processing" to="/processing" isActive={activeTab === 'processing'} />
+              <NavItem 
+                  icon={<FileText />} 
+                  label="Processing" 
+                  to="/processing" 
+                  isActive={activeTab === 'processing'} 
+                  notificationCount={processingNotificationCount} 
+              />
               <NavItem icon={<History />} label="History" to="/history" isActive={activeTab === 'history'} />
             </>
           )}
@@ -265,7 +317,13 @@ export default function AppLayout() {
             {currentUserRole === 'pho_staff' && (
               <>
                 <MobileBottomNavItem icon={<Activity />} label="Dashboard" to="/dashboard" isActive={activeTab === 'dashboard'} />
-                <MobileBottomNavItem icon={<FileText />} label="Processing" to="/processing" isActive={activeTab === 'processing'} />
+                <MobileBottomNavItem 
+                    icon={<FileText />} 
+                    label="Processing" 
+                    to="/processing" 
+                    isActive={activeTab === 'processing'} 
+                    notificationCount={processingNotificationCount} 
+                />
                 <MobileBottomNavItem icon={<History />} label="History" to="/history" isActive={activeTab === 'history'} />
               </>
             )}
@@ -324,20 +382,36 @@ export default function AppLayout() {
 
 // --- Helper Components --- //
 
-function NavItem({ icon, label, to, isActive }: NavItemProps) {
+function NavItem({ icon, label, to, isActive, notificationCount = 0 }: NavItemProps) {
   return (
     <Link to={to} className={`flex items-center gap-3 px-4 py-3 w-full text-left rounded-lg transition-all ${
         isActive ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-800 hover:text-white'
       }`}
     >
-      {React.cloneElement(icon, { size: 20 })}
-      <span className="font-medium">{label}</span>
+      <div className="relative flex items-center justify-center">
+          {React.cloneElement(icon, { size: 20 })}
+          {/* RED DOT NOTIFICATION - DESKTOP */}
+          {notificationCount > 0 && !isActive && (
+              <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 border border-slate-900"></span>
+              </span>
+          )}
+      </div>
+      <span className="font-medium flex-1">{label}</span>
+      
+      {/* "NEW" BADGE - DESKTOP */}
+      {notificationCount > 0 && !isActive && (
+          <span className="text-[10px] font-black text-white bg-red-500 px-2 py-0.5 rounded shadow-sm">
+              {notificationCount} NEW
+          </span>
+      )}
     </Link>
   );
 }
 
 // THE NEW CATCHY MAGIC NAV ITEM
-function MobileBottomNavItem({ icon, label, to, isActive }: NavItemProps) {
+function MobileBottomNavItem({ icon, label, to, isActive, notificationCount = 0 }: NavItemProps) {
     return (
       <Link 
         to={to} 
@@ -348,12 +422,21 @@ function MobileBottomNavItem({ icon, label, to, isActive }: NavItemProps) {
         }`}
       >
         <div className="flex items-center gap-2 relative z-10">
-           <div className={`transition-transform duration-500 ${isActive ? 'scale-110' : 'scale-100'}`}>
+           <div className={`relative transition-transform duration-500 ${isActive ? 'scale-110' : 'scale-100'}`}>
               {React.cloneElement(icon, { 
                 size: 20, 
                 strokeWidth: isActive ? 2.5 : 2 
               })}
+              
+              {/* RED DOT NOTIFICATION - MOBILE */}
+              {notificationCount > 0 && !isActive && (
+                  <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 border border-white"></span>
+                  </span>
+              )}
            </div>
+           
            {isActive && (
               <span className="text-sm font-bold tracking-wide whitespace-nowrap animate-in slide-in-from-right-2 fade-in duration-300">
                 {label}

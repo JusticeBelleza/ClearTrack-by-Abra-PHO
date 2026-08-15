@@ -1,6 +1,6 @@
 import { useState, useEffect, type SyntheticEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Archive, Check, ArrowRight, FileText, UserPlus, PenTool, Ban, RefreshCcw } from 'lucide-react';
+import { X, Archive, Check, ArrowRight, FileText, UserPlus, PenTool, Ban, RefreshCcw, ShieldCheck } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import FilePreviewModal from './FilePreviewModal';
 
@@ -25,6 +25,13 @@ interface DocumentTrailProps {
     onBack: () => void;
 }
 
+interface SignatureData {
+    url: string;
+    name: string;
+    date: string;
+    actionLabel: string;
+}
+
 export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
     const [isClosing, setIsClosing] = useState(false);
     const [events, setEvents] = useState<DocumentLog[]>([]);
@@ -33,7 +40,7 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
     
     // Preview States
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-    const [signatureToView, setSignatureToView] = useState<string | null>(null);
+    const [signatureToView, setSignatureToView] = useState<SignatureData | null>(null);
 
     const headerClass = 'bg-slate-900';
 
@@ -116,7 +123,7 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
                 </div>
 
                 {/* Content Area */}
-                <div className="flex-1 overflow-y-auto bg-white p-4 pt-6">
+                <div className="flex-1 overflow-y-auto bg-white p-4 pt-6 custom-scrollbar">
                     <div className="relative">
                         
                         {/* 1. SKELETON LOADER */}
@@ -191,6 +198,12 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
                             if (log.action === 'Cancelled') desc = `Location: ${log.location}\n${log.remarks}`;
                             if (log.action === 'Resubmitted') desc = `Location: ${log.location}\n${log.remarks}`;
 
+                            // Determine Action Label for Signature
+                            let sigActionLabel = "Signed By";
+                            if (log.action === 'In transit') sigActionLabel = "Received By";
+                            else if (log.action === 'Delivered') sigActionLabel = "Secured By";
+                            else if (log.action === 'Returned') sigActionLabel = "Returned By";
+
                             return (
                                 <div key={index} className="flex gap-4 relative w-full animate-in fade-in duration-300" style={{ animationFillMode: 'both', animationDelay: `${index * 50}ms` }}>
                                     <div className="w-20 shrink-0 flex flex-col text-right pt-0.5">
@@ -201,21 +214,34 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
                                         {index !== events.length - 1 && <div className="absolute top-5 bottom-[-1.5rem] w-[2px] bg-slate-200"></div>}
                                         <div className={`relative z-10 w-[22px] h-[22px] mt-0.5 rounded-full flex items-center justify-center ${nodeBg}`}>{icon}</div>
                                     </div>
-                                    <div className="flex-1 pb-10">
+                                    <div className="flex-1 pb-10 min-w-0 pr-1">
                                         <h4 className={`text-sm font-bold leading-none mb-1.5 ${titleColor}`}>{log.action}</h4>
-                                        <div className="text-sm text-slate-600 leading-relaxed pr-2">{formatDescription(desc)}</div>
+                                        <div className="text-sm text-slate-600 leading-relaxed">{formatDescription(desc)}</div>
                                         
-                                        {/* Attachment & Signature Buttons */}
+                                        {/* Attachment & Signature Buttons - Forced Side-by-Side Flex Row */}
                                         {(log.attachment_url || log.signature_url) && (
-                                            <div className="mt-3 flex flex-wrap gap-2">
+                                            <div className="flex flex-row items-center gap-2 mt-3 w-full">
                                                 {log.attachment_url && (
-                                                    <button onClick={() => setPreviewUrl(log.attachment_url || null)} className="inline-flex items-center gap-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs rounded-lg border border-blue-200 transition-colors active:scale-95 shadow-sm">
-                                                        <FileText size={16} strokeWidth={2.5} /> View File
+                                                    <button 
+                                                        onClick={() => setPreviewUrl(log.attachment_url || null)} 
+                                                        className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 sm:px-3 sm:py-2 bg-blue-50 text-blue-600 rounded-lg text-[10px] sm:text-xs font-bold whitespace-nowrap transition-all active:scale-95 border border-blue-200"
+                                                    >
+                                                        <FileText size={14} className="shrink-0" />
+                                                        <span className="truncate">View File</span>
                                                     </button>
                                                 )}
                                                 {log.signature_url && (
-                                                    <button onClick={() => setSignatureToView(log.signature_url || null)} className="inline-flex items-center gap-2 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-xs rounded-lg border border-indigo-200 transition-colors active:scale-95 shadow-sm">
-                                                        <PenTool size={16} strokeWidth={2.5} /> View Signature
+                                                    <button 
+                                                        onClick={() => setSignatureToView({
+                                                            url: log.signature_url!,
+                                                            name: log.assigned_to || creatorName || 'Authorized Personnel',
+                                                            date: `${dateStr}, ${timeStr}`,
+                                                            actionLabel: sigActionLabel
+                                                        })} 
+                                                        className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 sm:px-3 sm:py-2 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] sm:text-xs font-bold whitespace-nowrap transition-all active:scale-95 border border-indigo-200"
+                                                    >
+                                                        <PenTool size={14} className="shrink-0" />
+                                                        <span className="truncate">View Signature</span>
                                                     </button>
                                                 )}
                                             </div>
@@ -231,14 +257,14 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
         
         {/* Sub-Modals */}
         {previewUrl && <FilePreviewModal url={previewUrl} onClose={() => setPreviewUrl(null)} />}
-        {signatureToView && <SignatureModal url={signatureToView} onClose={() => setSignatureToView(null)} />}
+        {signatureToView && <SignatureModal data={signatureToView} onClose={() => setSignatureToView(null)} />}
         </>,
         document.body
     );
 }
 
-// --- NEW SIGNATURE MODAL COMPONENT ---
-function SignatureModal({ url, onClose }: { url: string, onClose: () => void }) {
+// --- NEW PROFESSIONAL SIGNATURE MODAL COMPONENT ---
+function SignatureModal({ data, onClose }: { data: SignatureData, onClose: () => void }) {
     const [isClosing, setIsClosing] = useState(false);
 
     const handleClose = () => {
@@ -265,34 +291,56 @@ function SignatureModal({ url, onClose }: { url: string, onClose: () => void }) 
                         <PenTool size={20} className="text-indigo-400" />
                         <h3 className="font-bold text-lg tracking-tight">E-Signature</h3>
                     </div>
-                    <button onClick={handleClose} className="p-2 -mr-2 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-full transition-colors mt-2 sm:mt-0">
+                    <button 
+                        onClick={handleClose} 
+                        className="p-2 -mr-2 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-full transition-all duration-200 active:scale-90 mt-2 sm:mt-0"
+                    >
                         <X size={20} strokeWidth={2.5} />
                     </button>
                 </div>
 
-                {/* Content: Signature Image */}
-                <div className="p-6 flex flex-col items-center justify-center bg-slate-50 min-h-[250px]">
-                    <div className="w-full bg-white border-2 border-slate-200 border-dashed rounded-2xl p-4 flex items-center justify-center shadow-sm">
-                        <img 
-                            src={url} 
-                            alt="Received Signature" 
-                            className="max-w-full max-h-48 object-contain mix-blend-multiply drop-shadow-sm" 
-                            onError={(e) => {
-                                (e.target as HTMLImageElement).style.display = 'none';
-                                e.currentTarget.parentElement!.innerHTML = '<p class="text-sm text-slate-400 font-bold">Image not available</p>';
-                            }}
-                        />
+                {/* Content: Professional Signature Certificate */}
+                <div className="p-5 sm:p-6 flex flex-col bg-slate-50 min-h-[300px]">
+                    <div className="bg-white rounded-2xl border-2 border-slate-200 shadow-sm overflow-hidden flex flex-col">
+                        
+                        {/* Certificate Header / Verified Badge */}
+                        <div className="bg-emerald-50 border-b-2 border-emerald-100 p-4 flex flex-col items-center justify-center gap-1 text-center">
+                            <div className="flex items-center gap-1.5 text-emerald-700">
+                                <ShieldCheck size={20} strokeWidth={2.5} />
+                                <h4 className="text-xs font-black uppercase tracking-widest">Verified & Logged</h4>
+                            </div>
+                            <span className="text-[11px] font-bold text-emerald-600/70 uppercase">{data.date}</span>
+                        </div>
+
+                        {/* Signature Area */}
+                        <div className="p-6 flex flex-col items-center text-center">
+                            <p className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">E-Signature</p>
+                            
+                            <div className="w-full h-32 flex items-center justify-center border-b-2 border-slate-300 border-dashed pb-2 mb-5 px-4">
+                                <img 
+                                    src={data.url} 
+                                    alt="Signature" 
+                                    className="max-w-full max-h-full object-contain mix-blend-multiply drop-shadow-sm" 
+                                    onError={(e) => {
+                                        (e.target as HTMLImageElement).style.display = 'none';
+                                        e.currentTarget.parentElement!.innerHTML = '<p class="text-sm text-slate-400 font-bold">Image not available</p>';
+                                    }}
+                                />
+                            </div>
+
+                            <p className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">{data.actionLabel}</p>
+                            <p className="text-lg sm:text-xl font-black text-slate-900 leading-tight">{data.name}</p>
+                        </div>
                     </div>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-4">Verified & Logged</p>
                 </div>
                 
                 {/* Footer Action */}
                 <div className="p-4 bg-white border-t border-slate-100">
                     <button 
                         onClick={handleClose}
-                        className="w-full py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-all active:scale-95 border border-slate-200"
+                        className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white font-bold rounded-xl transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 active:scale-[0.96] active:shadow-inner border-2 border-slate-900 select-none"
                     >
-                        Close
+                        Close Certificate
                     </button>
                 </div>
             </div>

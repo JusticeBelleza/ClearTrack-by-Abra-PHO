@@ -133,11 +133,11 @@ export default function SystemAdmin() {
     }
   }, [adminData?.settings]);
 
-  // Safe fallback arrays
-  const departments = adminData?.departments || [];
-  const categories = adminData?.categories || [];
-  const employees = adminData?.employees || [];
-  const auditLogs = adminData?.auditLogs || [];
+  // Safe fallback arrays (Memoized to fix exhaustive-deps warnings)
+  const departments = useMemo(() => adminData?.departments || [], [adminData?.departments]);
+  const categories = useMemo(() => adminData?.categories || [], [adminData?.categories]);
+  const employees = useMemo(() => adminData?.employees || [], [adminData?.employees]);
+  const auditLogs = useMemo(() => adminData?.auditLogs || [], [adminData?.auditLogs]);
 
   // --- Group Employees by Department (Minimalist Folder Prep) ---
   const employeesByDepartment = useMemo(() => {
