@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, FileText, AlertCircle, MapPin, Send, ChevronDown, Hash, Camera, Paperclip, CheckCircle, User } from 'lucide-react';
+import { X, FileText, AlertCircle, MapPin, Send, ChevronDown, Hash, Camera, Paperclip, CheckCircle, User, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUiStore } from '../../store/uiStore';
 import { supabase } from '../../lib/supabase';
@@ -51,11 +51,13 @@ interface Employee {
     department: string;
 }
 
-// --- Custom Dropdown Component (Clean Flat Version) ---
+// --- Custom Dropdown Component (Searchable Combobox Version) ---
 function CustomSelect({ options, value, onChange, placeholder, disabled = false, emptyText = "Loading options..." }: CustomSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState("");
     const dropdownRef = useRef<HTMLDivElement>(null);
     const menuRef = useRef<HTMLDivElement>(null); 
+    const searchInputRef = useRef<HTMLInputElement>(null);
   
     useEffect(() => {
       function handleClickOutside(event: MouseEvent) {
@@ -68,13 +70,27 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false,
     }, []);
 
     useEffect(() => {
-      if (isOpen && menuRef.current) {
+      if (isOpen) {
         setTimeout(() => {
+          searchInputRef.current?.focus();
           menuRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }, 50);
+      } else {
+        setSearchTerm(""); // Reset search when closed
       }
     }, [isOpen]);
+
+    // Filter options based on search term
+    const filteredOptions = options.filter(opt => {
+        const optLabel = typeof opt === 'string' ? opt : opt.label;
+        return optLabel.toLowerCase().includes(searchTerm.toLowerCase());
+    });
   
+    const selectedOptionLabel = options.find(opt => (typeof opt === 'string' ? opt : opt.value) === value);
+    const displayLabel = selectedOptionLabel 
+        ? (typeof selectedOptionLabel === 'string' ? selectedOptionLabel : selectedOptionLabel.label)
+        : placeholder;
+
     return (
       <div className="relative w-full" ref={dropdownRef}>
         <button
@@ -88,13 +104,7 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false,
               : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-slate-300 active:scale-[0.99]'
           } ${!value && !disabled ? 'text-slate-500' : 'text-slate-900 font-bold'}`}
         >
-          <span className="truncate">
-            {options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value)
-              ? (typeof options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value) === 'string' 
-                  ? options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value) as string
-                  : (options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value) as SelectOption).label)
-              : value || placeholder}
-          </span>
+          <span className="truncate">{displayLabel}</span>
           {!disabled && (
               <ChevronDown 
                 size={18} 
@@ -105,11 +115,32 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false,
   
         {isOpen && !disabled && (
           <div ref={menuRef} className="absolute z-20 w-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+            
+            {/* Search Input Area (Only shows if there are more than 5 options) */}
+            {options.length > 5 && (
+                <div className="p-2 border-b border-slate-100 bg-slate-50/50">
+                    <div className="relative">
+                        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                            ref={searchInputRef}
+                            type="text"
+                            placeholder="Type to search..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all font-medium text-slate-800 placeholder:text-slate-400"
+                        />
+                    </div>
+                </div>
+            )}
+
             <div className="max-h-48 sm:max-h-60 overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
-              {options.length === 0 ? (
-                  <div className="px-4 py-3 text-sm text-slate-500 text-center font-medium">{emptyText}</div>
+              {filteredOptions.length === 0 ? (
+                  <div className="px-4 py-6 text-sm text-slate-500 text-center font-medium">
+                      {searchTerm ? `No results for "${searchTerm}"` : emptyText}
+                  </div>
               ) : (
-                  options.map((option: OptionType, idx: number) => {
+                  filteredOptions.map((option: OptionType, idx: number) => {
                     const optValue = typeof option === 'string' ? option : option.value;
                     const optLabel = typeof option === 'string' ? option : option.label;
                     const isSelected = optValue === value;
@@ -197,6 +228,7 @@ export default function CreateDocumentModal() {
         fetchDropdownOptions();
     }, []);
 
+    // Filter available clerks strictly to the current user's department
     const availableClerks = allEmployees
         .filter(emp => currentUserDept ? emp.department === currentUserDept : true)
         .map(emp => ({ label: emp.name, value: emp.name }));

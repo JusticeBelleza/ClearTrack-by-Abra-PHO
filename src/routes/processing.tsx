@@ -89,6 +89,9 @@ interface CustomSelectProps {
     value: string;
     onChange: (val: string) => void;
     placeholder?: string;
+    disabled?: boolean;
+    emptyText?: string;
+    isRelative?: boolean; // NEW PROP: Forces dropdown to expand parent container
 }
 
 // --- DATA FETCHING FUNCTION FOR REACT QUERY ---
@@ -305,7 +308,7 @@ export default function Processing() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search by Title, ID, Location, or Assigned Name..." 
-                className="w-full pl-11 sm:pl-14 pr-11 sm:pr-14 py-3 sm:py-4 rounded-xl border-2 border-slate-300 focus:bg-white focus:border-blue-600 focus:ring-4 focus:ring-blue-600/10 outline-none font-bold text-slate-900 placeholder:text-slate-400 transition-all text-base sm:text-lg shadow-sm bg-slate-50" 
+                className="w-full pl-11 sm:pl-14 pr-11 sm:pr-14 py-3 sm:py-4 rounded-xl border-2 border-slate-300 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none font-bold text-slate-900 placeholder:text-slate-400 transition-all text-base sm:text-lg shadow-sm bg-slate-50" 
               />
               {searchQuery && (
                   <button 
@@ -536,10 +539,10 @@ export default function Processing() {
       {/* RE-ASSIGN MODAL */}
       {reassignDoc && (
           <div className={`fixed inset-0 z-[999] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosingReassign ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
-              <div className={`bg-white w-full max-w-md flex flex-col shadow-2xl rounded-t-[1.5rem] sm:rounded-3xl overflow-hidden ${isClosingReassign ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
+              <div className={`bg-white w-full max-w-md flex flex-col shadow-2xl rounded-t-[1.5rem] sm:rounded-3xl ${isClosingReassign ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
                   
-                  <div className="bg-slate-900 p-5 sm:p-6 flex justify-between items-center text-white relative shrink-0">
-                      <div className="w-12 h-1.5 bg-white/30 rounded-full absolute top-2 left-1/2 -translate-x-1/2 sm:hidden"></div>
+                  <div className="bg-slate-900 p-5 sm:p-6 flex justify-between items-center text-white relative shrink-0 rounded-t-[1.5rem] sm:rounded-t-3xl z-20">
+                      <div className="w-12 h-1.5 bg-white/30 rounded-full mx-auto absolute top-2 left-1/2 -translate-x-1/2 sm:hidden"></div>
                       <h3 className="font-black text-xl flex items-center gap-2 mt-2 sm:mt-0">
                           <UserPlus size={22} className="text-blue-400" /> Re-assign
                       </h3>
@@ -548,7 +551,7 @@ export default function Processing() {
                       </button>
                   </div>
                   
-                  <div className="p-5 sm:p-6 space-y-5 bg-slate-50 flex-1">
+                  <div className="p-5 sm:p-6 space-y-5 bg-slate-50 flex-1 relative z-10 overflow-y-auto custom-scrollbar">
                       <div className="bg-white border-2 border-slate-200 p-4 rounded-xl shadow-sm">
                           <p className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Document ID</p>
                           <p className="font-mono text-base sm:text-lg font-black text-slate-900">{reassignDoc.reference_no || reassignDoc.id}</p>
@@ -556,16 +559,20 @@ export default function Processing() {
                       
                       <div className="relative z-20">
                           <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase tracking-wider">Select Colleague</label>
+                          
+                          {/* Searchable CustomSelect with isRelative={true} to expand modal height */}
                           <CustomSelect 
                               options={availableColleagues}
                               value={selectedColleague}
                               onChange={(val: string) => setSelectedColleague(val)}
                               placeholder={availableColleagues.length === 0 ? "No other colleagues available" : "Choose an employee..."}
+                              emptyText="No employee found"
+                              isRelative={true}
                           />
                       </div>
                   </div>
 
-                  <div className="p-4 sm:p-5 bg-white border-t border-slate-200 flex gap-3 shrink-0">
+                  <div className="p-4 sm:p-5 bg-white border-t border-slate-200 flex gap-3 shrink-0 relative z-0 sm:rounded-b-3xl">
                       <button 
                           onClick={closeReassignModal} 
                           className="flex-1 py-3.5 bg-white border-2 border-slate-300 hover:bg-slate-50 rounded-xl font-bold text-slate-700 transition-all active:scale-95 text-sm sm:text-base"
@@ -601,7 +608,7 @@ function TabButton({ label, icon, count, isActive, onClick, colorClass, badgeCla
         <button 
             onClick={onClick}
             title={label}
-            className={`relative flex-none shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all active:scale-95 text-sm whitespace-nowrap border-2 ${
+            className={`relative flex-none shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all active:scale-95 text-sm whitespace-nowrap overflow-hidden border-2 ${
                 isActive ? `${colorClass} border-transparent shadow-sm` : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50 hover:text-slate-700'
             }`}
         >
@@ -633,9 +640,13 @@ function TabButton({ label, icon, count, isActive, onClick, colorClass, badgeCla
     )
 }
 
-function CustomSelect({ options, value, onChange, placeholder }: CustomSelectProps) {
+// --- UPGRADED SEARCHABLE CUSTOM SELECT ---
+function CustomSelect({ options, value, onChange, placeholder, disabled = false, emptyText = "Loading options...", isRelative = false }: CustomSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState("");
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const menuRef = useRef<HTMLDivElement>(null); 
+    const searchInputRef = useRef<HTMLInputElement>(null);
  
     useEffect(() => {
       function handleClickOutside(event: MouseEvent) {
@@ -644,6 +655,26 @@ function CustomSelect({ options, value, onChange, placeholder }: CustomSelectPro
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
+
+    useEffect(() => {
+      if (isOpen) {
+        setTimeout(() => {
+          searchInputRef.current?.focus();
+          menuRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 50);
+      } else {
+        setSearchTerm("");
+      }
+    }, [isOpen]);
+
+    const filteredOptions = options.filter(opt => {
+        const optLabel = typeof opt === 'string' ? opt : opt.label;
+        return optLabel.toLowerCase().includes(searchTerm.toLowerCase());
+    });
+
+    const MAX_ITEMS_TO_SHOW = 10;
+    const visibleOptions = filteredOptions.slice(0, MAX_ITEMS_TO_SHOW);
+    const hiddenCount = filteredOptions.length - visibleOptions.length;
 
     const selectedOptionLabel = options.find(opt => (typeof opt === 'string' ? opt : opt.value) === value);
     const displayLabel = selectedOptionLabel 
@@ -654,7 +685,8 @@ function CustomSelect({ options, value, onChange, placeholder }: CustomSelectPro
       <div className="relative w-full" ref={dropdownRef}>
         <button 
             type="button" 
-            onClick={() => setIsOpen(!isOpen)} 
+            disabled={disabled}
+            onClick={() => !disabled && setIsOpen(!isOpen)} 
             className={`w-full px-4 py-3 bg-white border-2 rounded-xl flex justify-between items-center transition-all text-sm sm:text-base outline-none active:scale-[0.99] ${isOpen ? 'border-blue-500 ring-4 ring-blue-500/10' : 'border-slate-300 hover:bg-slate-50 hover:border-slate-400'} ${!value ? 'text-slate-500 font-medium' : 'text-slate-900 font-bold'}`}
         >
           <span className="truncate">
@@ -663,22 +695,41 @@ function CustomSelect({ options, value, onChange, placeholder }: CustomSelectPro
           <ChevronDown size={20} className={`text-slate-400 transition-transform duration-300 ease-in-out sm:w-5 sm:h-5 ${isOpen ? 'rotate-180 text-slate-800' : ''}`} />
         </button>
 
-        {isOpen && (
-          <div className="absolute z-30 w-full mt-1.5 bg-white border-2 border-slate-300 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-            <div className="max-h-60 overflow-y-auto p-1.5 space-y-1 scrollbar-hide">
-              {options.length === 0 ? (
-                  <div className="px-4 py-3 text-sm text-slate-500 font-medium text-center">
-                      No options available
+        {isOpen && !disabled && (
+          <div ref={menuRef} className={`${isRelative ? 'relative mt-2 mb-4' : 'absolute mt-1.5'} z-50 w-full bg-white border-2 border-slate-300 rounded-xl shadow-xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200`}>
+            
+            {/* SEARCH INPUT ALWAYS SHOWS NOW */}
+            <div className="p-2 border-b-2 border-slate-100 bg-slate-50 shrink-0">
+                <div className="relative">
+                    <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                        ref={searchInputRef}
+                        type="text"
+                        placeholder="Type to search..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full pl-8 pr-3 py-2 bg-white border-2 border-slate-200 rounded-lg text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all font-medium text-slate-800 placeholder:text-slate-400"
+                    />
+                </div>
+            </div>
+
+            <div className="max-h-[240px] overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
+              {filteredOptions.length === 0 ? (
+                  <div className="px-4 py-6 text-sm text-slate-500 text-center font-medium">
+                      {searchTerm ? `No results for "${searchTerm}"` : emptyText}
                   </div>
               ) : (
-                  options.map((option: OptionType, idx: number) => {
+                  visibleOptions.map((option: OptionType, idx: number) => {
                     const optValue = typeof option === 'string' ? option : option.value;
                     const optLabel = typeof option === 'string' ? option : option.label;
+                    const isSelected = optValue === value;
+
                     return (
                       <div 
                         key={idx} 
                         onClick={() => { onChange(optValue); setIsOpen(false); }} 
-                        className={`px-4 py-3 text-sm sm:text-base rounded-lg cursor-pointer transition-colors flex items-center active:scale-95 ${optValue === value ? 'bg-blue-600 text-white font-bold' : 'text-slate-700 hover:bg-slate-100 font-medium'}`}
+                        className={`px-4 py-3 text-sm sm:text-base rounded-lg cursor-pointer transition-colors flex items-center active:scale-95 ${isSelected ? 'bg-blue-600 text-white font-bold' : 'text-slate-700 hover:bg-slate-100 font-medium'}`}
                       >
                         {optLabel}
                       </div>
@@ -686,6 +737,16 @@ function CustomSelect({ options, value, onChange, placeholder }: CustomSelectPro
                   })
               )}
             </div>
+
+            {/* --- Information Footer for Hidden Items --- */}
+            {hiddenCount > 0 && (
+                <div className="p-2.5 bg-slate-50 border-t-2 border-slate-100 shrink-0 text-center">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                        +{hiddenCount} more {hiddenCount === 1 ? 'employee' : 'employees'}. Keep typing to search.
+                    </p>
+                </div>
+            )}
+
           </div>
         )}
       </div>
@@ -859,7 +920,13 @@ function ReviseModal({ doc, departments, onClose, onSuccess }: ReviseModalProps)
 
                     <div className="relative z-20">
                         <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Next Destination Office *</label>
-                        <CustomSelect options={departments} value={destination} onChange={setDestination} placeholder="Select destination office..." />
+                        <CustomSelect 
+                            options={departments} 
+                            value={destination} 
+                            onChange={setDestination} 
+                            placeholder="Select destination office..." 
+                            isRelative={true} // Extends modal when opened
+                        />
                     </div>
 
                 </div>

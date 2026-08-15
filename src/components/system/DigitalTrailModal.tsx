@@ -116,7 +116,11 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
                     <div className="p-4 flex items-center justify-between">
                         <div className="w-10"></div>
                         <h3 className="font-bold text-lg tracking-tight">Track Document</h3>
-                        <button onClick={handleClose} onTouchEnd={handleClose} className="p-2 -mr-2 bg-white/10 md:hover:bg-white/20 active:bg-white/30 rounded-full transition-colors">
+                        <button 
+                            onClick={handleClose} 
+                            onTouchEnd={handleClose} 
+                            className="p-2 -mr-2 bg-white/10 md:hover:bg-white/20 active:bg-white/30 rounded-full transition-all duration-200 active:scale-90"
+                        >
                             <X size={24} strokeWidth={2.5} />
                         </button>
                     </div>
@@ -198,11 +202,24 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
                             if (log.action === 'Cancelled') desc = `Location: ${log.location}\n${log.remarks}`;
                             if (log.action === 'Resubmitted') desc = `Location: ${log.location}\n${log.remarks}`;
 
-                            // Determine Action Label for Signature
+                            // --- Determine Action Label and Name for Signature ---
                             let sigActionLabel = "Signed By";
-                            if (log.action === 'In transit') sigActionLabel = "Received By";
-                            else if (log.action === 'Delivered') sigActionLabel = "Secured By";
-                            else if (log.action === 'Returned') sigActionLabel = "Returned By";
+                            let sigName = log.assigned_to || creatorName || 'Authorized Personnel';
+
+                            if (log.action === 'In transit') {
+                                sigActionLabel = "Received By";
+                            } else if (log.action === 'Delivered') {
+                                sigActionLabel = "Released By";
+                                // Extract the person who actively released it from the remarks
+                                if (log.remarks) {
+                                    const releasedMatch = log.remarks.match(/Released By:\s*([^\n]+)/i);
+                                    if (releasedMatch && releasedMatch[1]) {
+                                        sigName = releasedMatch[1].trim();
+                                    }
+                                }
+                            } else if (log.action === 'Returned') {
+                                sigActionLabel = "Returned By";
+                            }
 
                             return (
                                 <div key={index} className="flex gap-4 relative w-full animate-in fade-in duration-300" style={{ animationFillMode: 'both', animationDelay: `${index * 50}ms` }}>
@@ -234,7 +251,7 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
                                                     <button 
                                                         onClick={() => setSignatureToView({
                                                             url: log.signature_url!,
-                                                            name: log.assigned_to || creatorName || 'Authorized Personnel',
+                                                            name: sigName,
                                                             date: `${dateStr}, ${timeStr}`,
                                                             actionLabel: sigActionLabel
                                                         })} 
@@ -293,7 +310,7 @@ function SignatureModal({ data, onClose }: { data: SignatureData, onClose: () =>
                     </div>
                     <button 
                         onClick={handleClose} 
-                        className="p-2 -mr-2 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-full transition-all duration-200 active:scale-90 mt-2 sm:mt-0"
+                        className="p-2 -mr-2 bg-slate-800 hover:bg-slate-700 active:bg-slate-950 rounded-full transition-all duration-200 active:scale-90 mt-2 sm:mt-0 shadow-sm"
                     >
                         <X size={20} strokeWidth={2.5} />
                     </button>
