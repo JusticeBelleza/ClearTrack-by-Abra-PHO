@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
     MapPin, PenTool, X, CheckCircle, ChevronDown, Camera, 
-    Paperclip, AlertCircle, ArrowLeft, ChevronRight, Search, UploadCloud, Ban
+    Paperclip, AlertCircle, ArrowLeft, ChevronRight, Search, Ban
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabase';
