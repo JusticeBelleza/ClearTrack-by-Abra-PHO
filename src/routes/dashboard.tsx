@@ -57,6 +57,15 @@ interface DocumentItem {
     updated_at?: string;
 }
 
+interface DashboardCache {
+    documents: {
+        assigned: DocumentItem[];
+        processing: DocumentItem[];
+        rejected: DocumentItem[];
+        myDocuments: DocumentItem[];
+    }
+}
+
 interface StatCardProps {
     title: string;
     value: number | string;
@@ -258,13 +267,13 @@ export default function Dashboard() {
                   const isForMe = newDoc.current_location === userDepartment || newDoc.assigned_clerk === currentUserName;
                   
                   if (isForMe) {
-                      // Access the current cache to see if we ALREADY had this document in our active lists
-                      const currentData = queryClient.getQueryData<any>(['dashboardData']);
+                      // FIX: Strongly typed the cache check to remove 'any' warnings
+                      const currentData = queryClient.getQueryData<DashboardCache>(['dashboardData']);
                       if (currentData) {
                           const wasAlreadyHere = 
-                              currentData.documents.assigned.some((d: any) => d.id === newDoc.id) ||
-                              currentData.documents.processing.some((d: any) => d.id === newDoc.id) ||
-                              currentData.documents.rejected.some((d: any) => d.id === newDoc.id);
+                              currentData.documents.assigned.some((d: DocumentItem) => d.id === newDoc.id) ||
+                              currentData.documents.processing.some((d: DocumentItem) => d.id === newDoc.id) ||
+                              currentData.documents.rejected.some((d: DocumentItem) => d.id === newDoc.id);
 
                           // If it wasn't in our dashboard before, it's a brand new arrival!
                           if (!wasAlreadyHere) {

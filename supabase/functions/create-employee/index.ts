@@ -7,13 +7,11 @@ const corsHeaders = {
 }
 
 serve(async (req) => {
-  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    // Initialize the Admin client securely using the Service Role Key
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -21,7 +19,7 @@ serve(async (req) => {
 
     const { email, password, name, emp_id, department, designation, contactNumber } = await req.json()
 
-    // 1. Check if Employee ID already exists in your employees table
+    // 1. Check if Employee ID already exists
     const { data: existingEmp, error: empCheckError } = await supabaseAdmin
       .from('employees')
       .select('id')
@@ -47,7 +45,6 @@ serve(async (req) => {
 
     if (authError) {
       let errorMessage = authError.message;
-      // Catch Supabase's default duplicate email error and make it user-friendly
       if (errorMessage.toLowerCase().includes('already registered') || errorMessage.toLowerCase().includes('already exists')) {
         errorMessage = "Email has already been registered.";
       }
@@ -71,20 +68,19 @@ serve(async (req) => {
       }])
 
     if (dbError) {
-      // Rollback auth user creation if directory insert fails so we don't have ghost accounts
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
       throw dbError
     }
 
-    // Success!
     return new Response(
       JSON.stringify({ success: true, user: authData.user }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
     return new Response(
-      JSON.stringify({ error: error.message || 'An unknown error occurred' }),
+      JSON.stringify({ error: errorMessage }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }

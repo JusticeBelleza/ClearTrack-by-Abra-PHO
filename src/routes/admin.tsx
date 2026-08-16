@@ -59,6 +59,15 @@ interface StatCardProps {
     color?: string;
 }
 
+interface EmployeeData {
+    id: string;
+    name: string;
+    email: string;
+    emp_id?: string;
+    department?: string;
+    designation?: string;
+}
+
 export default function SystemAdmin() {
   const queryClient = useQueryClient();
   const [mainTab, setMainTab] = useState<'dashboard' | 'directory' | 'audit' | 'settings'>('dashboard');
@@ -197,14 +206,20 @@ export default function SystemAdmin() {
 
   // --- Action Handlers ---
   const openOfficeModal = () => {
-      const generatedId = 'OFC-' + Math.floor(1000 + Math.random() * 9000);
-      setNewOffice({ office_id: generatedId, office_name: '', office_address: '' });
+      const randomArray = new Uint32Array(1);
+      window.crypto.getRandomValues(randomArray);
+      const randomNum = 1000 + (randomArray[0] % 9000);
+      
+      setNewOffice({ office_id: `OFC-${randomNum}`, office_name: '', office_address: '' });
       setIsDeptModalOpen(true);
   };
 
   const openCatModal = () => {
-      const generatedId = 'CAT-' + Math.floor(1000 + Math.random() * 9000);
-      setNewCat({ category_id: generatedId, name: '' });
+      const randomArray = new Uint32Array(1);
+      window.crypto.getRandomValues(randomArray);
+      const randomNum = 1000 + (randomArray[0] % 9000);
+      
+      setNewCat({ category_id: `CAT-${randomNum}`, name: '' });
       setIsCatModalOpen(true);
   };
 
@@ -220,7 +235,11 @@ export default function SystemAdmin() {
   }
 
   const handleGeneratePassword = () => {
-      const pass = 'User@' + Math.floor(1000 + Math.random() * 9000);
+      // FIX: Used crypto API instead of Math.random to satisfy strict linters
+      const array = new Uint32Array(1);
+      window.crypto.getRandomValues(array);
+      const pass = 'User@' + (1000 + (array[0] % 9000));
+      
       setNewEmp({...newEmp, password: pass, confirmPassword: pass});
       setShowPassword(true);
       setShowConfirmPassword(true);
@@ -318,16 +337,16 @@ export default function SystemAdmin() {
         let displayMessage = error?.message || data?.error || 'Registration Failed';
         
         try {
-            const errContext = (error as any)?.context;
-            if (errContext && typeof errContext.json === 'function') {
-                const bodyJson = await errContext.json();
+            // FIX: Typed the error object to remove 'any' warning
+            const errObj = error as { context?: { json?: () => Promise<{ error?: string }> } };
+            if (errObj?.context?.json) {
+                const bodyJson = await errObj.context.json();
                 if (bodyJson?.error) displayMessage = bodyJson.error;
             }
         } catch {
             // Fallback to initial message
         }
 
-        // POP MODAL NOTIFICATION FOR DUPLICATES
         if (displayMessage.includes('Email has already been registered')) {
             setDuplicateError({
                 title: 'Duplicate Email',
@@ -367,8 +386,12 @@ export default function SystemAdmin() {
   };
 
   // Reset Password Handlers
-  const openResetPasswordModal = (emp: any) => {
-      const generatedPass = '@User' + Math.floor(1000 + Math.random() * 9000);
+  const openResetPasswordModal = (emp: EmployeeData) => {
+      // FIX: Used crypto API instead of Math.random
+      const array = new Uint32Array(1);
+      window.crypto.getRandomValues(array);
+      const generatedPass = '@User' + (1000 + (array[0] % 9000));
+      
       setResetTargetEmployee({ 
           id: emp.id, 
           name: emp.name, 
@@ -403,8 +426,9 @@ export default function SystemAdmin() {
         toast.success("Password Reset Successful", { description: `The new password for ${resetTargetEmployee.name} is now active.` });
         logAuditAction(`Force reset password for user: ${resetTargetEmployee.email}`);
         closeResetModal();
-    } catch (err: any) {
-        toast.error("Failed to reset password", { description: err.message });
+    } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : 'An unknown error occurred';
+        toast.error("Failed to reset password", { description: errorMessage });
     } finally {
         setIsResetting(false);
     }
@@ -621,7 +645,7 @@ export default function SystemAdmin() {
                                                             {/* RIGHT BORDERED BUTTONS */}
                                                             <div className="flex items-center gap-2">
                                                                 <button 
-                                                                    onClick={() => openResetPasswordModal(emp)}
+                                                                    onClick={() => openResetPasswordModal(emp as EmployeeData)}
                                                                     className="p-2 sm:p-2.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 bg-white rounded-xl transition-all shrink-0 border-2 border-slate-200 hover:border-amber-200 active:scale-95 shadow-sm mt-1 sm:mt-0"
                                                                     title="Reset Password"
                                                                 >
@@ -912,7 +936,7 @@ export default function SystemAdmin() {
 
       {/* DELETE CONFIRMATION MODAL - EMPLOYEES */}
       {deleteEmpConfirm && (
-        <div className={`fixed inset-0 z-[999] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosingEmpDelete ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
+        <div className={`fixed inset-0 z-[999] flex items-end sm:items-center justify-center p-4 sm:p-0 bg-slate-900/60 backdrop-blur-sm ${isClosingEmpDelete ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
           <div className={`bg-white w-full max-w-md rounded-t-[1.5rem] sm:rounded-[2rem] shadow-2xl overflow-hidden ${isClosingEmpDelete ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
             <div className="bg-red-600 text-white p-5 sm:px-6 flex items-center justify-between">
               <h3 className="font-black text-xl flex items-center gap-2"><AlertCircle size={22} strokeWidth={2.5} /> Confirm Deletion</h3>
@@ -933,9 +957,9 @@ export default function SystemAdmin() {
 
       {/* RESET PASSWORD CONFIRMATION MODAL */}
       {resetTargetEmployee && (
-          <div className={`fixed inset-0 z-[999] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosingResetModal ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
-              <div className={`bg-white w-full max-w-md rounded-t-[1.5rem] sm:rounded-[2rem] shadow-2xl overflow-hidden ${isClosingResetModal ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
-                  <div className="bg-amber-600 text-white p-5 sm:px-6 flex items-center justify-between">
+          <div className={`fixed inset-0 z-[999] flex items-end sm:items-center justify-center p-4 sm:p-0 bg-slate-900/60 backdrop-blur-sm ${isClosingResetModal ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
+              <div className={`bg-white w-full max-w-sm rounded-t-[1.5rem] sm:rounded-[2rem] shadow-2xl overflow-hidden ${isClosingResetModal ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
+                  <div className="bg-red-600 text-white p-5 sm:px-6 flex items-center justify-between">
                       <h3 className="font-black text-xl flex items-center gap-2"><KeyRound size={22} strokeWidth={2.5} /> Force Reset</h3>
                       <button onClick={closeResetModal} className="p-2 bg-black/10 hover:bg-black/20 rounded-full transition-colors active:scale-95 -mr-1"><X size={20} /></button>
                   </div>
@@ -970,9 +994,9 @@ export default function SystemAdmin() {
                           <button 
                               onClick={handleResetPasswordConfirm}
                               disabled={isResetting}
-                              className="flex-1 py-3.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl active:scale-95 transition-all text-sm sm:text-base shadow-sm border border-amber-600 disabled:opacity-50 flex justify-center items-center gap-2"
+                              className="flex-1 py-3.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl active:scale-95 transition-all text-sm sm:text-base shadow-sm border border-red-600 disabled:opacity-50 flex justify-center items-center gap-2"
                           >
-                              {isResetting ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : 'Confirm'}
+                              {isResetting ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : 'Confirm & Change'}
                           </button>
                       </div>
                   </div>
@@ -982,7 +1006,7 @@ export default function SystemAdmin() {
 
       {/* DUPLICATE ERROR NOTIFICATION MODAL */}
       {duplicateError && (
-          <div className={`fixed inset-0 z-[9999] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosingDuplicateError ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
+          <div className={`fixed inset-0 z-[9999] flex items-end sm:items-center justify-center p-4 sm:p-0 bg-slate-900/60 backdrop-blur-sm ${isClosingDuplicateError ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
             <div className={`bg-white w-full max-w-md rounded-t-[1.5rem] sm:rounded-[2rem] shadow-2xl overflow-hidden ${isClosingDuplicateError ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
               <div className="bg-red-600 text-white p-5 sm:px-6 flex items-center justify-between">
                 <h3 className="font-black text-xl flex items-center gap-2">

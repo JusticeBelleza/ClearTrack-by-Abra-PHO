@@ -7,7 +7,6 @@ const corsHeaders = {
 }
 
 Deno.serve(async (req) => {
-  // Always handle CORS preflight request first
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
@@ -39,9 +38,10 @@ Deno.serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'An internal error occurred.';
     return new Response(
-      JSON.stringify({ error: error.message || "An internal error occurred." }),
+      JSON.stringify({ error: errorMessage }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
