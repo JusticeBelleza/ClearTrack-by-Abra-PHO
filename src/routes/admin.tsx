@@ -3,7 +3,7 @@ import {
   Building2, FolderTree, Users, Shield, Plus, 
   Trash2, X, Activity, AlertTriangle, 
   ClipboardList, Settings, Clock, Search,
-  Save, ChevronDown, Phone, Zap, MapPin, Hash, AlertCircle, Mail
+  Save, ChevronDown, Phone, Zap, MapPin, Hash, AlertCircle, Mail, KeyRound, Eye, EyeOff, Copy, Check
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -72,6 +72,10 @@ export default function SystemAdmin() {
     emp_id: '', name: '', email: '', designation: '', 
     department: '', contactNumber: '', password: '', confirmPassword: '' 
   });
+  
+  // Password Visibility Toggles
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // --- Accordion & Pagination State for Employee Directory ---
   const [expandedDepts, setExpandedDepts] = useState<Record<string, boolean>>({});
@@ -85,6 +89,7 @@ export default function SystemAdmin() {
   const [isEmpModalOpen, setIsEmpModalOpen] = useState(false);
   const [isClosingEmp, setIsClosingEmp] = useState(false);
 
+  // Deletion States
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
   const [isClosingDelete, setIsClosingDelete] = useState(false);
   const [deleteCatConfirm, setDeleteCatConfirm] = useState<{ id: string; name: string } | null>(null);
@@ -92,12 +97,40 @@ export default function SystemAdmin() {
   const [deleteEmpConfirm, setDeleteEmpConfirm] = useState<{ id: string; name: string; emp_id: string } | null>(null);
   const [isClosingEmpDelete, setIsClosingEmpDelete] = useState(false);
 
+  // Reset Password States
+  const [resetTargetEmployee, setResetTargetEmployee] = useState<{ id: string; name: string; email: string; generatedPassword?: string } | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
+  const [isClosingResetModal, setIsClosingResetModal] = useState(false);
+  const [hasCopied, setHasCopied] = useState(false);
+
+  // Duplicate Notification Modal State
+  const [duplicateError, setDuplicateError] = useState<{ title: string; message: string } | null>(null);
+  const [isClosingDuplicateError, setIsClosingDuplicateError] = useState(false);
+
   const closeDeptModal = () => { setIsClosingDept(true); setTimeout(() => { setIsDeptModalOpen(false); setIsClosingDept(false); }, 400); };
   const closeCatModal = () => { setIsClosingCat(true); setTimeout(() => { setIsCatModalOpen(false); setIsClosingCat(false); }, 400); };
   const closeEmpModal = () => { setIsClosingEmp(true); setTimeout(() => { setIsEmpModalOpen(false); setIsClosingEmp(false); }, 400); };
+  
   const closeDeleteModal = () => { setIsClosingDelete(true); setTimeout(() => { setDeleteConfirm(null); setIsClosingDelete(false); }, 400); };
   const closeCatDeleteModal = () => { setIsClosingCatDelete(true); setTimeout(() => { setDeleteCatConfirm(null); setIsClosingCatDelete(false); }, 400); };
   const closeEmpDeleteModal = () => { setIsClosingEmpDelete(true); setTimeout(() => { setDeleteEmpConfirm(null); setIsClosingEmpDelete(false); }, 400); };
+  
+  const closeResetModal = () => { 
+      setIsClosingResetModal(true); 
+      setTimeout(() => { 
+          setResetTargetEmployee(null); 
+          setIsClosingResetModal(false); 
+          setHasCopied(false);
+      }, 400); 
+  };
+
+  const closeDuplicateError = () => {
+      setIsClosingDuplicateError(true);
+      setTimeout(() => {
+          setDuplicateError(null);
+          setIsClosingDuplicateError(false);
+      }, 400);
+  };
 
   // =========================================
   // 🚀 REACT QUERY: FETCH ALL ADMIN DATA
@@ -133,7 +166,7 @@ export default function SystemAdmin() {
     }
   }, [adminData?.settings]);
 
-  // Safe fallback arrays (Memoized to fix exhaustive-deps warnings)
+  // Safe fallback arrays
   const departments = useMemo(() => adminData?.departments || [], [adminData?.departments]);
   const categories = useMemo(() => adminData?.categories || [], [adminData?.categories]);
   const employees = useMemo(() => adminData?.employees || [], [adminData?.employees]);
@@ -181,12 +214,16 @@ export default function SystemAdmin() {
           department: departments[0]?.name || '', contactNumber: '', 
           password: '', confirmPassword: '' 
       });
+      setShowPassword(false);
+      setShowConfirmPassword(false);
       setIsEmpModalOpen(true);
   }
 
   const handleGeneratePassword = () => {
       const pass = 'User@' + Math.floor(1000 + Math.random() * 9000);
       setNewEmp({...newEmp, password: pass, confirmPassword: pass});
+      setShowPassword(true);
+      setShowConfirmPassword(true);
   };
 
   const logAuditAction = async (action: string) => {
@@ -278,7 +315,33 @@ export default function SystemAdmin() {
     });
 
     if (error || data?.error) {
-        toast.error('Registration Failed', { description: error?.message || data?.error }); return;
+        let displayMessage = error?.message || data?.error || 'Registration Failed';
+        
+        try {
+            const errContext = (error as any)?.context;
+            if (errContext && typeof errContext.json === 'function') {
+                const bodyJson = await errContext.json();
+                if (bodyJson?.error) displayMessage = bodyJson.error;
+            }
+        } catch {
+            // Fallback to initial message
+        }
+
+        // POP MODAL NOTIFICATION FOR DUPLICATES
+        if (displayMessage.includes('Email has already been registered')) {
+            setDuplicateError({
+                title: 'Duplicate Email',
+                message: 'An account with this email address already exists in the system. Please use a different email.'
+            });
+        } else if (displayMessage.includes('Employee ID has already been registered')) {
+            setDuplicateError({
+                title: 'Duplicate ID',
+                message: 'This Employee ID is already actively assigned to someone else. Please verify the ID.'
+            });
+        } else {
+            toast.error('Registration Failed', { description: displayMessage });
+        }
+        return;
     }
 
     setExpandedDepts(prev => ({ ...prev, [newEmp.department]: true }));
@@ -301,6 +364,50 @@ export default function SystemAdmin() {
           logAuditAction(`Deleted employee: ${emp_id} (${name})`);
       }
       closeEmpDeleteModal();
+  };
+
+  // Reset Password Handlers
+  const openResetPasswordModal = (emp: any) => {
+      const generatedPass = '@User' + Math.floor(1000 + Math.random() * 9000);
+      setResetTargetEmployee({ 
+          id: emp.id, 
+          name: emp.name, 
+          email: emp.email,
+          generatedPassword: generatedPass
+      });
+  };
+
+  const copyToClipboard = () => {
+      if (resetTargetEmployee?.generatedPassword) {
+          navigator.clipboard.writeText(resetTargetEmployee.generatedPassword);
+          setHasCopied(true);
+          setTimeout(() => setHasCopied(false), 2000);
+          toast.success("Password copied to clipboard!");
+      }
+  };
+
+  const handleResetPasswordConfirm = async () => {
+    if (!resetTargetEmployee?.generatedPassword) return;
+    setIsResetting(true);
+    try {
+        const { data, error } = await supabase.functions.invoke('reset-password', {
+            body: { 
+                userId: resetTargetEmployee.id, 
+                newPassword: resetTargetEmployee.generatedPassword 
+            }
+        });
+        
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+        
+        toast.success("Password Reset Successful", { description: `The new password for ${resetTargetEmployee.name} is now active.` });
+        logAuditAction(`Force reset password for user: ${resetTargetEmployee.email}`);
+        closeResetModal();
+    } catch (err: any) {
+        toast.error("Failed to reset password", { description: err.message });
+    } finally {
+        setIsResetting(false);
+    }
   };
 
   const saveGlobalSettings = async () => {
@@ -511,15 +618,23 @@ export default function SystemAdmin() {
                                                                 )}
                                                             </div>
 
-                                                            {/* RIGHT BORDERED DELETE BUTTON */}
-                                                            <button 
-                                                                onClick={() => setDeleteEmpConfirm({ id: emp.id, name: emp.name, emp_id: emp.emp_id })} 
-                                                                className="p-2 sm:p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 bg-white rounded-xl transition-all shrink-0 border-2 border-slate-200 hover:border-red-200 active:scale-95 shadow-sm mt-1 sm:mt-0"
-                                                                title="Remove Employee"
-                                                            >
-                                                                <Trash2 size={18} className="w-4 h-4 sm:w-5 sm:h-5" />
-                                                            </button>
-                                                            
+                                                            {/* RIGHT BORDERED BUTTONS */}
+                                                            <div className="flex items-center gap-2">
+                                                                <button 
+                                                                    onClick={() => openResetPasswordModal(emp)}
+                                                                    className="p-2 sm:p-2.5 text-slate-400 hover:text-amber-600 hover:bg-amber-50 bg-white rounded-xl transition-all shrink-0 border-2 border-slate-200 hover:border-amber-200 active:scale-95 shadow-sm mt-1 sm:mt-0"
+                                                                    title="Reset Password"
+                                                                >
+                                                                    <KeyRound size={18} className="w-4 h-4 sm:w-5 sm:h-5" />
+                                                                </button>
+                                                                <button 
+                                                                    onClick={() => setDeleteEmpConfirm({ id: emp.id, name: emp.name, emp_id: emp.emp_id })} 
+                                                                    className="p-2 sm:p-2.5 text-slate-400 hover:text-red-600 hover:bg-red-50 bg-white rounded-xl transition-all shrink-0 border-2 border-slate-200 hover:border-red-200 active:scale-95 shadow-sm mt-1 sm:mt-0"
+                                                                    title="Remove Employee"
+                                                                >
+                                                                    <Trash2 size={18} className="w-4 h-4 sm:w-5 sm:h-5" />
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -668,7 +783,7 @@ export default function SystemAdmin() {
       {/* MODAL 1: ADD DEPARTMENT / OFFICE */}
       {isDeptModalOpen && (
         <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosingDept ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
-          <div className={`bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden ${isClosingDept ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
+          <div className={`bg-white w-full max-w-lg rounded-t-[1.5rem] sm:rounded-2xl shadow-2xl overflow-hidden ${isClosingDept ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
             <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
               <h3 className="font-black text-xl">Add New Office</h3>
               <button onClick={closeDeptModal} className="p-2 bg-white/10 hover:bg-white/20 rounded-full"><X size={20} /></button>
@@ -717,18 +832,18 @@ export default function SystemAdmin() {
       {/* DELETE CONFIRMATION MODAL - OFFICES */}
       {deleteConfirm && (
         <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosingDelete ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
-          <div className={`bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden ${isClosingDelete ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
-            <div className="bg-red-700 text-white p-5 flex items-center justify-between">
-              <h3 className="font-black text-xl flex items-center gap-2"><AlertCircle size={22} /> Confirm Deletion</h3>
-              <button onClick={closeDeleteModal} className="p-2 bg-white/10 hover:bg-white/20 rounded-full"><X size={20} /></button>
+          <div className={`bg-white w-full max-w-md rounded-t-[1.5rem] sm:rounded-[2rem] shadow-2xl overflow-hidden ${isClosingDelete ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
+            <div className="bg-red-600 text-white p-5 sm:px-6 flex items-center justify-between">
+              <h3 className="font-black text-xl flex items-center gap-2"><AlertCircle size={22} strokeWidth={2.5} /> Confirm Deletion</h3>
+              <button onClick={closeDeleteModal} className="p-2 bg-black/10 hover:bg-black/20 rounded-full transition-colors active:scale-95 -mr-1"><X size={20} /></button>
             </div>
-            <div className="p-6 space-y-4">
-              <p className="text-base text-slate-700 font-medium">
-                Are you sure you want to delete <strong className="text-slate-900">{deleteConfirm.name}</strong>? This action cannot be undone.
+            <div className="p-6 sm:p-7 space-y-6">
+              <p className="text-sm sm:text-base text-slate-600 font-medium leading-relaxed">
+                Are you sure you want to permanently delete <strong className="text-slate-900">{deleteConfirm.name}</strong>? This action cannot be undone.
               </p>
-              <div className="pt-4 flex gap-3">
-                <button type="button" onClick={closeDeleteModal} className="flex-1 py-3.5 bg-white border-2 border-slate-300 text-slate-700 font-bold rounded-xl active:scale-95 transition-transform text-base">Cancel</button>
-                <button type="button" onClick={confirmDeleteDepartment} className="flex-1 py-3.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl border-2 border-red-700 active:scale-95 transition-transform text-base shadow-md">Yes, Delete</button>
+              <div className="flex gap-3">
+                <button type="button" onClick={closeDeleteModal} className="flex-1 py-3.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl active:scale-95 hover:bg-slate-50 transition-all text-sm sm:text-base">Cancel</button>
+                <button type="button" onClick={confirmDeleteDepartment} className="flex-1 py-3.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl active:scale-95 transition-all text-sm sm:text-base shadow-sm border border-red-600">Yes, Delete</button>
               </div>
             </div>
           </div>
@@ -738,7 +853,7 @@ export default function SystemAdmin() {
       {/* MODAL 2: ADD CATEGORY */}
       {isCatModalOpen && (
         <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosingCat ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
-          <div className={`bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden ${isClosingCat ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
+          <div className={`bg-white w-full max-w-lg rounded-t-[1.5rem] sm:rounded-2xl shadow-2xl overflow-hidden ${isClosingCat ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
             <div className="bg-slate-900 text-white p-5 flex items-center justify-between">
               <h3 className="font-black text-xl">Add Document Category</h3>
               <button onClick={closeCatModal} className="p-2 bg-white/10 hover:bg-white/20 rounded-full"><X size={20} /></button>
@@ -777,18 +892,18 @@ export default function SystemAdmin() {
       {/* DELETE CONFIRMATION MODAL - CATEGORIES */}
       {deleteCatConfirm && (
         <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosingCatDelete ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
-          <div className={`bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden ${isClosingCatDelete ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
-            <div className="bg-red-700 text-white p-5 flex items-center justify-between">
-              <h3 className="font-black text-xl flex items-center gap-2"><AlertCircle size={22} /> Confirm Deletion</h3>
-              <button onClick={closeCatDeleteModal} className="p-2 bg-white/10 hover:bg-white/20 rounded-full"><X size={20} /></button>
+          <div className={`bg-white w-full max-w-md rounded-t-[1.5rem] sm:rounded-[2rem] shadow-2xl overflow-hidden ${isClosingCatDelete ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
+            <div className="bg-red-600 text-white p-5 sm:px-6 flex items-center justify-between">
+              <h3 className="font-black text-xl flex items-center gap-2"><AlertCircle size={22} strokeWidth={2.5} /> Confirm Deletion</h3>
+              <button onClick={closeCatDeleteModal} className="p-2 bg-black/10 hover:bg-black/20 rounded-full transition-colors active:scale-95 -mr-1"><X size={20} /></button>
             </div>
-            <div className="p-6 space-y-4">
-              <p className="text-base text-slate-700 font-medium">
-                Are you sure you want to delete <strong className="text-slate-900">{deleteCatConfirm.name}</strong>? This action cannot be undone.
+            <div className="p-6 sm:p-7 space-y-6">
+              <p className="text-sm sm:text-base text-slate-600 font-medium leading-relaxed">
+                Are you sure you want to permanently delete <strong className="text-slate-900">{deleteCatConfirm.name}</strong>? This action cannot be undone.
               </p>
-              <div className="pt-4 flex gap-3">
-                <button type="button" onClick={closeCatDeleteModal} className="flex-1 py-3.5 bg-white border-2 border-slate-300 text-slate-700 font-bold rounded-xl active:scale-95 transition-transform text-base">Cancel</button>
-                <button type="button" onClick={confirmDeleteCategory} className="flex-1 py-3.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl border-2 border-red-700 active:scale-95 transition-transform text-base shadow-md">Yes, Delete</button>
+              <div className="flex gap-3">
+                <button type="button" onClick={closeCatDeleteModal} className="flex-1 py-3.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl active:scale-95 hover:bg-slate-50 transition-all text-sm sm:text-base">Cancel</button>
+                <button type="button" onClick={confirmDeleteCategory} className="flex-1 py-3.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl active:scale-95 transition-all text-sm sm:text-base shadow-sm border border-red-600">Yes, Delete</button>
               </div>
             </div>
           </div>
@@ -797,29 +912,101 @@ export default function SystemAdmin() {
 
       {/* DELETE CONFIRMATION MODAL - EMPLOYEES */}
       {deleteEmpConfirm && (
-        <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosingEmpDelete ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
-          <div className={`bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden ${isClosingEmpDelete ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
-            <div className="bg-red-700 text-white p-5 flex items-center justify-between">
-              <h3 className="font-black text-xl flex items-center gap-2"><AlertCircle size={22} /> Confirm Deletion</h3>
-              <button onClick={closeEmpDeleteModal} className="p-2 bg-white/10 hover:bg-white/20 rounded-full"><X size={20} /></button>
+        <div className={`fixed inset-0 z-[999] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosingEmpDelete ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
+          <div className={`bg-white w-full max-w-md rounded-t-[1.5rem] sm:rounded-[2rem] shadow-2xl overflow-hidden ${isClosingEmpDelete ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
+            <div className="bg-red-600 text-white p-5 sm:px-6 flex items-center justify-between">
+              <h3 className="font-black text-xl flex items-center gap-2"><AlertCircle size={22} strokeWidth={2.5} /> Confirm Deletion</h3>
+              <button onClick={closeEmpDeleteModal} className="p-2 bg-black/10 hover:bg-black/20 rounded-full transition-colors active:scale-95 -mr-1"><X size={20} /></button>
             </div>
-            <div className="p-6 space-y-4">
-              <p className="text-base text-slate-700 font-medium">
+            <div className="p-6 sm:p-7 space-y-6">
+              <p className="text-sm sm:text-base text-slate-600 font-medium leading-relaxed">
                 Are you sure you want to permanently delete <strong className="text-slate-900">{deleteEmpConfirm.name}</strong>? This action cannot be undone.
               </p>
-              <div className="pt-4 flex gap-3">
-                <button type="button" onClick={closeEmpDeleteModal} className="flex-1 py-3.5 bg-white border-2 border-slate-300 text-slate-700 font-bold rounded-xl active:scale-95 transition-transform text-base">Cancel</button>
-                <button type="button" onClick={confirmDeleteEmployee} className="flex-1 py-3.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl border-2 border-red-700 active:scale-95 transition-transform text-base shadow-md">Yes, Delete</button>
+              <div className="flex gap-3">
+                <button type="button" onClick={closeEmpDeleteModal} className="flex-1 py-3.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl active:scale-95 hover:bg-slate-50 transition-all text-sm sm:text-base">Cancel</button>
+                <button type="button" onClick={confirmDeleteEmployee} className="flex-1 py-3.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl active:scale-95 transition-all text-sm sm:text-base shadow-sm border border-red-600">Yes, Delete</button>
               </div>
             </div>
           </div>
         </div>
       )}
 
+      {/* RESET PASSWORD CONFIRMATION MODAL */}
+      {resetTargetEmployee && (
+          <div className={`fixed inset-0 z-[999] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosingResetModal ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
+              <div className={`bg-white w-full max-w-md rounded-t-[1.5rem] sm:rounded-[2rem] shadow-2xl overflow-hidden ${isClosingResetModal ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
+                  <div className="bg-amber-600 text-white p-5 sm:px-6 flex items-center justify-between">
+                      <h3 className="font-black text-xl flex items-center gap-2"><KeyRound size={22} strokeWidth={2.5} /> Force Reset</h3>
+                      <button onClick={closeResetModal} className="p-2 bg-black/10 hover:bg-black/20 rounded-full transition-colors active:scale-95 -mr-1"><X size={20} /></button>
+                  </div>
+                  
+                  <div className="p-6 sm:p-7 space-y-6">
+                      <p className="text-sm sm:text-base text-slate-600 font-medium leading-relaxed">
+                          This instantly changes the password for <strong className="text-slate-900">{resetTargetEmployee.name}</strong>. Copy the temporary password below.
+                      </p>
+                      
+                      <div className="p-4 bg-slate-50 border-2 border-slate-200 rounded-2xl flex items-center justify-between group transition-colors hover:border-slate-300">
+                          <div className="min-w-0 pr-4">
+                              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Generated Password</p>
+                              <p className="text-xl sm:text-2xl font-mono font-black text-slate-900 tracking-tight truncate">{resetTargetEmployee.generatedPassword}</p>
+                          </div>
+                          <button 
+                              onClick={copyToClipboard}
+                              className={`p-3.5 rounded-xl transition-all border active:scale-95 shrink-0 ${hasCopied ? 'bg-emerald-50 border-emerald-200 text-emerald-600 shadow-sm' : 'bg-white border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-200 shadow-sm'}`}
+                              title="Copy to clipboard"
+                          >
+                              {hasCopied ? <Check size={20} strokeWidth={3} /> : <Copy size={20} strokeWidth={2.5} />}
+                          </button>
+                      </div>
+
+                      <div className="flex gap-3">
+                          <button 
+                              onClick={closeResetModal}
+                              disabled={isResetting}
+                              className="flex-1 py-3.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl active:scale-95 hover:bg-slate-50 transition-all text-sm sm:text-base"
+                          >
+                              Cancel
+                          </button>
+                          <button 
+                              onClick={handleResetPasswordConfirm}
+                              disabled={isResetting}
+                              className="flex-1 py-3.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl active:scale-95 transition-all text-sm sm:text-base shadow-sm border border-amber-600 disabled:opacity-50 flex justify-center items-center gap-2"
+                          >
+                              {isResetting ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : 'Confirm'}
+                          </button>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {/* DUPLICATE ERROR NOTIFICATION MODAL */}
+      {duplicateError && (
+          <div className={`fixed inset-0 z-[9999] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosingDuplicateError ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
+            <div className={`bg-white w-full max-w-md rounded-t-[1.5rem] sm:rounded-[2rem] shadow-2xl overflow-hidden ${isClosingDuplicateError ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
+              <div className="bg-red-600 text-white p-5 sm:px-6 flex items-center justify-between">
+                <h3 className="font-black text-xl flex items-center gap-2">
+                  <AlertCircle size={22} strokeWidth={2.5} /> 
+                  {duplicateError.title}
+                </h3>
+                <button onClick={closeDuplicateError} className="p-2 bg-black/10 hover:bg-black/20 rounded-full transition-colors active:scale-95 -mr-1"><X size={20} /></button>
+              </div>
+              <div className="p-6 sm:p-7 space-y-6">
+                <p className="text-sm sm:text-base text-slate-600 font-medium leading-relaxed">
+                  {duplicateError.message}
+                </p>
+                <div className="flex">
+                  <button type="button" onClick={closeDuplicateError} className="w-full py-3.5 bg-white border border-slate-300 text-slate-700 font-bold rounded-xl active:scale-95 hover:bg-slate-50 transition-all text-sm sm:text-base shadow-sm">Okay, got it</button>
+                </div>
+              </div>
+            </div>
+          </div>
+      )}
+
       {/* MODAL 3: REGISTER EMPLOYEE */}
       {isEmpModalOpen && (
         <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosingEmp ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
-          <div className={`bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] ${isClosingEmp ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
+          <div className={`bg-white w-full max-w-lg rounded-t-[1.5rem] sm:rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] ${isClosingEmp ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
             <div className="bg-slate-900 text-white p-5 flex items-center justify-between shrink-0">
               <h3 className="font-black text-xl">Register New Employee</h3>
               <button onClick={closeEmpModal} className="p-2 bg-white/10 hover:bg-white/20 rounded-full"><X size={20} /></button>
@@ -828,28 +1015,27 @@ export default function SystemAdmin() {
               
               <div>
                 <label className="block text-sm font-bold text-slate-900 mb-1.5">Employee ID *</label>
-                <input type="text" value={newEmp.emp_id} onChange={(e) => setNewEmp({...newEmp, emp_id: e.target.value})} placeholder="EMP-2026-105" className="w-full p-3.5 bg-slate-50 border-2 border-slate-400 rounded-xl focus:border-slate-900 outline-none font-bold text-slate-900 font-mono text-base" />
+                <input type="text" value={newEmp.emp_id} onChange={(e) => setNewEmp({...newEmp, emp_id: e.target.value})} placeholder="EMP-2026-105" className="w-full p-3.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-slate-900 font-mono text-base transition-colors" />
               </div>
 
               <div>
                 <label className="block text-sm font-bold text-slate-900 mb-1.5">Full Name *</label>
-                <input type="text" value={newEmp.name} onChange={(e) => setNewEmp({...newEmp, name: e.target.value})} placeholder="Juan Dela Cruz" className="w-full p-3.5 bg-slate-50 border-2 border-slate-400 rounded-xl focus:border-slate-900 outline-none font-bold text-slate-900 text-base" />
+                <input type="text" value={newEmp.name} onChange={(e) => setNewEmp({...newEmp, name: e.target.value})} placeholder="Juan Dela Cruz" className="w-full p-3.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-slate-900 text-base transition-colors" />
               </div>
 
-              {/* NEW EMAIL FIELD */}
               <div>
                 <label className="block text-sm font-bold text-slate-900 mb-1.5 flex items-center gap-1.5"><Mail size={16} /> Email Address *</label>
-                <input type="email" value={newEmp.email} onChange={(e) => setNewEmp({...newEmp, email: e.target.value})} placeholder="employee@abrapho.gov.ph" className="w-full p-3.5 bg-slate-50 border-2 border-slate-400 rounded-xl focus:border-slate-900 outline-none font-bold text-slate-900 text-base" />
+                <input type="email" value={newEmp.email} onChange={(e) => setNewEmp({...newEmp, email: e.target.value})} placeholder="employee@abrapho.gov.ph" className="w-full p-3.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-slate-900 text-base transition-colors" />
               </div>
 
               <div>
                 <label className="block text-sm font-bold text-slate-900 mb-1.5">Designation *</label>
-                <input type="text" value={newEmp.designation} onChange={(e) => setNewEmp({...newEmp, designation: e.target.value})} placeholder="Administrative Officer II" className="w-full p-3.5 bg-slate-50 border-2 border-slate-400 rounded-xl focus:border-slate-900 outline-none font-bold text-slate-900 text-base" />
+                <input type="text" value={newEmp.designation} onChange={(e) => setNewEmp({...newEmp, designation: e.target.value})} placeholder="Administrative Officer II" className="w-full p-3.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-slate-900 text-base transition-colors" />
               </div>
 
               <div>
                 <label className="block text-sm font-bold text-slate-900 mb-1.5 flex items-center gap-1.5"><Phone size={16} /> Contact Number *</label>
-                <input type="tel" value={newEmp.contactNumber} onChange={(e) => setNewEmp({...newEmp, contactNumber: e.target.value})} placeholder="0917 123 4567" className="w-full p-3.5 bg-slate-50 border-2 border-slate-400 rounded-xl focus:border-slate-900 outline-none font-bold text-slate-900 text-base" />
+                <input type="tel" value={newEmp.contactNumber} onChange={(e) => setNewEmp({...newEmp, contactNumber: e.target.value})} placeholder="0917 123 4567" className="w-full p-3.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-slate-900 text-base transition-colors" />
               </div>
 
               <div>
@@ -869,12 +1055,42 @@ export default function SystemAdmin() {
                         <Zap size={14} /> Auto-Generate
                     </button>
                   </div>
-                  <input type="text" value={newEmp.password} onChange={(e) => setNewEmp({...newEmp, password: e.target.value})} placeholder="Enter temporary password" className="w-full p-3.5 bg-slate-50 border-2 border-slate-400 rounded-xl focus:border-slate-900 outline-none font-bold text-slate-900 text-base" />
+                  <div className="relative">
+                      <input 
+                          type={showPassword ? "text" : "password"} 
+                          value={newEmp.password} 
+                          onChange={(e) => setNewEmp({...newEmp, password: e.target.value})} 
+                          placeholder="Enter temporary password" 
+                          className="w-full p-3.5 pr-12 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-slate-900 text-base transition-colors" 
+                      />
+                      <button 
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-700 transition-colors bg-white rounded-md border border-slate-200 active:scale-95 shadow-sm"
+                      >
+                          {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                  </div>
               </div>
 
               <div>
                   <label className="block text-sm font-bold text-slate-900 mb-1.5">Confirm Password *</label>
-                  <input type="text" value={newEmp.confirmPassword} onChange={(e) => setNewEmp({...newEmp, confirmPassword: e.target.value})} placeholder="Re-enter temporary password" className="w-full p-3.5 bg-slate-50 border-2 border-slate-400 rounded-xl focus:border-slate-900 outline-none font-bold text-slate-900 text-base" />
+                  <div className="relative">
+                      <input 
+                          type={showConfirmPassword ? "text" : "password"} 
+                          value={newEmp.confirmPassword} 
+                          onChange={(e) => setNewEmp({...newEmp, confirmPassword: e.target.value})} 
+                          placeholder="Re-enter temporary password" 
+                          className="w-full p-3.5 pr-12 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-slate-900 text-base transition-colors" 
+                      />
+                      <button 
+                          type="button"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          className="absolute right-3.5 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-700 transition-colors bg-white rounded-md border border-slate-200 active:scale-95 shadow-sm"
+                      >
+                          {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                  </div>
               </div>
 
               <div className="pt-4 flex gap-3 shrink-0">
@@ -906,7 +1122,7 @@ function CustomSelect({ options, value, onChange, placeholder }: CustomSelectPro
   
     return (
       <div className="relative w-full" ref={dropdownRef}>
-        <button type="button" onClick={() => setIsOpen(!isOpen)} className={`w-full px-4 py-3.5 bg-white border-2 rounded-xl flex justify-between items-center transition-all text-base outline-none active:scale-[0.99] ${isOpen ? 'border-blue-600 ring-4 ring-blue-600/10' : 'border-slate-300 hover:bg-slate-50 hover:border-slate-400'} ${!value ? 'text-slate-500' : 'text-slate-900 font-bold'}`}>
+        <button type="button" onClick={() => setIsOpen(!isOpen)} className={`w-full px-4 py-3.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 rounded-xl flex justify-between items-center transition-all text-base outline-none active:scale-[0.99] ${isOpen ? 'border-blue-500 bg-white ring-4 ring-blue-500/10' : 'hover:bg-white hover:border-slate-300'} ${!value ? 'text-slate-500 font-medium' : 'text-slate-900 font-bold'}`}>
           <span className="truncate">
             {options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value)
               ? (typeof options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value) === 'string' 
@@ -914,16 +1130,16 @@ function CustomSelect({ options, value, onChange, placeholder }: CustomSelectPro
                   : (options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value) as SelectOption).label)
               : value || placeholder}
           </span>
-          <ChevronDown size={20} className={`text-slate-600 transition-transform duration-300 ease-in-out ${isOpen ? 'rotate-180 text-slate-900' : ''}`} />
+          <ChevronDown size={20} className={`text-slate-400 transition-transform duration-300 ease-in-out ${isOpen ? 'rotate-180 text-slate-800' : ''}`} />
         </button>
         {isOpen && (
-          <div className="absolute z-20 w-full mt-2 bg-white border-2 border-slate-300 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-            <div className="max-h-60 overflow-y-auto p-1.5 space-y-1 scrollbar-hide">
+          <div className="absolute z-50 w-full mt-2 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+            <div className="max-h-60 overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
               {options.map((option: OptionType, idx: number) => {
                 const optValue = typeof option === 'string' ? option : option.value;
                 const optLabel = typeof option === 'string' ? option : option.label;
                 return (
-                  <div key={idx} onClick={() => { onChange(optValue); setIsOpen(false); }} className={`px-4 py-3 text-base rounded-lg cursor-pointer transition-colors flex items-center active:scale-95 ${optValue === value ? 'bg-blue-600 text-white font-bold' : 'text-slate-800 hover:bg-slate-100 font-medium'}`}>
+                  <div key={idx} onClick={() => { onChange(optValue); setIsOpen(false); }} className={`px-4 py-3 text-base rounded-lg cursor-pointer transition-colors flex items-center active:scale-95 ${optValue === value ? 'bg-blue-600 text-white font-bold shadow-sm' : 'text-slate-700 hover:bg-slate-100 font-medium'}`}>
                     {optLabel}
                   </div>
                 );

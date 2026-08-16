@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
   Search, Activity, AlertCircle, MapPin, Clock, 
   ChevronRight, CheckCircle, FileText, XCircle, Eye, X, Plus,
-  Inbox, CornerUpLeft, Folder, User, UserPlus, ChevronDown
+  Inbox, CornerUpLeft, Folder, User, UserPlus, ChevronDown, Bell
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
@@ -12,7 +12,7 @@ import HandoverScreen from '../components/system/HandoverScreen';
 import FilePreviewModal from '../components/system/FilePreviewModal';
 
 // --- Import React Query ---
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 // --- Shared Animation Styles ---
 const modalAnimationStyles = `
@@ -105,6 +105,7 @@ const formatPHDateTime = (isoString?: string) => {
 };
 
 export default function Dashboard() {
+  const queryClient = useQueryClient();
   const openCreateModal = useUiStore((state) => state.openCreateModal);
   
   const [activeTab, setActiveTab] = useState<'assigned' | 'myDocuments' | 'processing' | 'rejected'>('assigned');
@@ -147,10 +148,12 @@ export default function Dashboard() {
       const firstName = currentUserName.split(' ')[0];
 
       let colleagues: string[] = [];
+      let userDepartment = '';
       if (currentUserName) {
           const { data: empData } = await supabase.from('employees').select('department').eq('name', currentUserName).single();
           if (empData?.department) {
-              const { data: deptEmps } = await supabase.from('employees').select('name').eq('department', empData.department);
+              userDepartment = empData.department;
+              const { data: deptEmps } = await supabase.from('employees').select('name').eq('department', userDepartment);
               if (deptEmps) colleagues = deptEmps.map(e => e.name);
           }
       }
@@ -170,6 +173,7 @@ export default function Dashboard() {
       const myRelevantDocs = safeDocs.filter((d: DocumentItem) => 
           (d.created_by === currentUserId || 
            d.assigned_clerk === currentUserName || 
+           d.current_location === userDepartment || // Include docs physically in our dept
            d.custodian_id === currentUserId) &&
           d.status !== 'cancelled'
       );
@@ -203,6 +207,7 @@ export default function Dashboard() {
           userName: firstName,
           currentUserName,
           currentUserId,
+          userDepartment,
           colleagues,
           departments,
           documents: { assigned, myDocuments, processing, rejected },
@@ -223,13 +228,62 @@ export default function Dashboard() {
   const stats = dashboardData?.stats || { active: 0, urgent: 0, actionNeeded: 0, completed: 0 };
   const userName = dashboardData?.userName || '';
   const currentUserName = dashboardData?.currentUserName || '';
-  const currentUserId = dashboardData?.currentUserId || '';
+  const currentUserId = dashboardData?.currentUserId || ''; // FIXED: Extracted missing currentUserId
+  const userDepartment = dashboardData?.userDepartment || '';
   const departments = dashboardData?.departments || [];
 
   const availableColleagues = useMemo(() => {
       if (!dashboardData || !reassignDoc) return [];
       return dashboardData.colleagues.filter((name) => name !== reassignDoc.assigned_clerk);
   }, [dashboardData, reassignDoc]);
+
+  // =========================================
+  // 🚀 SUPABASE REALTIME NOTIFICATIONS
+  // =========================================
+  useEffect(() => {
+      if (!currentUserName || !userDepartment) return;
+
+      const channel = supabase
+          .channel('dashboard-document-updates')
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'documents' }, (payload) => {
+              
+              // Immediately tell React Query to fetch the latest data behind the scenes
+              queryClient.invalidateQueries({ queryKey: ['dashboardData'] });
+
+              // TOAST NOTIFICATIONS FOR ARRIVALS
+              if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+                  const newDoc = payload.new as DocumentItem;
+                  
+                  // Is this document meant for this user's department or specifically assigned to them?
+                  const isForMe = newDoc.current_location === userDepartment || newDoc.assigned_clerk === currentUserName;
+                  
+                  if (isForMe) {
+                      // Access the current cache to see if we ALREADY had this document in our active lists
+                      const currentData = queryClient.getQueryData<any>(['dashboardData']);
+                      if (currentData) {
+                          const wasAlreadyHere = 
+                              currentData.documents.assigned.some((d: any) => d.id === newDoc.id) ||
+                              currentData.documents.processing.some((d: any) => d.id === newDoc.id) ||
+                              currentData.documents.rejected.some((d: any) => d.id === newDoc.id);
+
+                          // If it wasn't in our dashboard before, it's a brand new arrival!
+                          if (!wasAlreadyHere) {
+                              toast.info('New Document Arrived! 🔔', {
+                                  description: newDoc.title || newDoc.reference_no,
+                                  icon: <Bell className="text-blue-500" />
+                              });
+                          }
+                      }
+                  }
+              }
+          })
+          .subscribe();
+
+      // Cleanup subscription on unmount
+      return () => {
+          supabase.removeChannel(channel);
+      };
+  }, [currentUserName, userDepartment, queryClient]);
 
   if (isError) {
       toast.error("Failed to sync dashboard data.");
@@ -510,17 +564,13 @@ export default function Dashboard() {
                                         </button>
                                     )}
                                 </div>
-                                {isManager ? (
+                                {isManager && (
                                     <button 
                                         onClick={() => setSelectedDoc(doc)}
                                         className="w-full py-2.5 px-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-sm border-2 border-blue-700 shadow-sm mt-1"
                                     >
                                         Action <ChevronRight size={16} />
                                     </button>
-                                ) : (
-                                    <div className="w-full py-2.5 px-3 bg-slate-50 border-2 border-slate-200 rounded-xl text-center mt-1">
-                                        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Pending action by {doc.assigned_clerk}</p>
-                                    </div>
                                 )}
                             </div>
                         </div>

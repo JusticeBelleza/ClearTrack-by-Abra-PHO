@@ -558,7 +558,7 @@ export default function Processing() {
                       </div>
                       
                       <div className="relative z-20">
-                          <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase tracking-wider">Select Colleague</label>
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase tracking-wider">Select Employee</label>
                           
                           {/* Searchable CustomSelect with isRelative={true} to expand modal height */}
                           <CustomSelect 

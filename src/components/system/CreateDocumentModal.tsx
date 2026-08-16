@@ -44,6 +44,8 @@ interface CustomSelectProps {
     placeholder?: string;
     disabled?: boolean;
     emptyText?: string;
+    isRelative?: boolean;
+    itemType?: string;
 }
 
 interface Employee {
@@ -51,19 +53,17 @@ interface Employee {
     department: string;
 }
 
-// --- Custom Dropdown Component (Searchable Combobox Version) ---
-function CustomSelect({ options, value, onChange, placeholder, disabled = false, emptyText = "Loading options..." }: CustomSelectProps) {
+// --- UPGRADED SEARCHABLE CUSTOM SELECT ---
+function CustomSelect({ options, value, onChange, placeholder, disabled = false, emptyText = "Loading options...", isRelative = false, itemType = "option" }: CustomSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const dropdownRef = useRef<HTMLDivElement>(null);
     const menuRef = useRef<HTMLDivElement>(null); 
     const searchInputRef = useRef<HTMLInputElement>(null);
-  
+ 
     useEffect(() => {
       function handleClickOutside(event: MouseEvent) {
-        if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-          setIsOpen(false);
-        }
+        if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) setIsOpen(false);
       }
       document.addEventListener("mousedown", handleClickOutside);
       return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -76,51 +76,51 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false,
           menuRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }, 50);
       } else {
-        setSearchTerm(""); // Reset search when closed
+        setSearchTerm("");
       }
     }, [isOpen]);
 
-    // Filter options based on search term
     const filteredOptions = options.filter(opt => {
         const optLabel = typeof opt === 'string' ? opt : opt.label;
         return optLabel.toLowerCase().includes(searchTerm.toLowerCase());
     });
-  
+
+    const MAX_ITEMS_TO_SHOW = 4;
+    const visibleOptions = filteredOptions.slice(0, MAX_ITEMS_TO_SHOW);
+    const hiddenCount = filteredOptions.length - visibleOptions.length;
+
     const selectedOptionLabel = options.find(opt => (typeof opt === 'string' ? opt : opt.value) === value);
     const displayLabel = selectedOptionLabel 
         ? (typeof selectedOptionLabel === 'string' ? selectedOptionLabel : selectedOptionLabel.label)
         : placeholder;
-
+ 
     return (
       <div className="relative w-full" ref={dropdownRef}>
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => !disabled && setIsOpen(!isOpen)}
-          className={`w-full px-3 py-3 border rounded-xl flex justify-between items-center transition-all text-sm sm:text-base outline-none ${
-            disabled ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed' :
-            isOpen
-              ? 'border-blue-500 ring-4 ring-blue-500/10 bg-white'
-              : 'bg-slate-50 border-slate-200 hover:bg-white hover:border-slate-300 active:scale-[0.99]'
-          } ${!value && !disabled ? 'text-slate-500' : 'text-slate-900 font-bold'}`}
+        <button 
+            type="button" 
+            disabled={disabled}
+            onClick={() => !disabled && setIsOpen(!isOpen)} 
+            className={`w-full px-4 py-3 border-2 rounded-xl flex justify-between items-center transition-all text-sm sm:text-base outline-none active:scale-[0.99] ${
+                disabled ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed' :
+                isOpen ? 'border-blue-500 bg-white ring-4 ring-blue-500/10' : 'bg-white border-slate-200 hover:border-slate-300'
+            } ${!value && !disabled ? 'text-slate-500 font-medium' : 'text-slate-900 font-bold'}`}
         >
-          <span className="truncate">{displayLabel}</span>
+          <span className="truncate">
+            {displayLabel}
+          </span>
           {!disabled && (
-              <ChevronDown 
-                size={18} 
-                className={`text-slate-400 transition-transform duration-300 ease-in-out sm:w-5 sm:h-5 ${isOpen ? 'rotate-180 text-slate-800' : ''}`} 
-              />
+              <ChevronDown size={20} className={`text-slate-400 transition-transform duration-300 ease-in-out sm:w-5 sm:h-5 ${isOpen ? 'rotate-180 text-slate-800' : ''}`} />
           )}
         </button>
-  
+
         {isOpen && !disabled && (
-          <div ref={menuRef} className="absolute z-20 w-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+          <div ref={menuRef} className={`${isRelative ? 'relative mt-2 mb-4' : 'absolute mt-1.5'} z-50 w-full bg-white border-2 border-slate-200 rounded-xl shadow-xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200`}>
             
-            {/* Search Input Area (Only shows if there are more than 5 options) */}
-            {options.length > 5 && (
-                <div className="p-2 border-b border-slate-100 bg-slate-50/50">
+            {/* Always show search bar if there are multiple options */}
+            {options.length > 3 && (
+                <div className="p-2 border-b-2 border-slate-100 bg-white shrink-0">
                     <div className="relative">
-                        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                         <input
                             ref={searchInputRef}
                             type="text"
@@ -128,35 +128,28 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false,
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
                             onClick={(e) => e.stopPropagation()}
-                            className="w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all font-medium text-slate-800 placeholder:text-slate-400"
+                            className="w-full pl-9 pr-3 py-2.5 bg-white border-2 border-blue-100 rounded-lg text-sm focus:outline-none focus:border-blue-500 transition-all font-medium text-slate-800 placeholder:text-slate-400"
                         />
                     </div>
                 </div>
             )}
 
-            <div className="max-h-48 sm:max-h-60 overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
+            <div className="max-h-[240px] overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
               {filteredOptions.length === 0 ? (
                   <div className="px-4 py-6 text-sm text-slate-500 text-center font-medium">
                       {searchTerm ? `No results for "${searchTerm}"` : emptyText}
                   </div>
               ) : (
-                  filteredOptions.map((option: OptionType, idx: number) => {
+                  visibleOptions.map((option: OptionType, idx: number) => {
                     const optValue = typeof option === 'string' ? option : option.value;
                     const optLabel = typeof option === 'string' ? option : option.label;
                     const isSelected = optValue === value;
-      
+
                     return (
-                      <div
-                        key={idx}
-                        onClick={() => {
-                          onChange(optValue);
-                          setIsOpen(false);
-                        }}
-                        className={`px-3 py-2.5 sm:px-4 sm:py-3 text-sm sm:text-base rounded-lg cursor-pointer transition-colors flex items-center active:scale-95 ${
-                          isSelected
-                            ? 'bg-blue-600 text-white font-bold'
-                            : 'text-slate-700 hover:bg-slate-100 font-medium'
-                        }`}
+                      <div 
+                        key={idx} 
+                        onClick={() => { onChange(optValue); setIsOpen(false); }} 
+                        className={`px-4 py-3 text-sm sm:text-base rounded-lg cursor-pointer transition-colors flex items-center active:scale-95 ${isSelected ? 'bg-blue-600 text-white font-bold shadow-sm' : 'text-slate-700 hover:bg-slate-100 font-medium'}`}
                       >
                         {optLabel}
                       </div>
@@ -164,6 +157,16 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false,
                   })
               )}
             </div>
+
+            {/* Notification Footer for hidden items matching the screenshot */}
+            {hiddenCount > 0 && (
+                <div className="p-3 bg-slate-50 border-t-2 border-slate-100 shrink-0 text-center">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                        +{hiddenCount} more {hiddenCount === 1 ? itemType : `${itemType}s`}. Keep typing to search.
+                    </p>
+                </div>
+            )}
+
           </div>
         )}
       </div>
@@ -360,9 +363,9 @@ export default function CreateDocumentModal() {
             }]);
 
             toast.success('Document Routed Successfully!', { description: `Tracking No: ${formData.trackingNumber}` });
+            
+            // Replaced window.location.reload() with graceful close
             handleClose();
-
-            setTimeout(() => { window.location.reload(); }, 800);
 
         } catch (error: unknown) {
             console.error("Submit Error:", error);
@@ -385,22 +388,22 @@ export default function CreateDocumentModal() {
                         <h3 className="font-black text-xl flex items-center gap-2 mt-2 sm:mt-0">
                             <FileText size={22} className="text-blue-400" /> Route Document
                         </h3>
-                        <button onClick={handleClose} disabled={isSubmitting} className="p-2 -mr-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors active:scale-95 disabled:opacity-50">
+                        <button type="button" onClick={handleClose} disabled={isSubmitting} className="p-2 -mr-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors active:scale-95 disabled:opacity-50">
                             <X size={20} />
                         </button>
                     </div>
                 </div>
 
                 <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 sm:p-8 custom-scrollbar">
-                    <div className="space-y-5">
+                    <div className="space-y-6">
 
                         {/* Flat Tracking Number Badge */}
-                        <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl flex items-center justify-between">
+                        <div className="bg-white border-2 border-slate-200 p-4 rounded-xl flex items-center justify-between shadow-sm">
                             <div>
-                                <p className="text-[10px] sm:text-xs font-bold text-blue-600 uppercase tracking-wider mb-0.5">Tracking Number</p>
+                                <p className="text-[10px] sm:text-xs font-bold text-slate-500 uppercase tracking-wider mb-0.5">Tracking Number</p>
                                 <p className="font-mono text-lg sm:text-xl font-black text-slate-900 tracking-widest">{formData.trackingNumber}</p>
                             </div>
-                            <Hash className="text-blue-500 opacity-80" size={28} />
+                            <Hash className="text-slate-300" size={28} />
                         </div>
 
                         <div>
@@ -410,19 +413,19 @@ export default function CreateDocumentModal() {
                                 value={formData.title}
                                 onChange={(e) => setFormData({...formData, title: e.target.value})}
                                 placeholder="e.g. Budget Request for Q3" 
-                                className="w-full p-3 sm:p-3.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 rounded-xl outline-none font-bold text-slate-900 text-sm sm:text-base transition-all" 
+                                className="w-full p-3 sm:p-3.5 bg-white border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 rounded-xl outline-none font-bold text-slate-900 text-sm sm:text-base transition-all" 
                             />
                         </div>
 
                         <div>
                             <label className="block text-xs sm:text-sm font-bold text-slate-900 mb-1.5">Scanned Attachment (Optional)</label>
                             <div className="flex items-center gap-3">
-                                <label className={`hidden sm:flex flex-1 items-center justify-center gap-2 p-3 border border-dashed rounded-xl cursor-pointer transition-colors ${attachment ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-slate-50 border-slate-300 text-slate-600 hover:bg-white hover:border-slate-400'}`}>
+                                <label className={`hidden sm:flex flex-1 items-center justify-center gap-2 p-3 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${attachment ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-slate-50 border-slate-300 text-slate-600 hover:bg-white hover:border-slate-400'}`}>
                                     <input type="file" accept="image/*,application/pdf" className="hidden" onChange={handleFileChange} disabled={isProcessingFile} />
                                     {isProcessingFile ? <span className="animate-pulse font-bold text-sm">Processing...</span> : attachment ? <><CheckCircle size={18}/> <span className="font-bold text-sm truncate max-w-[200px]">{attachmentName}</span></> : <><Paperclip size={18}/> <span className="font-bold text-sm">Attach File / PDF</span></>}
                                 </label>
 
-                                <label className={`flex sm:hidden flex-1 items-center justify-center gap-2 p-3 border border-dashed rounded-xl cursor-pointer transition-colors active:scale-95 ${attachment ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-slate-50 border-slate-300 text-slate-600 hover:bg-white hover:border-slate-400'}`}>
+                                <label className={`flex sm:hidden flex-1 items-center justify-center gap-2 p-3 border-2 border-dashed rounded-xl cursor-pointer transition-colors active:scale-95 ${attachment ? 'bg-emerald-50 border-emerald-300 text-emerald-700' : 'bg-slate-50 border-slate-300 text-slate-600 hover:bg-white hover:border-slate-400'}`}>
                                     <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} disabled={isProcessingFile} />
                                     {isProcessingFile ? <span className="animate-pulse font-bold text-sm">Processing...</span> : attachment ? <><CheckCircle size={18}/> <span className="font-bold text-sm truncate max-w-[150px]">{attachmentName}</span></> : <><Camera size={18}/> <span className="font-bold text-sm">Scan Document</span></>}
                                 </label>
@@ -436,14 +439,20 @@ export default function CreateDocumentModal() {
                         </div>
 
                         <div>
-                            <label className="block text-xs sm:text-sm font-bold text-slate-900 mb-1.5 flex items-center gap-1.5">Document Category *</label>
-                            <CustomSelect options={categories} value={formData.category} onChange={(val: string) => setFormData({...formData, category: val})} placeholder="Select Category..." />
+                            <label className="block text-[11px] sm:text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">Document Category *</label>
+                            <CustomSelect 
+                                options={categories} 
+                                value={formData.category} 
+                                onChange={(val: string) => setFormData({...formData, category: val})} 
+                                placeholder="Select Category..." 
+                                itemType="category"
+                            />
                         </div>
 
                         {/* Flat Routing Grouping Box */}
-                        <div className="p-4 rounded-xl border border-blue-100 bg-blue-50/40 space-y-4">
-                            <div>
-                                <label className="block text-[11px] sm:text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                        <div className="p-5 rounded-[1.25rem] border-2 border-slate-100 bg-slate-50/50 space-y-5">
+                            <div className="relative z-20">
+                                <label className="block text-[11px] sm:text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5 uppercase tracking-wider">
                                     <MapPin size={14} className="text-blue-600" /> Final Destination *
                                 </label>
                                 <CustomSelect 
@@ -451,11 +460,13 @@ export default function CreateDocumentModal() {
                                     value={formData.destination} 
                                     onChange={(val: string) => setFormData({...formData, destination: val})} 
                                     placeholder="Select Office..." 
+                                    isRelative={true}
+                                    itemType="office"
                                 />
                             </div>
 
-                            <div>
-                                <label className="block text-[11px] sm:text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                            <div className="relative z-10">
+                                <label className="block text-[11px] sm:text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5 uppercase tracking-wider">
                                     <User size={14} className="text-blue-600" /> Assign To (Internal Clerk) *
                                 </label>
                                 <CustomSelect 
@@ -464,15 +475,17 @@ export default function CreateDocumentModal() {
                                     onChange={(val: string) => setFormData({...formData, assignedClerk: val})} 
                                     placeholder="Select employee..." 
                                     emptyText={currentUserDept ? `No staff registered under ${currentUserDept}` : "No staff found"}
+                                    isRelative={true}
+                                    itemType="employee"
                                 />
                             </div>
                         </div>
 
                         {/* Flat Urgent Toggle */}
-                        <div className={`p-4 border rounded-xl flex items-center justify-between transition-colors cursor-pointer active:scale-[0.99] ${formData.isUrgent ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200'}`} onClick={() => setFormData({...formData, isUrgent: !formData.isUrgent})}>
+                        <div className={`p-4 border-2 rounded-xl flex items-center justify-between transition-colors cursor-pointer active:scale-[0.99] ${formData.isUrgent ? 'bg-red-50 border-red-300 shadow-sm' : 'bg-white border-slate-200 hover:border-slate-300'}`} onClick={() => setFormData({...formData, isUrgent: !formData.isUrgent})}>
                             <div>
-                                <h4 className={`font-black text-sm sm:text-base flex items-center gap-2 ${formData.isUrgent ? 'text-red-700' : 'text-slate-700'}`}>
-                                    <AlertCircle size={16} /> Mark as Priority / RUSH
+                                <h4 className={`font-black text-sm sm:text-base flex items-center gap-2 ${formData.isUrgent ? 'text-red-700' : 'text-slate-800'}`}>
+                                    <AlertCircle size={16} strokeWidth={2.5} /> Mark as Priority / RUSH
                                 </h4>
                                 <p className={`text-[11px] sm:text-xs font-medium mt-0.5 ${formData.isUrgent ? 'text-red-600' : 'text-slate-500'}`}>Flags this document in red for all receiving offices.</p>
                             </div>
@@ -487,22 +500,22 @@ export default function CreateDocumentModal() {
                                 value={formData.remarks}
                                 onChange={(e) => setFormData({...formData, remarks: e.target.value})}
                                 placeholder="Add any instructions for the receiving office..." 
-                                className="w-full p-3 sm:p-3.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 rounded-xl outline-none font-bold text-slate-900 text-sm sm:text-base min-h-[100px] resize-y transition-all" 
+                                className="w-full p-3 sm:p-3.5 bg-white border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 rounded-xl outline-none font-bold text-slate-900 text-sm sm:text-base min-h-[100px] resize-y transition-all" 
                             ></textarea>
                         </div>
                     </div>
                 </form>
 
                 {/* Flat Footer Buttons */}
-                <div className="bg-slate-50 p-4 sm:p-5 border-t border-slate-100 flex gap-3 shrink-0 pb-6 sm:pb-5">
-                    <button type="button" disabled={isSubmitting || isProcessingFile} onClick={handleClose} className="flex-1 py-3 sm:py-3.5 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-xl active:scale-95 transition-all text-sm sm:text-base disabled:opacity-50 shadow-sm">
+                <div className="bg-slate-50 p-4 sm:p-5 border-t-2 border-slate-200 flex gap-3 shrink-0 pb-6 sm:pb-5">
+                    <button type="button" disabled={isSubmitting || isProcessingFile} onClick={handleClose} className="flex-1 py-3.5 bg-white border-2 border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-xl active:scale-95 transition-all text-sm sm:text-base disabled:opacity-50 shadow-sm">
                         Cancel
                     </button>
-                    <button type="submit" disabled={isSubmitting || isProcessingFile} onClick={handleSubmit} className="flex-[1.5] py-3 sm:py-3.5 bg-blue-600 border border-blue-600 text-white font-bold rounded-xl active:scale-95 transition-all text-sm sm:text-base flex justify-center items-center gap-2 disabled:opacity-50 shadow-sm hover:bg-blue-700 hover:border-blue-700">
+                    <button type="submit" disabled={isSubmitting || isProcessingFile} onClick={handleSubmit} className="flex-[1.5] py-3.5 bg-blue-600 border-2 border-blue-700 text-white font-bold rounded-xl active:scale-95 transition-all text-sm sm:text-base flex justify-center items-center gap-2 disabled:opacity-50 shadow-sm hover:bg-blue-700">
                         {isSubmitting ? (
-                            <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
+                            <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
                         ) : (
-                            <><Send size={16} /> Route Document</>
+                            <><Send size={18} strokeWidth={2.5} /> Route Document</>
                         )}
                     </button>
                 </div>

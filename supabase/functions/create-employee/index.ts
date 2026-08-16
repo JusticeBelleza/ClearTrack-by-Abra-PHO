@@ -1,7 +1,6 @@
-import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// Required for the frontend to be able to talk to this function without CORS errors
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -14,17 +13,31 @@ serve(async (req) => {
   }
 
   try {
-    // 1. Initialize the Admin client securely inside the Edge Function
-    // The Edge environment automatically provides SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY
+    // Initialize the Admin client securely using the Service Role Key
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Parse the payload sent from your React frontend
     const { email, password, name, emp_id, department, designation, contactNumber } = await req.json()
 
-    // 2. Create the user in Auth Admin
+    // 1. Check if Employee ID already exists in your employees table
+    const { data: existingEmp, error: empCheckError } = await supabaseAdmin
+      .from('employees')
+      .select('id')
+      .eq('emp_id', emp_id)
+      .maybeSingle()
+
+    if (empCheckError) throw empCheckError
+
+    if (existingEmp) {
+      return new Response(
+        JSON.stringify({ error: "Employee ID has already been registered." }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // 2. Create User in Supabase Auth
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
@@ -32,47 +45,47 @@ serve(async (req) => {
       user_metadata: { full_name: name }
     })
 
-    if (authError) throw authError
+    if (authError) {
+      let errorMessage = authError.message;
+      // Catch Supabase's default duplicate email error and make it user-friendly
+      if (errorMessage.toLowerCase().includes('already registered') || errorMessage.toLowerCase().includes('already exists')) {
+        errorMessage = "Email has already been registered.";
+      }
+      return new Response(
+        JSON.stringify({ error: errorMessage }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
-    const userId = authData.user.id
+    // 3. Insert into employees directory table
+    const { error: dbError } = await supabaseAdmin
+      .from('employees')
+      .insert([{
+        id: authData.user.id,
+        emp_id: emp_id,
+        name: name,
+        email: email,
+        department: department,
+        designation: designation,
+        contact_number: contactNumber || null
+      }])
 
-    // 3. Insert into the public employees directory
-    const { error: dirError } = await supabaseAdmin.from('employees').insert([{
-      emp_id,
-      name,
-      email,
-      designation,
-      department,
-      contact_number: contactNumber
-    }])
+    if (dbError) {
+      // Rollback auth user creation if directory insert fails so we don't have ghost accounts
+      await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
+      throw dbError
+    }
 
-    if (dirError) throw dirError
-
-    // 4. Guarantee the profile is created and fully synced
-    const { error: profileError } = await supabaseAdmin.from('profiles').upsert({
-      id: userId,
-      full_name: name,
-      emp_id,
-      department,
-      designation,
-      contact_number: contactNumber,
-      role: 'pho_staff'
-    })
-
-    if (profileError) throw profileError
-
-    // 5. Fetch the inserted employee record to return to the frontend for state updates
-    const { data: newEmployee } = await supabaseAdmin.from('employees').select('*').eq('emp_id', emp_id).single()
-
-    // Send back success and the newly created employee
+    // Success!
     return new Response(
-      JSON.stringify({ success: true, employee: newEmployee }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      JSON.stringify({ success: true, user: authData.user }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
-  } catch (error) {
+
+  } catch (error: any) {
     return new Response(
-      JSON.stringify({ error: error.message }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+      JSON.stringify({ error: error.message || 'An unknown error occurred' }),
+      { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }
 })
