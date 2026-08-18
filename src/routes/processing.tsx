@@ -749,8 +749,8 @@ export default function Processing() {
       {isBatchModalOpen && (
           <BatchActionModal 
             selectedDocs={selectedDocs}
-            currentUserId={data?.currentUserId}
-            currentUserName={data?.currentUserName}
+            currentUserId={data?.currentUserId || ''}
+            currentUserName={data?.currentUserName || ''}
             departments={departments}
             colleagues={availableColleagues}
             onClose={() => setIsBatchModalOpen(false)}
@@ -833,14 +833,13 @@ interface BatchModalProps {
     selectedDocs: DocumentItem[];
     currentUserId: string;
     currentUserName: string;
-    userDepartment: string;
     departments: OptionType[];
     colleagues: string[];
     onClose: () => void;
     onSuccess: () => void;
 }
 
-function BatchActionModal({ selectedDocs, currentUserId, currentUserName, userDepartment, departments, colleagues, onClose, onSuccess }: BatchModalProps) {
+function BatchActionModal({ selectedDocs, currentUserId, currentUserName, departments, colleagues, onClose, onSuccess }: BatchModalProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const isDrawingRef = useRef(false);
 
