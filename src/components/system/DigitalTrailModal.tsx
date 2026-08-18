@@ -1,4 +1,4 @@
-import { useState, useEffect, type SyntheticEvent } from 'react';
+import React, { useState, useEffect, type SyntheticEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Archive, Check, ArrowRight, FileText, UserPlus, PenTool, Ban, RefreshCcw, ShieldCheck } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
@@ -286,16 +286,17 @@ function SignatureModal({ data, onClose }: { data: SignatureData, onClose: () =>
 
     const handleClose = () => {
         setIsClosing(true);
-        setTimeout(onClose, 300); // Wait for animation to finish
+        setTimeout(onClose, 150); // Matches the new closing speed
     };
 
+    // FAST ANIMATIONS (150ms instead of 200ms/300ms)
     const overlayAnimation = isClosing 
-        ? "animate-out fade-out duration-200 ease-in fill-mode-forwards" 
-        : "animate-in fade-in duration-200 ease-out fill-mode-forwards";
+        ? "animate-out fade-out duration-150 ease-in fill-mode-forwards" 
+        : "animate-in fade-in duration-150 ease-out fill-mode-forwards";
         
     const modalAnimation = isClosing 
-        ? "animate-out slide-out-to-bottom-[100%] sm:slide-out-to-bottom-0 sm:zoom-out-95 duration-300 ease-in fill-mode-forwards" 
-        : "animate-in slide-in-from-bottom-[100%] sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-300 ease-out fill-mode-forwards";
+        ? "animate-out slide-out-to-bottom-[100%] sm:slide-out-to-bottom-0 sm:zoom-out-95 duration-150 ease-in fill-mode-forwards" 
+        : "animate-in slide-in-from-bottom-[100%] sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-150 ease-out fill-mode-forwards";
 
     return (
         <div className={`fixed inset-0 z-[1000] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/80 backdrop-blur-sm ${overlayAnimation}`}>
@@ -329,15 +330,15 @@ function SignatureModal({ data, onClose }: { data: SignatureData, onClose: () =>
                             <span className="text-[11px] font-bold text-emerald-600/70 uppercase">{data.date}</span>
                         </div>
 
-                        {/* Signature Area */}
+                        {/* Signature Area - Android Bug Fix: Removed mix-blend-multiply */}
                         <div className="p-6 flex flex-col items-center text-center">
                             <p className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">E-Signature</p>
                             
-                            <div className="w-full h-32 flex items-center justify-center border-b-2 border-slate-300 border-dashed pb-2 mb-5 px-4">
+                            <div className="w-full h-32 flex items-center justify-center border-b-2 border-slate-300 border-dashed pb-2 mb-5 px-4 bg-white">
                                 <img 
                                     src={data.url} 
                                     alt="Signature" 
-                                    className="max-w-full max-h-full object-contain mix-blend-multiply drop-shadow-sm" 
+                                    className="max-w-full max-h-full object-contain drop-shadow-sm" 
                                     onError={(e) => {
                                         (e.target as HTMLImageElement).style.display = 'none';
                                         e.currentTarget.parentElement!.innerHTML = '<p class="text-sm text-slate-400 font-bold">Image not available</p>';

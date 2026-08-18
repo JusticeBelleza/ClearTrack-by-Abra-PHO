@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { 
     Search, MapPin, Clock, CheckCircle, AlertCircle, 
-    Archive, FileText, X, Eye, CornerUpLeft, Ban, ChevronDown, FolderTree
+    Archive, FileText, X, Eye, CornerUpLeft, Ban, ChevronDown, FolderTree, User
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -41,6 +41,7 @@ interface DocumentItem {
     status: string;
     assigned_clerk?: string;
     created_by?: string;
+    creator_name?: string; // New field to hold the mapped profile name
     custodian_id?: string;
     final_destination?: string;
     current_location?: string;
@@ -73,19 +74,31 @@ const fetchHistoryData = async (): Promise<HistoryData> => {
     if (!session) throw new Error("No authenticated session");
     const currentUserId = session.user.id;
 
-    const { data: docsRes, error } = await supabase.from('documents')
-        .select(`
-            *,
-            document_logs (
-                action,
-                created_at
-            )
-        `)
-        .in('status', ['sealed', 'cancelled']);
+    // Fetch documents AND profiles simultaneously so we can map IDs to actual names
+    const [docsRes, profilesRes] = await Promise.all([
+        supabase.from('documents')
+            .select(`
+                *,
+                document_logs (
+                    action,
+                    created_at
+                )
+            `)
+            .in('status', ['sealed', 'cancelled']),
+        supabase.from('profiles').select('id, full_name')
+    ]);
 
-    if (error) throw error;
+    if (docsRes.error) throw docsRes.error;
 
-    const rawDocs = docsRes || [];
+    // Create a dictionary to quickly look up a user's name by their ID
+    const creatorMap: Record<string, string> = {};
+    if (profilesRes.data) {
+        profilesRes.data.forEach((p: any) => {
+            creatorMap[p.id] = p.full_name;
+        });
+    }
+
+    const rawDocs = docsRes.data || [];
 
     let completed: DocumentItem[] = [];
     let cancelled: DocumentItem[] = [];
@@ -97,6 +110,9 @@ const fetchHistoryData = async (): Promise<HistoryData> => {
 
         const processedDocs = myRelevantDocs.map((doc) => {
             const logs = doc.document_logs || [];
+            
+            // Map the UUID to the real name
+            doc.creator_name = creatorMap[doc.created_by || ''] || 'System User';
             
             if (doc.status === 'sealed') {
                 const deliveryLog = logs.filter((l) => l.action === 'Delivered')
@@ -128,9 +144,12 @@ export default function History() {
   const [trailDoc, setTrailDoc] = useState<DocumentItem | null>(null);
   const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
 
-  // --- Accordion & Pagination State for Document Categories ---
+  // --- Accordion & Pagination State ---
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
   const [categoryPages, setCategoryPages] = useState<Record<string, number>>({});
+  
+  // Collapsible cards state
+  const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
 
   const { data, isLoading } = useQuery<HistoryData>({
       queryKey: ['historyDocuments'],
@@ -179,6 +198,13 @@ export default function History() {
       setExpandedCategories(prev => ({
           ...prev,
           [categoryName]: !prev[categoryName]
+      }));
+  };
+
+  const toggleCardCollapse = (docId: string) => {
+      setExpandedCards(prev => ({
+          ...prev,
+          [docId]: !prev[docId]
       }));
   };
 
@@ -256,7 +282,7 @@ export default function History() {
                   </div>
                   <h3 className="text-xl font-black text-slate-900 mb-2">No records found</h3>
                   <p className="text-base font-medium text-slate-500 max-w-md">
-                     We couldn't find any {activeTab} documents matching your search criteria.
+                      We couldn't find any {activeTab} documents matching your search criteria.
                   </p>
               </div>
           ) : (
@@ -269,7 +295,7 @@ export default function History() {
                   
                   <div className="p-4 sm:p-6 space-y-4 bg-white">
                       {groupedDocs.map(({ category, docs }) => {
-                          const isExpanded = expandedCategories[category];
+                          const isCategoryExpanded = expandedCategories[category];
                           const currentPage = categoryPages[category] || 1;
                           const itemsPerPage = 5;
                           const totalPages = Math.ceil(docs.length / itemsPerPage);
@@ -280,7 +306,7 @@ export default function History() {
                                   {/* MINIMAL FOLDER HEADER */}
                                   <button 
                                       onClick={() => toggleCategoryAccordion(category)}
-                                      className={`w-full py-4 px-4 flex items-start sm:items-center justify-between transition-all duration-200 ease-in-out focus:outline-none group active:bg-slate-100 ${isExpanded ? 'bg-slate-50' : 'bg-transparent hover:bg-slate-50/50'}`}
+                                      className={`w-full py-4 px-4 flex items-start sm:items-center justify-between transition-all duration-200 ease-in-out focus:outline-none group active:bg-slate-100 ${isCategoryExpanded ? 'bg-slate-50' : 'bg-transparent hover:bg-slate-50/50'}`}
                                   >
                                       <div className="flex flex-col text-left flex-1 min-w-0 pr-4 gap-1">
                                           <div className="flex items-center gap-2">
@@ -293,68 +319,122 @@ export default function History() {
                                       </div>
                                       <ChevronDown 
                                           size={18} 
-                                          className={`shrink-0 text-slate-400 transition-transform duration-200 mt-1 sm:mt-0 ${isExpanded ? 'rotate-180 text-slate-800' : 'group-hover:text-slate-600'}`} 
+                                          className={`shrink-0 text-slate-400 transition-transform duration-200 mt-1 sm:mt-0 ${isCategoryExpanded ? 'rotate-180 text-slate-800' : 'group-hover:text-slate-600'}`} 
                                       />
                                   </button>
 
-                                  {/* MINIMAL FOLDER CONTENT (DOCUMENTS) */}
-                                  {isExpanded && (
-                                      <div className="animate-in fade-in slide-in-from-top-1 duration-200 bg-white border-t-2 border-slate-100 flex flex-col">
-                                          <div className="flex flex-col">
-                                              {paginatedDocs.map((doc) => (
-                                                  <div key={doc.id} className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 sm:p-5 gap-4 group hover:bg-slate-50/50 transition-colors border-b border-slate-200 last:border-b-0">
-                                                      
-                                                      {/* SMART VERTICAL STACK */}
-                                                      <div className="flex flex-col gap-1.5 flex-1 min-w-0">
-                                                          <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-widest bg-slate-100 px-2 py-0.5 rounded w-fit border border-slate-200">{doc.reference_no || doc.id}</span>
-                                                          <h4 className="font-black text-slate-900 text-sm sm:text-base leading-tight break-words group-hover:text-blue-600 transition-colors">{doc.title}</h4>
+                                  {/* COLLAPSIBLE CARDS CONTENT */}
+                                  {isCategoryExpanded && (
+                                      <div className="animate-in fade-in slide-in-from-top-1 duration-200 bg-slate-50 border-t-2 border-slate-100 p-4">
+                                          <div className="flex flex-col gap-3">
+                                              {paginatedDocs.map((doc) => {
+                                                  const isCardExpanded = !!expandedCards[doc.id];
+                                                  const themeColor = activeTab === 'completed' ? 'emerald' : 'rose';
+                                                  
+                                                  return (
+                                                      <div key={doc.id} className="bg-white rounded-2xl border-2 border-slate-200 hover:border-slate-300 transition-all relative overflow-hidden shadow-sm">
+                                                          <div className={`absolute top-0 left-0 w-1.5 h-full bg-${themeColor}-500`}></div>
                                                           
-                                                          <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3 text-xs sm:text-sm font-medium text-slate-600 mt-0.5">
-                                                              {activeTab === 'completed' ? (
-                                                                  <span className="flex items-start gap-1.5 break-words">
-                                                                      <MapPin size={14} className="text-emerald-500 shrink-0 mt-0.5"/>
-                                                                      <span className="truncate">Final: {doc.final_destination || 'Archived'}</span>
-                                                                  </span>
-                                                              ) : (
-                                                                  <span className="flex items-start gap-1.5 break-words">
-                                                                      <AlertCircle size={14} className="text-rose-500 shrink-0 mt-0.5"/>
-                                                                      <span className="truncate">Reason: {doc.remarks}</span>
-                                                                  </span>
-                                                              )}
-                                                              <span className="hidden sm:inline text-slate-300">•</span>
-                                                              <span className="flex items-start gap-1.5 break-words text-slate-500">
-                                                                  <Clock size={14} className="text-slate-400 shrink-0 mt-0.5"/>
-                                                                  {formatPHDateTime(doc.action_time)}
-                                                              </span>
+                                                          {/* CARD HEADER */}
+                                                          <div 
+                                                              onClick={() => toggleCardCollapse(doc.id)}
+                                                              className="p-4 pl-5 flex items-center justify-between gap-3 cursor-pointer select-none hover:bg-slate-50/70 transition-colors"
+                                                          >
+                                                              <div className="flex items-center gap-2.5 flex-1 min-w-0">
+                                                                  <div className="flex flex-col min-w-0 flex-1">
+                                                                      <div className="flex items-center gap-2 mb-0.5">
+                                                                          <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 shrink-0">
+                                                                              {doc.reference_no || doc.id.substring(0, 8)}
+                                                                          </span>
+                                                                          <span className={`flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded border uppercase tracking-wider shrink-0 text-${themeColor}-700 bg-${themeColor}-50 border-${themeColor}-200`}>
+                                                                              {activeTab === 'completed' ? 'Completed' : 'Cancelled'}
+                                                                          </span>
+                                                                      </div>
+                                                                      <h4 className="font-bold text-slate-900 text-sm sm:text-base leading-snug truncate mt-1">
+                                                                          {doc.title || doc.subject}
+                                                                      </h4>
+                                                                  </div>
+                                                              </div>
+
+                                                              <ChevronDown 
+                                                                  size={18} 
+                                                                  className={`text-slate-400 shrink-0 transition-transform duration-200 ease-in-out ${isCardExpanded ? `rotate-180 text-${themeColor}-600` : ''}`} 
+                                                              />
+                                                          </div>
+                                                          
+                                                          {/* SLIDE-DOWN DETAILS */}
+                                                          <div 
+                                                              className={`grid transition-[grid-template-rows,opacity] duration-[400ms] ease-in-out ${
+                                                                  isCardExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
+                                                              }`}
+                                                          >
+                                                              <div className="overflow-hidden">
+                                                                  <div className="p-4 pl-5 pt-1 border-t border-slate-100 bg-white space-y-4">
+                                                                      
+                                                                      <div className="flex items-center gap-1.5 pt-1">
+                                                                          <User size={13} className="text-slate-400 shrink-0" />
+                                                                          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                                                              Created by: <span className="text-slate-800">{doc.creator_name}</span>
+                                                                          </p>
+                                                                      </div>
+                                                                      
+                                                                      <div className="p-3.5 rounded-xl border border-slate-200 space-y-2.5 bg-slate-50">
+                                                                          {activeTab === 'completed' ? (
+                                                                              <div className="flex items-start gap-2">
+                                                                                  <MapPin size={15} className="text-slate-400 mt-0.5 shrink-0" />
+                                                                                  <p className="text-xs sm:text-sm text-slate-900 font-bold leading-snug">
+                                                                                      <span className="text-slate-500 text-[10px] block font-bold uppercase tracking-wider mb-0.5">Final Destination</span>
+                                                                                      {doc.final_destination || 'Archived'}
+                                                                                  </p>
+                                                                              </div>
+                                                                          ) : (
+                                                                              <div className="flex items-start gap-2">
+                                                                                  <AlertCircle size={15} className="text-rose-500 mt-0.5 shrink-0" />
+                                                                                  <p className="text-xs sm:text-sm text-slate-900 font-bold leading-snug">
+                                                                                      <span className="text-rose-500 text-[10px] block font-bold uppercase tracking-wider mb-0.5">Reason for Cancellation</span>
+                                                                                      {doc.remarks || 'No reason provided'}
+                                                                                  </p>
+                                                                              </div>
+                                                                          )}
+                                                                          <div className="flex items-start gap-2">
+                                                                              <Clock size={15} className="text-slate-400 mt-0.5 shrink-0" />
+                                                                              <p className="text-xs sm:text-sm text-slate-900 font-bold leading-snug">
+                                                                                  <span className="text-slate-500 text-[10px] block font-bold uppercase tracking-wider mb-0.5">
+                                                                                      {activeTab === 'completed' ? 'Completed On' : 'Cancelled On'}
+                                                                                  </span>
+                                                                                  {formatPHDateTime(doc.action_time || doc.created_at)}
+                                                                              </p>
+                                                                          </div>
+                                                                      </div>
+                                                                      
+                                                                      <div className="flex gap-2 pt-1">
+                                                                          {doc.attachment_url && (
+                                                                              <button 
+                                                                                  onClick={() => setPreviewDocUrl(doc.attachment_url as string)} 
+                                                                                  className="shrink-0 py-2.5 px-3 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl flex items-center justify-center transition-all active:scale-95 border-2 border-slate-300 shadow-sm"
+                                                                                  title="View Attached File"
+                                                                              >
+                                                                                  <Eye size={18} />
+                                                                              </button>
+                                                                          )}
+                                                                          <button 
+                                                                              onClick={() => setTrailDoc(doc)}
+                                                                              className="flex-1 py-2 px-2 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-xs sm:text-sm border-2 border-slate-300 shadow-sm"
+                                                                          >
+                                                                              <Clock size={14} /> View Digital Trail
+                                                                          </button>
+                                                                      </div>
+                                                                  </div>
+                                                              </div>
                                                           </div>
                                                       </div>
-
-                                                      {/* RIGHT BORDERED ACTION BUTTONS */}
-                                                      <div className="flex gap-2 shrink-0 mt-2 sm:mt-0 w-full sm:w-auto">
-                                                          {doc.attachment_url && (
-                                                              <button 
-                                                                  onClick={() => setPreviewDocUrl(doc.attachment_url as string)} 
-                                                                  className="p-2 sm:p-2.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 bg-white rounded-xl transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-95 active:shadow-inner border-2 border-slate-300 hover:border-blue-300"
-                                                                  title="View Document"
-                                                              >
-                                                                  <Eye size={18} className="w-4 h-4 sm:w-5 sm:h-5" />
-                                                              </button>
-                                                          )}
-                                                          <button 
-                                                              onClick={() => setTrailDoc(doc)} 
-                                                              className="flex-1 sm:flex-none py-2 px-3 sm:p-2.5 bg-blue-600 text-white hover:bg-blue-700 rounded-xl font-bold transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-95 active:shadow-inner border-2 border-blue-700 flex items-center justify-center gap-1.5 text-xs sm:text-sm"
-                                                          >
-                                                              Track <CornerUpLeft size={16} className="w-4 h-4 sm:w-4 sm:h-4" />
-                                                          </button>
-                                                      </div>
-                                                      
-                                                  </div>
-                                              ))}
+                                                  );
+                                              })}
                                           </div>
 
                                           {/* PAGINATION CONTROLS */}
                                           {totalPages > 1 && (
-                                              <div className="p-3 sm:p-4 bg-slate-50 border-t border-slate-200 flex items-center justify-between">
+                                              <div className="p-3 sm:p-4 bg-transparent mt-2 flex items-center justify-between">
                                                   <span className="text-[10px] sm:text-xs font-bold text-slate-500">
                                                       Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, docs.length)} of {docs.length}
                                                   </span>
