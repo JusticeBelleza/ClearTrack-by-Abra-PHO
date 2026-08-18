@@ -355,9 +355,9 @@ export default function Processing() {
           toast.success(`Document re-assigned to ${selectedColleague}`);
           closeReassignModal();
           refetch();
-      } catch (error) {
-          toast.error("Failed to re-assign document. Please try again.");
-      } finally {
+      } catch {
+            toast.error("Failed to re-assign document. Please try again.");
+        } finally {
           setIsReassigning(false);
       }
   };
@@ -688,7 +688,7 @@ export default function Processing() {
                               </div>
                               <div className="h-px bg-slate-200 flex-1"></div>
                               <span className="text-[10px] font-bold text-slate-400">
-                                  {clerks.reduce((total, [_, docs]) => total + docs.length, 0)} items
+                                  {clerks.reduce((total, [, docs]) => total + docs.length, 0)} items
                               </span>
                           </div>
                           
@@ -829,7 +829,18 @@ export default function Processing() {
 // BATCH ACTION MODAL
 // ==========================================
 
-function BatchActionModal({ selectedDocs, currentUserId, currentUserName, departments, colleagues, onClose, onSuccess }: any) {
+interface BatchModalProps {
+    selectedDocs: DocumentItem[];
+    currentUserId: string;
+    currentUserName: string;
+    userDepartment: string;
+    departments: OptionType[];
+    colleagues: string[];
+    onClose: () => void;
+    onSuccess: () => void;
+}
+
+function BatchActionModal({ selectedDocs, currentUserId, currentUserName, userDepartment, departments, colleagues, onClose, onSuccess }: BatchModalProps) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const isDrawingRef = useRef(false);
 
@@ -960,7 +971,7 @@ function BatchActionModal({ selectedDocs, currentUserId, currentUserName, depart
             if (file.type === 'application/pdf') { setAttachment(file); setAttachmentName(file.name); } 
             else if (file.type.startsWith('image/')) {
                 const pdfBlob = await processImageToScannedPDF(file);
-                setAttachment(pdfBlob); setAttachmentName(`Batch_Completed_${Date.now()}.pdf`);
+                setAttachment(pdfBlob); setAttachmentName('Batch_Completed.pdf');
             } else { toast.error("Unsupported file type."); setAttachmentName(""); }
         } catch { toast.error("Failed to process the document."); setAttachmentName(""); } 
         finally { setIsProcessingFile(false); }
@@ -1041,7 +1052,7 @@ function BatchActionModal({ selectedDocs, currentUserId, currentUserName, depart
                     const fateString = retentionFate === 'originator' ? 'Returned to Originator' : 'Retained at Final Destination';
                     const detailedRemarks = `Released By: ${releasedBy.trim()}\nDocument Retention: ${fateString}${remarks ? `\nRemarks: ${remarks.trim()}` : ''}`;
                     
-                    const updateData: any = { status: 'sealed', updated_at: nowIso };
+                    const updateData: Record<string, string | null> = { status: 'sealed', updated_at: nowIso };
                     if (sharedAttachmentUrl) updateData.completed_attachment_url = sharedAttachmentUrl;
 
                     await supabase.from('documents').update(updateData).eq('id', doc.id);

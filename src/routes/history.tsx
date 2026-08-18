@@ -94,7 +94,7 @@ const fetchHistoryData = async (): Promise<HistoryData> => {
     // Create a dictionary to quickly look up a user's name by their ID
     const creatorMap: Record<string, string> = {};
     if (profilesRes.data) {
-        profilesRes.data.forEach((p: any) => {
+        profilesRes.data.forEach((p: { id: string; full_name: string }) => {
             creatorMap[p.id] = p.full_name;
         });
     }
