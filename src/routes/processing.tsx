@@ -1073,13 +1073,6 @@ function BatchActionModal({ selectedDocs, currentUserId, currentUserName, depart
         }
     };
 
-    const modalConfig = {
-        add_step: { title: 'Route Document', icon: MapPin, color: 'blue' },
-        complete: { title: 'Batch Complete', icon: CheckCircle, color: 'emerald' },
-        reject: { title: 'Batch Return / Reject', icon: Ban, color: 'rose' },
-        reassign: { title: 'Batch Re-assign', icon: UserPlus, color: 'indigo' }
-    }[activeAction as 'add_step'|'complete'|'reject'|'reassign'] || { title: 'Batch Action', icon: Layers, color: 'slate' };
-
     const headerColorClass = !activeAction || activeAction === 'add_step' ? 'bg-slate-900' :
         activeAction === 'reject' ? 'bg-red-700' :
         activeAction === 'complete' ? 'bg-emerald-700' :
