@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { 
     Search, MapPin, Clock, CheckCircle, AlertCircle, 
-    Archive, FileText, X, Eye, CornerUpLeft, Ban, ChevronDown, FolderTree, User
+    Archive, FileText, X, Eye, Ban, ChevronDown, FolderTree, User
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -37,6 +37,7 @@ interface DocumentItem {
     id: string;
     reference_no?: string;
     title?: string;
+    subject?: string;
     category?: string;
     status: string;
     assigned_clerk?: string;

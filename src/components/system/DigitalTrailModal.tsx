@@ -1,4 +1,4 @@
-import React, { useState, useEffect, type SyntheticEvent } from 'react';
+import { useState, useEffect, type SyntheticEvent } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Archive, Check, ArrowRight, FileText, UserPlus, PenTool, Ban, RefreshCcw, ShieldCheck } from 'lucide-react';
 import { supabase } from '../../lib/supabase';

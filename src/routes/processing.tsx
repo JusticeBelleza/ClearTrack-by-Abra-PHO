@@ -3,13 +3,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { 
     Search, AlertCircle, MapPin, Eye, Clock, ChevronRight, X, Activity, CornerUpLeft, 
     User, MessageSquareWarning, CheckCircle, UserPlus, ChevronDown, Camera, Paperclip, 
-    UploadCloud, Ban, CheckSquare, Square, Layers, PenTool, ShieldCheck, ListPlus, ArrowLeft, RefreshCw
+    UploadCloud, Ban, CheckSquare, Square, Layers, PenTool, ArrowLeft, RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import { formatPHDateTime } from '../lib/utils';
 import { jsPDF } from 'jspdf';
-import { useUiStore } from '../store/uiStore';
 import HandoverScreen from '../components/system/HandoverScreen';
 import DigitalTrailModal from '../components/system/DigitalTrailModal';
 import FilePreviewModal from '../components/system/FilePreviewModal';
@@ -158,8 +157,6 @@ const fetchProcessingData = async (): Promise<ProcessingData> => {
 
 export default function Processing() {
   const queryClient = useQueryClient();
-  const openCreateModal = useUiStore((state) => state.openCreateModal);
-  
   const [activeTab, setActiveTab] = useState<'processing' | 'returned'>('processing');
   const [selectedDoc, setSelectedDoc] = useState<DocumentItem | null>(null);
   const [trailDoc, setTrailDoc] = useState<DocumentItem | null>(null);
@@ -214,8 +211,6 @@ export default function Processing() {
   }, [data]);
   
   const departments = data?.departments || [];
-  const allEmployeesList = data?.allEmployeesList || [];
-
   const filteredDocs = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
     const sourceList = documents[activeTab];
@@ -756,7 +751,6 @@ export default function Processing() {
             selectedDocs={selectedDocs}
             currentUserId={data?.currentUserId}
             currentUserName={data?.currentUserName}
-            userDepartment={data?.currentUserName ? data.departments.find(d => data.colleagues.includes(data.currentUserName))?.label || '' : ''}
             departments={departments}
             colleagues={availableColleagues}
             onClose={() => setIsBatchModalOpen(false)}
@@ -835,7 +829,7 @@ export default function Processing() {
 // BATCH ACTION MODAL
 // ==========================================
 
-function BatchActionModal({ selectedDocs, currentUserId, currentUserName, userDepartment, departments, colleagues, onClose, onSuccess }: any) {
+function BatchActionModal({ selectedDocs, currentUserId, currentUserName, departments, colleagues, onClose, onSuccess }: any) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const isDrawingRef = useRef(false);
 
@@ -1085,8 +1079,6 @@ function BatchActionModal({ selectedDocs, currentUserId, currentUserName, userDe
         reject: { title: 'Batch Return / Reject', icon: Ban, color: 'rose' },
         reassign: { title: 'Batch Re-assign', icon: UserPlus, color: 'indigo' }
     }[activeAction as 'add_step'|'complete'|'reject'|'reassign'] || { title: 'Batch Action', icon: Layers, color: 'slate' };
-
-    const Icon = modalConfig.icon;
 
     const headerColorClass = !activeAction || activeAction === 'add_step' ? 'bg-slate-900' :
         activeAction === 'reject' ? 'bg-red-700' :
