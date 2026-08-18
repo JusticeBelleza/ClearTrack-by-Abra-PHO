@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { 
     Search, AlertCircle, MapPin, Eye, Clock, ChevronRight, X, Activity, CornerUpLeft, 
     User, MessageSquareWarning, CheckCircle, UserPlus, ChevronDown, Camera, Paperclip, 
-    UploadCloud, Ban, CheckSquare, Square, Layers, PenTool, ArrowLeft, RefreshCw
+    UploadCloud, Ban, CheckSquare, Square, PenTool, ArrowLeft, RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
