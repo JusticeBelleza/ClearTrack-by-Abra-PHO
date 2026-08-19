@@ -74,8 +74,8 @@ export default function BatchActionModal({ selectedDocs, currentUserId, currentU
             const getCoordinates = (e: MouseEvent | TouchEvent) => {
                 const rect = canvas.getBoundingClientRect();
                 const scaleX = canvas.width / rect.width; const scaleY = canvas.height / rect.height;
-                let clientX = e.type.includes('touch') ? (e as TouchEvent).touches[0].clientX : (e as MouseEvent).clientX;
-                let clientY = e.type.includes('touch') ? (e as TouchEvent).touches[0].clientY : (e as MouseEvent).clientY;
+                const clientX = e.type.includes('touch') ? (e as TouchEvent).touches[0].clientX : (e as MouseEvent).clientX;
+                const clientY = e.type.includes('touch') ? (e as TouchEvent).touches[0].clientY : (e as MouseEvent).clientY;
                 return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
             };
 

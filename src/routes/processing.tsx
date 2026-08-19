@@ -1,13 +1,12 @@
-// src/routes/Processing.tsx
+// src/routes/processing.tsx
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Search, X, Activity, CornerUpLeft, RefreshCw, CheckCircle, MapPin, ChevronDown, User, Clock, Eye, UserPlus, Ban, Square, CheckSquare, AlertCircle, Plus, Layers, PenTool, Camera, Paperclip, ChevronRight, UploadCloud } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import { jsPDF } from 'jspdf';
-import type { ProcessingData, DocumentItem } from '../types/processing';
+import type { ProcessingData, DocumentItem, OptionType } from '../types/processing';
 import { formatPHDateTime } from '../lib/utils';
-
 import HandoverScreen from '../components/system/HandoverScreen';
 import DigitalTrailModal from '../components/system/DigitalTrailModal';
 import FilePreviewModal from '../components/system/FilePreviewModal';
@@ -59,14 +58,14 @@ export default function Processing() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'processing' | 'returned'>('processing');
   const [searchQuery, setSearchQuery] = useState("");
-
+  
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
   const [selectedDocs, setSelectedDocs] = useState<DocumentItem[]>([]);
-
+  
   // FAB & Batch Actions State
   const [isFabOpen, setIsFabOpen] = useState(false);
   const [batchAction, setBatchAction] = useState<'add_step' | 'complete' | 'reject' | 'reassign' | null>(null);
-
+  
   // Modals
   const [selectedDoc, setSelectedDoc] = useState<DocumentItem | null>(null);
   const [trailDoc, setTrailDoc] = useState<DocumentItem | null>(null);
@@ -253,11 +252,11 @@ export default function Processing() {
                                                 key={doc.id} doc={doc} activeTab={activeTab} isSelected={selectedDocs.some(d => d.id === doc.id)}
                                                 isExpanded={!!expandedCards[doc.id]} showCheckbox={clerkDocCounts[doc.assigned_clerk || 'Unassigned'] > 1 && (!selectedDocs.length || selectedDocs[0].assigned_clerk === (doc.assigned_clerk || 'Unassigned'))}
                                                 currentUserName={data?.currentUserName || ''} currentUserId={data?.currentUserId || ''}
-                                                onToggleSelection={(d: any) => setSelectedDocs((prev: any) => prev.some((x: any) => x.id === d.id) ? prev.filter((x: any) => x.id !== d.id) : [...prev, d])}
-                                                onToggleCollapse={(id: any) => setExpandedCards((prev: any) => ({...prev, [id]: !prev[id]}))}
-                                                onPreview={(url: any) => setPreviewDocUrl(url)} onTrack={(d: any) => setTrailDoc(d)}
-                                                onReassign={(d: any) => setReassignDoc(d)} onCancel={(d: any) => setCancelDoc(d)}
-                                                onRevise={(d: any) => setReviseDoc(d)} onAction={(d: any) => setSelectedDoc(d)}
+                                                onToggleSelection={(d: DocumentItem) => setSelectedDocs((prev: DocumentItem[]) => prev.some((x: DocumentItem) => x.id === d.id) ? prev.filter((x: DocumentItem) => x.id !== d.id) : [...prev, d])}
+                                                onToggleCollapse={(id: string) => setExpandedCards((prev: Record<string, boolean>) => ({...prev, [id]: !prev[id]}))}
+                                                onPreview={(url: string) => setPreviewDocUrl(url)} onTrack={(d: DocumentItem) => setTrailDoc(d)}
+                                                onReassign={(d: DocumentItem) => setReassignDoc(d)} onCancel={(d: DocumentItem) => setCancelDoc(d)}
+                                                onRevise={(d: DocumentItem) => setReviseDoc(d)} onAction={(d: DocumentItem) => setSelectedDoc(d)}
                                               />
                                           ))}
                                       </div>
@@ -275,11 +274,11 @@ export default function Processing() {
                             key={doc.id} doc={doc} activeTab={activeTab} isSelected={selectedDocs.some(d => d.id === doc.id)}
                             isExpanded={!!expandedCards[doc.id]} showCheckbox={clerkDocCounts[doc.assigned_clerk || 'Unassigned'] > 1 && (!selectedDocs.length || selectedDocs[0].assigned_clerk === (doc.assigned_clerk || 'Unassigned'))}
                             currentUserName={data?.currentUserName || ''} currentUserId={data?.currentUserId || ''}
-                            onToggleSelection={(d: any) => setSelectedDocs((prev: any) => prev.some((x: any) => x.id === d.id) ? prev.filter((x: any) => x.id !== d.id) : [...prev, d])}
-                            onToggleCollapse={(id: any) => setExpandedCards((prev: any) => ({...prev, [id]: !prev[id]}))}
-                            onPreview={(url: any) => setPreviewDocUrl(url)} onTrack={(d: any) => setTrailDoc(d)}
-                            onReassign={(d: any) => setReassignDoc(d)} onCancel={(d: any) => setCancelDoc(d)}
-                            onRevise={(d: any) => setReviseDoc(d)} onAction={(d: any) => setSelectedDoc(d)}
+                            onToggleSelection={(d: DocumentItem) => setSelectedDocs((prev: DocumentItem[]) => prev.some((x: DocumentItem) => x.id === d.id) ? prev.filter((x: DocumentItem) => x.id !== d.id) : [...prev, d])}
+                            onToggleCollapse={(id: string) => setExpandedCards((prev: Record<string, boolean>) => ({...prev, [id]: !prev[id]}))}
+                            onPreview={(url: string) => setPreviewDocUrl(url)} onTrack={(d: DocumentItem) => setTrailDoc(d)}
+                            onReassign={(d: DocumentItem) => setReassignDoc(d)} onCancel={(d: DocumentItem) => setCancelDoc(d)}
+                            onRevise={(d: DocumentItem) => setReviseDoc(d)} onAction={(d: DocumentItem) => setSelectedDoc(d)}
                           />
                       ))}
                   </div>
@@ -374,7 +373,7 @@ export default function Processing() {
       {selectedDoc && <HandoverScreen doc={selectedDoc} departments={departments} onBack={() => setSelectedDoc(null)} onSuccess={() => refetch()} />}
       {trailDoc && <DigitalTrailModal doc={trailDoc} onBack={() => setTrailDoc(null)} />}
       {previewDocUrl && <FilePreviewModal url={previewDocUrl} onClose={() => setPreviewDocUrl(null)} />}
-
+      
       {/* Inline Fallback Modals (Revise/Cancel/Reassign) */}
       {reassignDoc && <ReassignModal doc={reassignDoc} currentUserName={data?.currentUserName || ''} currentUserId={data?.currentUserId || ''} colleagues={availableColleagues} onClose={() => setReassignDoc(null)} onSuccess={() => refetch()} />}
       {reviseDoc && <ReviseModal doc={reviseDoc} departments={departments} onClose={() => setReviseDoc(null)} onSuccess={() => refetch()} />}
@@ -384,16 +383,16 @@ export default function Processing() {
 }
 
 // ==========================================
-// INLINE COMPONENTS (Move to separate files later)
+// INLINE COMPONENTS WITH STRICT TYPING
 // ==========================================
 
-function MenuButton({ icon, label, onClick, colorTheme = 'teal' }: any) {
+function MenuButton({ icon, label, onClick, colorTheme = 'teal' }: { icon: React.ReactNode, label: string, onClick: () => void, colorTheme?: 'teal' | 'slate' }) {
     const colors = {
         teal: 'bg-teal-50 text-teal-700',
         slate: 'bg-slate-100 text-slate-700'
     };
-    const activeColor = colors[colorTheme as keyof typeof colors] || colors.teal;
-
+    const activeColor = colors[colorTheme] || colors.teal;
+    
     return (
         <button onClick={onClick} className="flex items-center gap-3 p-2 w-full hover:bg-slate-50 rounded-xl transition-colors text-left active:scale-[0.98]">
             <div className={`p-2 rounded-[0.8rem] ${activeColor}`}>
@@ -404,7 +403,7 @@ function MenuButton({ icon, label, onClick, colorTheme = 'teal' }: any) {
     );
 }
 
-function TabButton({ label, icon, count, isActive, onClick, colorClass, badgeClass, newCount = 0 }: any) {
+function TabButton({ label, icon, count, isActive, onClick, colorClass, badgeClass, newCount = 0 }: { label: string, icon: React.ReactNode, count: number, isActive: boolean, onClick: () => void, colorClass: string, badgeClass: string, newCount?: number }) {
     return (
         <button 
             onClick={onClick} title={label}
@@ -426,7 +425,7 @@ function TabButton({ label, icon, count, isActive, onClick, colorClass, badgeCla
     );
 }
 
-function CustomSelect({ options, value, onChange, placeholder, disabled = false, emptyText = "Loading options...", isRelative = false }: any) {
+function CustomSelect({ options, value, onChange, placeholder, disabled = false, emptyText = "Loading options...", isRelative = false }: { options: OptionType[], value: string, onChange: (val: string) => void, placeholder?: string, disabled?: boolean, emptyText?: string, isRelative?: boolean }) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const dropdownRef = useRef<HTMLDivElement>(null);
@@ -437,14 +436,14 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false,
       return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    const filteredOptions = options.filter((opt: any) => {
+    const filteredOptions = options.filter((opt: OptionType) => {
         const optLabel = typeof opt === 'string' ? opt : opt.label;
         return optLabel.toLowerCase().includes(searchTerm.toLowerCase());
     });
 
-    const selectedOptionLabel = options.find((opt: any) => (typeof opt === 'string' ? opt : opt.value) === value);
+    const selectedOptionLabel = options.find((opt: OptionType) => (typeof opt === 'string' ? opt : opt.value) === value);
     const displayLabel = selectedOptionLabel ? (typeof selectedOptionLabel === 'string' ? selectedOptionLabel : selectedOptionLabel.label) : placeholder;
-
+ 
     return (
       <div className="relative w-full" ref={dropdownRef}>
         <button type="button" disabled={disabled} onClick={() => !disabled && setIsOpen(!isOpen)} className={`w-full px-4 py-3.5 bg-slate-50/50 focus:bg-white border focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 rounded-xl flex justify-between items-center transition-all text-sm outline-none active:scale-[0.99] ${isOpen ? 'border-teal-500 bg-white ring-4 ring-teal-500/10' : 'border-slate-200 hover:bg-white hover:border-slate-300'} ${!value ? 'text-slate-500 font-medium' : 'text-slate-700 font-bold'}`}>
@@ -462,7 +461,7 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false,
                 </div>
             )}
             <div className="max-h-[240px] overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
-              {filteredOptions.length === 0 ? <div className="px-4 py-6 text-sm text-slate-500 text-center font-medium">{emptyText}</div> : filteredOptions.map((option: any, idx: number) => {
+              {filteredOptions.length === 0 ? <div className="px-4 py-6 text-sm text-slate-500 text-center font-medium">{emptyText}</div> : filteredOptions.map((option: OptionType, idx: number) => {
                     const optValue = typeof option === 'string' ? option : option.value;
                     const optLabel = typeof option === 'string' ? option : option.label;
                     return <div key={idx} onClick={() => { onChange(optValue); setIsOpen(false); }} className={`px-4 py-3 text-sm rounded-lg cursor-pointer transition-colors flex items-center active:scale-95 ${optValue === value ? 'bg-teal-600 text-white font-bold shadow-sm' : 'text-slate-700 hover:bg-slate-100 font-medium'}`}>{optLabel}</div>
@@ -474,11 +473,11 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false,
     );
 }
 
-function DocumentCard({ doc, isSelected, isExpanded, showCheckbox, currentUserName, currentUserId, onToggleSelection, onToggleCollapse, onPreview, onTrack, onReassign, onAction }: any) {
+function DocumentCard({ doc, activeTab, isSelected, isExpanded, showCheckbox, currentUserName, currentUserId, onToggleSelection, onToggleCollapse, onPreview, onTrack, onReassign, onCancel, onRevise, onAction }: { doc: DocumentItem, activeTab: string, isSelected: boolean, isExpanded: boolean, showCheckbox: boolean, currentUserName: string, currentUserId: string, onToggleSelection: (d: DocumentItem) => void, onToggleCollapse: (id: string) => void, onPreview: (url: string) => void, onTrack: (d: DocumentItem) => void, onReassign: (d: DocumentItem) => void, onCancel: (d: DocumentItem) => void, onRevise: (d: DocumentItem) => void, onAction: (d: DocumentItem) => void }) {
     const isManager = doc.assigned_clerk === currentUserName;
     const isCreator = doc.created_by === currentUserId;
     const canReassign = isManager || isCreator;
-
+    
     return (
         <div className={`bg-white rounded-2xl border-2 transition-all relative overflow-hidden ${doc.is_urgent ? 'border-red-300 shadow-sm hover:border-red-400' : (isSelected ? 'border-teal-500 ring-4 ring-teal-500/10' : 'border-slate-200 hover:border-slate-300')}`}>
             <div className={`absolute top-0 left-0 w-full h-1 ${doc.is_urgent ? 'bg-red-600' : (isSelected ? 'bg-teal-500' : 'bg-transparent')}`}></div>
@@ -511,10 +510,6 @@ function DocumentCard({ doc, isSelected, isExpanded, showCheckbox, currentUserNa
                                 <MapPin size={15} className="text-slate-400 mt-0.5 shrink-0" />
                                 <p className="text-xs sm:text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-[10px] block font-bold uppercase tracking-wider mb-0.5">Current Location</span>{doc.current_location || 'Processing'}</p>
                             </div>
-                            <div className="flex items-start gap-2">
-                                <Clock size={15} className="text-slate-400 mt-0.5 shrink-0" />
-                                <p className="text-xs sm:text-sm text-slate-900 font-bold leading-snug"><span className="text-slate-500 text-[10px] block font-bold uppercase tracking-wider mb-0.5">Last Update</span>{formatPHDateTime(doc.updated_at || doc.created_at)}</p>
-                            </div>
                         </div>
                         <div className="flex flex-col gap-2 pt-1">
                             <div className="flex gap-2">
@@ -535,14 +530,14 @@ function DocumentCard({ doc, isSelected, isExpanded, showCheckbox, currentUserNa
     );
 }
 
-function BatchActionModal({ selectedDocs, initialAction, currentUserId, currentUserName, departments, colleagues, onClose, onSuccess }: any) {
+function BatchActionModal({ selectedDocs, initialAction, currentUserId, currentUserName, departments, colleagues, onClose, onSuccess }: { selectedDocs: DocumentItem[], initialAction: 'add_step' | 'complete' | 'reject' | 'reassign', currentUserId: string, currentUserName: string, departments: OptionType[], colleagues: string[], onClose: () => void, onSuccess: () => void }) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const isDrawingRef = useRef(false);
     const [isClosing, setIsClosing] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
-
+    
     const [activeAction] = useState<'add_step' | 'complete' | 'reject' | 'reassign'>(initialAction);
-
+    
     const [hasSignature, setHasSignature] = useState(false);
     const [destination, setDestination] = useState('');
     const [receivingClerk, setReceivingClerk] = useState('');
@@ -564,8 +559,8 @@ function BatchActionModal({ selectedDocs, initialAction, currentUserId, currentU
             ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
             const getCoordinates = (e: MouseEvent | TouchEvent) => {
                 const rect = canvas.getBoundingClientRect(); const scaleX = canvas.width / rect.width; const scaleY = canvas.height / rect.height;
-                let clientX = e.type.includes('touch') ? (e as TouchEvent).touches[0].clientX : (e as MouseEvent).clientX;
-                let clientY = e.type.includes('touch') ? (e as TouchEvent).touches[0].clientY : (e as MouseEvent).clientY;
+                const clientX = e.type.includes('touch') ? (e as TouchEvent).touches[0].clientX : (e as MouseEvent).clientX;
+                const clientY = e.type.includes('touch') ? (e as TouchEvent).touches[0].clientY : (e as MouseEvent).clientY;
                 return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
             };
             const startDrawing = (e: MouseEvent | TouchEvent) => { e.preventDefault(); isDrawingRef.current = true; setHasSignature(true); const { x, y } = getCoordinates(e); ctx.beginPath(); ctx.moveTo(x, y); };
@@ -744,7 +739,7 @@ function BatchActionModal({ selectedDocs, initialAction, currentUserId, currentU
 }
 
 // INLINE COMPONENT FOR RE-ASSIGNMENT OF SINGLE DOCUMENT
-function ReassignModal({ doc, currentUserName, currentUserId, colleagues, onClose, onSuccess }: any) {
+function ReassignModal({ doc, currentUserName, currentUserId, colleagues, onClose, onSuccess }: { doc: DocumentItem, currentUserName: string, currentUserId: string, colleagues: string[], onClose: () => void, onSuccess: () => void }) {
     const [selectedColleague, setSelectedColleague] = useState('');
     const [isReassigning, setIsReassigning] = useState(false);
     const [isClosing, setIsClosing] = useState(false);
@@ -790,7 +785,7 @@ function ReassignModal({ doc, currentUserName, currentUserId, colleagues, onClos
     );
 }
 
-function ReviseModal({ doc, departments, onClose, onSuccess }: any) {
+function ReviseModal({ doc, departments, onClose, onSuccess }: { doc: DocumentItem, departments: OptionType[], onClose: () => void, onSuccess: () => void }) {
     const [isClosing, setIsClosing] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     
@@ -846,7 +841,7 @@ function ReviseModal({ doc, departments, onClose, onSuccess }: any) {
             await supabase.from('document_logs').insert([{ document_id: doc.id, action: 'Resubmitted', location: destination, assigned_to: 'Office Queue', remarks: logRemarks, created_by: session?.user?.id || null }]);
 
             toast.success("Document Successfully Revised & Resubmitted!"); onSuccess(); handleClose();
-        } catch (err: unknown) { toast.error("Failed to resubmit the document."); } finally { setIsSubmitting(false); }
+        } catch { toast.error("Failed to resubmit the document."); } finally { setIsSubmitting(false); }
     };
 
     return (
@@ -879,7 +874,7 @@ function ReviseModal({ doc, departments, onClose, onSuccess }: any) {
     );
 }
 
-function CancelModal({ doc, onClose, onSuccess }: any) {
+function CancelModal({ doc, onClose, onSuccess }: { doc: DocumentItem, onClose: () => void, onSuccess: () => void }) {
     const [isClosing, setIsClosing] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [reason, setReason] = useState('');
@@ -895,7 +890,7 @@ function CancelModal({ doc, onClose, onSuccess }: any) {
             await supabase.from('document_logs').insert([{ document_id: doc.id, action: 'Cancelled', location: doc.current_location || 'Origin', remarks: `Document cancelled by creator. Reason: ${reason.trim()}`, created_by: session?.user?.id || null }]);
             toast.success("Document Cancelled", { description: "It has been moved to your cancelled history." });
             onSuccess(); handleClose();
-        } catch (err) { toast.error("Failed to cancel the document."); } finally { setIsSubmitting(false); }
+        } catch { toast.error("Failed to cancel the document."); } finally { setIsSubmitting(false); }
     };
 
     return (
