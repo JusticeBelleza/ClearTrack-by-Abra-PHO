@@ -1,6 +1,7 @@
+// src/routes/login.tsx
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ArrowRight, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Lock, Mail, ArrowRight, Loader2, Eye, EyeOff, Fingerprint } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { Turnstile } from '@marsidev/react-turnstile';
@@ -17,9 +18,10 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [isBiometricLoading, setIsBiometricLoading] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
-  // FIXED: Added a reference to the Turnstile widget so we can reset it on failure
+  // Added a reference to the Turnstile widget so we can reset it on failure
   const turnstileRef = useRef<TurnstileInstance>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -46,10 +48,46 @@ export default function Login() {
 
       if (error) throw error;
 
+      await navigateToDashboard(data.user.id);
+    } catch (err: unknown) {
+      console.error("Supabase Auth Error:", err);
+      const errorMessage = err instanceof Error ? err.message : "Invalid credentials.";
+      toast.error("Login Failed", { description: errorMessage });
+      
+      // Reset the CAPTCHA token so the user can try again without refreshing
+      setTurnstileToken(null);
+      turnstileRef.current?.reset();
+      
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleBiometricLogin = async () => {
+    setIsBiometricLoading(true);
+    try {
+      // @ts-expect-error - Supabase Experimental Passkey Method
+      const { data, error } = await supabase.auth.signInWithPasskey();
+      
+      if (error) throw error;
+      
+      if (data?.user?.id) {
+          await navigateToDashboard(data.user.id);
+      }
+    } catch (err: unknown) {
+      console.error("Biometric Login Error:", err);
+      const errorMessage = err instanceof Error ? err.message : "Authentication failed.";
+      toast.error("Biometric Login Failed", { description: errorMessage });
+    } finally {
+      setIsBiometricLoading(false);
+    }
+  };
+
+  const navigateToDashboard = async (userId: string) => {
       const { data: profile } = await supabase
         .from('profiles')
         .select('role')
-        .eq('id', data.user.id)
+        .eq('id', userId)
         .single();
 
       toast.success("Welcome Back!");
@@ -59,18 +97,6 @@ export default function Login() {
       } else {
         navigate('/dashboard', { replace: true });
       }
-    } catch (err: unknown) {
-      console.error("Supabase Auth Error:", err);
-      const errorMessage = err instanceof Error ? err.message : "Invalid credentials.";
-      toast.error("Login Failed", { description: errorMessage });
-      
-      // FIXED: Reset the CAPTCHA token so the user can try again without refreshing!
-      setTurnstileToken(null);
-      turnstileRef.current?.reset();
-      
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   const handleForgotPassword = () => {
@@ -80,7 +106,7 @@ export default function Login() {
   };
 
   return (
-    // Changed to min-h-[100dvh] for perfect mobile keyboard handling
+    // min-h-[100dvh] for perfect mobile keyboard handling
     <div className="min-h-[100dvh] bg-slate-900 flex flex-col justify-center items-center p-4 sm:p-6 relative overflow-hidden">
       {/* Background Glow */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[30rem] h-[30rem] bg-blue-600/20 rounded-full blur-[100px] pointer-events-none"></div>
@@ -128,7 +154,7 @@ export default function Login() {
                 placeholder="name@abra.gov.ph"
                 required
                 autoComplete="email"
-                disabled={isLoading}
+                disabled={isLoading || isBiometricLoading}
                 className="w-full pl-12 pr-4 py-3.5 bg-slate-50/50 border-2 border-slate-200 focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-600/10 rounded-2xl outline-none font-semibold text-slate-900 transition-all text-base placeholder:text-slate-400 placeholder:font-normal disabled:opacity-70"
               />
             </div>
@@ -155,7 +181,7 @@ export default function Login() {
                 placeholder="••••••••"
                 required
                 autoComplete="current-password"
-                disabled={isLoading}
+                disabled={isLoading || isBiometricLoading}
                 className="w-full pl-12 pr-14 py-3.5 bg-slate-50/50 border-2 border-slate-200 focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-600/10 rounded-2xl outline-none font-semibold text-slate-900 transition-all text-base placeholder:text-slate-400 placeholder:font-normal disabled:opacity-70"
               />
               {/* Touch-optimized password toggle */}
@@ -170,7 +196,7 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Enhanced Captcha Container */}
+          {/* Captcha Container */}
           <div className="flex justify-center pt-2">
             <div className="w-full flex justify-center sm:rounded-2xl sm:bg-slate-50/80 sm:border-2 sm:border-slate-100 sm:p-1.5 sm:shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] [&_iframe]:!border-none [&_iframe]:!outline-none [&_iframe]:!rounded-none [&>div]:!border-none overflow-hidden">
               <Turnstile
@@ -187,10 +213,10 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Submit Button */}
+          {/* Standard Login Button */}
           <button 
             type="submit" 
-            disabled={isLoading || !turnstileToken}
+            disabled={isLoading || isBiometricLoading || !turnstileToken}
             className="w-full py-4 mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl shadow-[0_8px_16px_-6px_rgba(37,99,235,0.4)] hover:shadow-[0_12px_20px_-8px_rgba(37,99,235,0.6)] transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-base border border-blue-500 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:shadow-none"
           >
             {isLoading ? (
@@ -205,6 +231,31 @@ export default function Login() {
             )}
           </button>
         </form>
+
+        <div className="relative flex items-center justify-center py-5">
+            <div className="w-full h-px bg-slate-200"></div>
+            <span className="absolute bg-white px-4 text-xs font-bold text-slate-400 uppercase tracking-widest">or</span>
+        </div>
+
+        {/* NEW: Biometric Login Button */}
+        <button 
+            type="button"
+            onClick={handleBiometricLogin}
+            disabled={isLoading || isBiometricLoading}
+            className="w-full py-3.5 bg-slate-50 hover:bg-slate-100 text-slate-900 font-bold rounded-2xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm border-2 border-slate-200 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
+        >
+            {isBiometricLoading ? (
+                <>
+                    <Loader2 className="animate-spin h-5 w-5 text-blue-600" />
+                    Scanning...
+                </>
+            ) : (
+                <>
+                    <Fingerprint size={20} className="text-blue-600" />
+                    Sign in with Passkey / Face ID
+                </>
+            )}
+        </button>
 
         <div className="mt-8 text-center border-t border-slate-100 pt-6">
           <p className="text-xs text-slate-400 font-medium mb-3">

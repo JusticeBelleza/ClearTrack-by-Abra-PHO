@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
-  Shield, Lock, Eye, EyeOff, Save, X, Check, AlertCircle, Mail, Briefcase, Phone, Settings as SettingsIcon, Building2, Edit3, ChevronDown, Hash, User
+    Shield, Lock, Eye, EyeOff, Save, X, Check, AlertCircle, Mail, Briefcase, Phone, Settings as SettingsIcon, Building2, Edit3, ChevronDown, Hash, User, Fingerprint
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
@@ -144,6 +144,9 @@ export default function Settings() {
   const queryClient = useQueryClient();
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   
+  // Passkey Registration State
+  const [isRegisteringPasskey, setIsRegisteringPasskey] = useState(false);
+
   // Edit Profile Modal States
   const [isEditing, setIsEditing] = useState(false);
   const [isClosingEdit, setIsClosingEdit] = useState(false);
@@ -257,6 +260,23 @@ export default function Settings() {
           return;
       }
       updateProfileMutation.mutate(formData);
+  };
+
+  const handleRegisterPasskey = async () => {
+      setIsRegisteringPasskey(true);
+      try {
+          // @ts-expect-error - Supabase Experimental Passkey Method
+          const { data, error } = await supabase.auth.registerPasskey();
+          
+          if (error) throw error;
+          toast.success("Device registered successfully!", { description: "You can now use Face ID / Touch ID to log in." });
+      } catch (err: unknown) {
+          console.error(err);
+          const errorMessage = err instanceof Error ? err.message : "An unexpected error occurred.";
+          toast.error("Failed to register device", { description: errorMessage });
+      } finally {
+          setIsRegisteringPasskey(false);
+      }
   };
 
   const getInitials = (name?: string) => {
@@ -425,14 +445,29 @@ export default function Settings() {
               <Shield size={24} className="text-slate-900" />
               <h3 className="text-xl font-black text-slate-900">Security</h3>
             </div>
-            <p className="text-sm text-slate-600 font-medium mb-6">Keep your account secure by regularly updating your password.</p>
+            <p className="text-sm text-slate-600 font-medium mb-6">Keep your account secure and manage your login preferences.</p>
             
-            <button 
-              onClick={() => setIsPasswordModalOpen(true)}
-              className="w-full py-3.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 text-base border-2 border-slate-900 shadow-md"
-            >
-              <Lock size={18} /> Change Password
-            </button>
+            <div className="space-y-3">
+                <button 
+                  onClick={() => setIsPasswordModalOpen(true)}
+                  className="w-full py-3.5 px-4 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 text-base border-2 border-slate-900 shadow-md"
+                >
+                  <Lock size={18} /> Change Password
+                </button>
+                
+                {/* NEW BIOMETRICS BUTTON */}
+                <button 
+                  onClick={handleRegisterPasskey}
+                  disabled={isRegisteringPasskey}
+                  className="w-full py-3.5 px-4 bg-white hover:bg-slate-50 text-slate-900 font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 text-base border-2 border-slate-200 shadow-sm disabled:opacity-50"
+                >
+                  {isRegisteringPasskey ? (
+                      <span className="w-5 h-5 border-2 border-slate-300 border-t-slate-900 rounded-full animate-spin"></span>
+                  ) : (
+                      <><Fingerprint size={18} className="text-blue-600" /> Register Biometrics</>
+                  )}
+                </button>
+            </div>
           </div>
         </div>
 
