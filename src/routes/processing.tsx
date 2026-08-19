@@ -511,13 +511,14 @@ function DocumentCard({ doc, isSelected, isExpanded, showCheckbox, currentUserNa
                             <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 shrink-0">{doc.reference_no || doc.id.substring(0, 8)}</span>
                             {doc.is_urgent && <span className="flex items-center gap-0.5 text-[9px] font-black text-red-700 bg-red-50 px-1.5 py-0.5 rounded border border-red-200 uppercase tracking-wider animate-pulse shrink-0"><AlertCircle size={10} strokeWidth={3}/> Rush</span>}
                             
-                            {/* MOVED AGING BADGE */}
+                            {/* MOVED AGING BADGE (No label, top row) */}
                             <div className={`ml-auto px-1.5 py-0.5 rounded border flex items-center gap-1 shadow-sm shrink-0 ${aging.colorTheme}`}>
                                 <Clock size={10} strokeWidth={2.5} />
                                 <span className="text-[10px] font-black tracking-widest font-mono">{aging.displayTime}</span>
                             </div>
                         </div>
-                        <h4 className="font-bold text-slate-900 text-sm sm:text-base leading-snug truncate">{doc.title || doc.subject}</h4>
+                        {/* CONDITIONAL TRUNCATION: Wraps text when expanded */}
+                        <h4 className={`font-bold text-slate-900 text-sm sm:text-base leading-snug ${isExpanded ? '' : 'truncate'}`}>{doc.title || doc.subject}</h4>
                     </div>
                 </div>
                 
