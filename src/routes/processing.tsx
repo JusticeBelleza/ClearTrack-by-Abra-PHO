@@ -507,23 +507,20 @@ function DocumentCard({ doc, isSelected, isExpanded, showCheckbox, currentUserNa
                         </button>
                     )}
                     <div className="flex flex-col min-w-0 flex-1">
-                        <div className="flex items-center gap-2 mb-0.5">
+                        <div className="flex items-center gap-2 mb-1">
                             <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 shrink-0">{doc.reference_no || doc.id.substring(0, 8)}</span>
                             {doc.is_urgent && <span className="flex items-center gap-0.5 text-[9px] font-black text-red-700 bg-red-50 px-1.5 py-0.5 rounded border border-red-200 uppercase tracking-wider animate-pulse shrink-0"><AlertCircle size={10} strokeWidth={3}/> Rush</span>}
+                            
+                            {/* MOVED AGING BADGE */}
+                            <div className={`ml-auto px-1.5 py-0.5 rounded border flex items-center gap-1 shadow-sm shrink-0 ${aging.colorTheme}`}>
+                                <Clock size={10} strokeWidth={2.5} />
+                                <span className="text-[10px] font-black tracking-widest font-mono">{aging.displayTime}</span>
+                            </div>
                         </div>
                         <h4 className="font-bold text-slate-900 text-sm sm:text-base leading-snug truncate">{doc.title || doc.subject}</h4>
                     </div>
                 </div>
                 
-                {/* AGING BADGE IN HEADER */}
-                <div className="flex flex-col items-end shrink-0 mr-1 sm:mr-2">
-                    <span className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Time in</span>
-                    <div className={`px-1.5 py-0.5 rounded border flex items-center gap-1 shadow-sm ${aging.colorTheme}`}>
-                        <Clock size={10} strokeWidth={2.5} />
-                        <span className="text-[10px] font-black tracking-widest font-mono">{aging.displayTime}</span>
-                    </div>
-                </div>
-
                 <ChevronDown size={18} className={`text-slate-400 shrink-0 transition-transform duration-200 ease-in-out ${isExpanded ? 'rotate-180 text-teal-600' : ''}`} />
             </div>
             <div className={`grid transition-[grid-template-rows,opacity] duration-[400ms] ease-in-out ${isExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
