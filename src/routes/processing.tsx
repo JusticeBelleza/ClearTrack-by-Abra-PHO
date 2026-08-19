@@ -376,8 +376,31 @@ export default function Processing() {
 }
 
 // ==========================================
-// INLINE COMPONENTS WITH STRICT TYPING
+// INLINE COMPONENTS & HELPERS WITH STRICT TYPING
 // ==========================================
+
+// Time calculation helper for 48/72hr SLA bottleneck tracking
+function getDocumentAging(updatedAt: string) {
+    const now = new Date().getTime();
+    const updatedTime = new Date(updatedAt).getTime();
+    
+    const diffHours = (now - updatedTime) / (1000 * 60 * 60);
+    const days = Math.floor(diffHours / 24);
+    const remainingHrs = Math.floor(diffHours % 24);
+
+    const formattedDays = days.toString().padStart(2, '0');
+    const formattedHours = remainingHrs.toString().padStart(2, '0');
+    const displayTime = `${formattedDays}d:${formattedHours}h`;
+
+    let colorTheme = "bg-slate-100 text-slate-600 border-slate-200"; 
+    if (diffHours >= 72) {
+        colorTheme = "bg-rose-50 text-rose-700 border-rose-200 animate-pulse"; 
+    } else if (diffHours >= 48) {
+        colorTheme = "bg-amber-50 text-amber-700 border-amber-200"; 
+    }
+
+    return { displayTime, colorTheme, isDelayed: diffHours >= 48 };
+}
 
 function MenuButton({ icon, label, onClick, colorTheme = 'teal' }: { icon: React.ReactNode, label: string, onClick: () => void, colorTheme?: 'teal' | 'slate' }) {
     const colors = {
@@ -471,6 +494,8 @@ function DocumentCard({ doc, isSelected, isExpanded, showCheckbox, currentUserNa
     const isCreator = doc.created_by === currentUserId;
     const canReassign = isManager || isCreator;
     
+    const aging = getDocumentAging(doc.updated_at || doc.created_at);
+    
     return (
         <div className={`bg-white rounded-2xl border-2 transition-all relative overflow-hidden ${doc.is_urgent ? 'border-red-300 shadow-sm hover:border-red-400' : (isSelected ? 'border-teal-500 ring-4 ring-teal-500/10' : 'border-slate-200 hover:border-slate-300')}`}>
             <div className={`absolute top-0 left-0 w-full h-1 ${doc.is_urgent ? 'bg-red-600' : (isSelected ? 'bg-teal-500' : 'bg-transparent')}`}></div>
@@ -489,6 +514,16 @@ function DocumentCard({ doc, isSelected, isExpanded, showCheckbox, currentUserNa
                         <h4 className="font-bold text-slate-900 text-sm sm:text-base leading-snug truncate">{doc.title || doc.subject}</h4>
                     </div>
                 </div>
+                
+                {/* AGING BADGE IN HEADER */}
+                <div className="flex flex-col items-end shrink-0 mr-1 sm:mr-2">
+                    <span className="text-[8px] sm:text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Time in</span>
+                    <div className={`px-1.5 py-0.5 rounded border flex items-center gap-1 shadow-sm ${aging.colorTheme}`}>
+                        <Clock size={10} strokeWidth={2.5} />
+                        <span className="text-[10px] font-black tracking-widest font-mono">{aging.displayTime}</span>
+                    </div>
+                </div>
+
                 <ChevronDown size={18} className={`text-slate-400 shrink-0 transition-transform duration-200 ease-in-out ${isExpanded ? 'rotate-180 text-teal-600' : ''}`} />
             </div>
             <div className={`grid transition-[grid-template-rows,opacity] duration-[400ms] ease-in-out ${isExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
