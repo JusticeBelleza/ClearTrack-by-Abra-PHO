@@ -1,7 +1,7 @@
 // src/components/ui/CustomSelect.tsx
-import React, { useState, useEffect, useRef } from 'react';
-import { Search, ChevronDown } from 'lucide-react';
-import type { DocumentItem } from '../../types/processing';
+import { useState, useEffect, useRef } from 'react';
+import { ChevronDown, Search } from 'lucide-react';
+import type { OptionType } from '../../types/processing';
 
 interface CustomSelectProps {
     options: OptionType[];

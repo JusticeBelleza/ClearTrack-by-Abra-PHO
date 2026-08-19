@@ -1,4 +1,5 @@
 // src/types/processing.ts
+import React from 'react';
 
 export interface DocumentLog {
     action: string;
@@ -31,17 +32,27 @@ export interface DepartmentOption {
     value: string;
 }
 
-export interface SelectOption { 
-    label: string; 
-    value: string; 
+export interface SelectOption {
+    label: string;
+    value: string;
 }
-
 export type OptionType = SelectOption | string;
+
+export interface TabButtonProps {
+    label: string;
+    icon: React.ReactNode;
+    count: number;
+    isActive: boolean;
+    onClick: () => void;
+    colorClass: string;
+    badgeClass: string;
+    newCount?: number;
+}
 
 export interface ProcessingData {
     processing: DocumentItem[];
     returned: DocumentItem[];
-    departments: DepartmentOption[];
+    departments: OptionType[];
     currentUserName: string;
     currentUserId: string;
     colleagues: string[];

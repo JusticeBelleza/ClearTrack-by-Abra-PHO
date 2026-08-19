@@ -5,7 +5,7 @@ import { Search, X, Activity, CornerUpLeft, RefreshCw, CheckCircle, MapPin, Chev
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import { jsPDF } from 'jspdf';
-import type { ProcessingData, DocumentItem, OptionType } from '../types/processing';
+import type { ProcessingData, DocumentItem } from '../types/processing';
 import { formatPHDateTime } from '../lib/utils';
 
 import HandoverScreen from '../components/system/HandoverScreen';
@@ -111,7 +111,7 @@ export default function Processing() {
   const nestedProcessingGroups = useMemo(() => {
       if (activeTab !== 'processing') return [];
       const hierarchy: Record<string, Record<string, DocumentItem[]>> = {};
-      filteredDocs.forEach(doc => {
+      filteredDocs.forEach((doc: DocumentItem) => {
           const dest = doc.final_destination || 'Unspecified Destination';
           const clerk = doc.assigned_clerk || 'Unassigned';
           if (!hierarchy[dest]) hierarchy[dest] = {};
@@ -128,7 +128,7 @@ export default function Processing() {
   const clerkDocCounts = useMemo(() => {
       if (activeTab !== 'processing') return {};
       const counts: Record<string, number> = {};
-      filteredDocs.forEach(doc => {
+      filteredDocs.forEach((doc: DocumentItem) => {
           const clerk = doc.assigned_clerk || 'Unassigned';
           counts[clerk] = (counts[clerk] || 0) + 1;
       });
@@ -137,7 +137,7 @@ export default function Processing() {
 
   const availableColleagues = useMemo(() => {
       if (!data) return [];
-      if (reassignDoc) return data.colleagues.filter((name) => name !== reassignDoc.assigned_clerk);
+      if (reassignDoc) return data.colleagues.filter((name: string) => name !== reassignDoc.assigned_clerk);
       return data.colleagues;
   }, [data, reassignDoc]);
 
@@ -148,16 +148,16 @@ export default function Processing() {
 
   useEffect(() => { setSelectedDocs([]); setIsFabOpen(false); }, [activeTab, searchQuery]);
 
-  const newProcessingCount = useMemo(() => documents.processing.filter(d => new Date(d.updated_at || d.created_at).getTime() > Number(lastViewedProcessing)).length, [documents.processing, lastViewedProcessing]);
-  const newReturnedCount = useMemo(() => documents.returned.filter(d => new Date(d.updated_at || d.created_at).getTime() > Number(lastViewedReturned)).length, [documents.returned, lastViewedReturned]);
+  const newProcessingCount = useMemo(() => documents.processing.filter((d: DocumentItem) => new Date(d.updated_at || d.created_at).getTime() > Number(lastViewedProcessing)).length, [documents.processing, lastViewedProcessing]);
+  const newReturnedCount = useMemo(() => documents.returned.filter((d: DocumentItem) => new Date(d.updated_at || d.created_at).getTime() > Number(lastViewedReturned)).length, [documents.returned, lastViewedReturned]);
 
   useEffect(() => {
       if (activeTab === 'processing' && documents.processing.length > 0) {
-          const newest = Math.max(...documents.processing.map(d => new Date(d.updated_at || d.created_at).getTime()));
+          const newest = Math.max(...documents.processing.map((d: DocumentItem) => new Date(d.updated_at || d.created_at).getTime()));
           if (newest > Number(lastViewedProcessing)) { localStorage.setItem('filetrackr_viewed_processing', newest.toString()); setLastViewedProcessing(newest.toString()); }
       }
       if (activeTab === 'returned' && documents.returned.length > 0) {
-          const newest = Math.max(...documents.returned.map(d => new Date(d.updated_at || d.created_at).getTime()));
+          const newest = Math.max(...documents.returned.map((d: DocumentItem) => new Date(d.updated_at || d.created_at).getTime()));
           if (newest > Number(lastViewedReturned)) { localStorage.setItem('filetrackr_viewed_returned', newest.toString()); setLastViewedReturned(newest.toString()); }
       }
   }, [activeTab, documents.processing, documents.returned, lastViewedProcessing, lastViewedReturned]);
@@ -270,7 +270,7 @@ export default function Processing() {
           ) : (
               filteredDocs.length > 0 && (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-                      {filteredDocs.map(doc => (
+                      {filteredDocs.map((doc: DocumentItem) => (
                           <DocumentCard 
                             key={doc.id} doc={doc} activeTab={activeTab} isSelected={selectedDocs.some(d => d.id === doc.id)}
                             isExpanded={!!expandedCards[doc.id]} showCheckbox={clerkDocCounts[doc.assigned_clerk || 'Unassigned'] > 1 && (!selectedDocs.length || selectedDocs[0].assigned_clerk === (doc.assigned_clerk || 'Unassigned'))}
@@ -474,11 +474,10 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false,
     );
 }
 
-function DocumentCard({ doc, activeTab, isSelected, isExpanded, showCheckbox, currentUserName, currentUserId, onToggleSelection, onToggleCollapse, onPreview, onTrack, onReassign, onCancel, onRevise, onAction }: any) {
+function DocumentCard({ doc, isSelected, isExpanded, showCheckbox, currentUserName, currentUserId, onToggleSelection, onToggleCollapse, onPreview, onTrack, onReassign, onAction }: any) {
     const isManager = doc.assigned_clerk === currentUserName;
     const isCreator = doc.created_by === currentUserId;
     const canReassign = isManager || isCreator;
-    const canRevise = isManager || isCreator;
 
     return (
         <div className={`bg-white rounded-2xl border-2 transition-all relative overflow-hidden ${doc.is_urgent ? 'border-red-300 shadow-sm hover:border-red-400' : (isSelected ? 'border-teal-500 ring-4 ring-teal-500/10' : 'border-slate-200 hover:border-slate-300')}`}>

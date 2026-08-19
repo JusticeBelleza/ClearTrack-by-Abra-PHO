@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
     Search, Activity, AlertCircle, MapPin, Clock, 
-    ChevronRight, CheckCircle, FileText, XCircle, Eye, X, Plus,
+    ChevronRight, CheckCircle, FileText, Eye, X, Plus,
     Inbox, CornerUpLeft, Folder, User, UserPlus, ChevronDown, Bell
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';

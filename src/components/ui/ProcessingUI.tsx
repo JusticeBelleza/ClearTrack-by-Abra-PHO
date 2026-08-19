@@ -1,5 +1,4 @@
 // src/components/ui/ProcessingUI.tsx
-import React from 'react';
 import type { TabButtonProps } from '../../types/processing';
 
 export function TabButton({ label, icon, count, isActive, onClick, colorClass, badgeClass, newCount = 0 }: TabButtonProps) {

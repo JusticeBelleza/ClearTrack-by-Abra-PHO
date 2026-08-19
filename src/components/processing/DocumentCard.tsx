@@ -1,5 +1,4 @@
 // src/components/processing/DocumentCard.tsx
-import React from 'react';
 import { AlertCircle, MapPin, Eye, Clock, ChevronRight, User, MessageSquareWarning, CheckSquare, Square, ChevronDown, UserPlus, Ban } from 'lucide-react';
 import { formatPHDateTime } from '../../lib/utils';
 import type { DocumentItem } from '../../types/processing';
@@ -31,7 +30,6 @@ export default function DocumentCard({
     const isCreator = doc.created_by === currentUserId;
     const canReassign = isManager || isCreator;
     const canRevise = isManager || isCreator;
-    const isActionableTab = activeTab === 'processing';
 
     if (activeTab === 'returned') {
         return (
