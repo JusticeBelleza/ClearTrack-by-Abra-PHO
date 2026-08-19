@@ -265,10 +265,13 @@ export default function Settings() {
   const handleRegisterPasskey = async () => {
       setIsRegisteringPasskey(true);
       try {
-          // @ts-expect-error - Supabase Experimental Passkey Method
-          const { data, error } = await supabase.auth.registerPasskey();
+          const { error } = await supabase.auth.registerPasskey();
           
           if (error) throw error;
+
+          // Drop a flag so the browser knows to show the Biometric Login button
+          localStorage.setItem('filetrackr_passkey_registered', 'true');
+
           toast.success("Device registered successfully!", { description: "You can now use Face ID / Touch ID to log in." });
       } catch (err: unknown) {
           console.error(err);

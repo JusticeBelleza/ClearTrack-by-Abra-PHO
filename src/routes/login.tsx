@@ -1,4 +1,3 @@
-// src/routes/login.tsx
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, Mail, ArrowRight, Loader2, Eye, EyeOff, Fingerprint } from 'lucide-react';
@@ -73,6 +72,7 @@ export default function Login() {
     setIsBiometricLoading(true);
     try {
       // 2. Pass the captchaToken into the options
+      // @ts-expect-error - Passkey with CAPTCHA options
       const { data, error } = await supabase.auth.signInWithPasskey({
         options: {
           captchaToken: turnstileToken
@@ -246,30 +246,35 @@ export default function Login() {
           </button>
         </form>
 
-        <div className="relative flex items-center justify-center py-5">
-            <div className="w-full h-px bg-slate-200"></div>
-            <span className="absolute bg-white px-4 text-xs font-bold text-slate-400 uppercase tracking-widest">or</span>
-        </div>
+        {/* CONDITIONAL RENDER: Only show if device is registered */}
+        {localStorage.getItem('filetrackr_passkey_registered') === 'true' && (
+          <>
+            <div className="relative flex items-center justify-center py-5">
+                <div className="w-full h-px bg-slate-200"></div>
+                <span className="absolute bg-white px-4 text-xs font-bold text-slate-400 uppercase tracking-widest">or</span>
+            </div>
 
-        {/* NEW: Biometric Login Button */}
-        <button 
-            type="button"
-            onClick={handleBiometricLogin}
-            disabled={isLoading || isBiometricLoading}
-            className="w-full py-3.5 bg-slate-50 hover:bg-slate-100 text-slate-900 font-bold rounded-2xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm border-2 border-slate-200 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
-        >
-            {isBiometricLoading ? (
-                <>
-                    <Loader2 className="animate-spin h-5 w-5 text-blue-600" />
-                    Scanning...
-                </>
-            ) : (
-                <>
-                    <Fingerprint size={20} className="text-blue-600" />
-                    Sign in with Passkey / Face ID
-                </>
-            )}
-        </button>
+            {/* NEW: Biometric Login Button */}
+            <button 
+                type="button"
+                onClick={handleBiometricLogin}
+                disabled={isLoading || isBiometricLoading}
+                className="w-full py-3.5 bg-slate-50 hover:bg-slate-100 text-slate-900 font-bold rounded-2xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm border-2 border-slate-200 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
+            >
+                {isBiometricLoading ? (
+                    <>
+                        <Loader2 className="animate-spin h-5 w-5 text-blue-600" />
+                        Scanning...
+                    </>
+                ) : (
+                    <>
+                        <Fingerprint size={20} className="text-blue-600" />
+                        Sign in with Passkey / Face ID
+                    </>
+                )}
+            </button>
+          </>
+        )}
 
         <div className="mt-8 text-center border-t border-slate-100 pt-6">
           <p className="text-xs text-slate-400 font-medium mb-3">
