@@ -255,7 +255,6 @@ export default function Processing() {
                                                 onReassign={(d: DocumentItem) => setReassignDoc(d)} 
                                                 onAction={(d: DocumentItem) => setSelectedDoc(d)}
                                                 onCancel={(d: DocumentItem) => setCancelDoc(d)}
-                                                onReRoute={(d: DocumentItem) => setReRouteDoc(d)}
                                               />
                                           ))}
                                       </div>

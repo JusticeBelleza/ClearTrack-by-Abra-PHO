@@ -205,12 +205,6 @@ export default function DocumentCard({
                                         </button>
                                     )}
 
-                                    {/* RE-ROUTE BUTTON BECOMES SECONDARY OPTION */}
-                                    {onReRoute && (
-                                        <button onClick={(e) => { e.stopPropagation(); onReRoute(doc); }} className="w-[42px] shrink-0 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center border border-blue-200 transition-all active:scale-95 shadow-sm" title="Re-route Document">
-                                            <Send size={15} />
-                                        </button>
-                                    )}
 
                                     {onCancel && (
                                         <button onClick={(e) => { e.stopPropagation(); onCancel(doc); }} title="Cancel Document" className="w-[42px] shrink-0 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl flex items-center justify-center border border-rose-200 transition-all active:scale-95 shadow-sm">
