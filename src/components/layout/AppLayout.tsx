@@ -1,20 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
-  FileText, Activity, History, Settings, LogOut, Shield, AlertCircle, X, Calendar
+    FileText, Activity, History, Settings, LogOut, Shield, AlertCircle, X, Calendar, FilePlus 
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUiStore } from '../../store/uiStore';
 import CreateDocumentModal from '../system/CreateDocumentModal';
 import { supabase } from '../../lib/supabase';
-import { useQuery, useQueryClient } from '@tanstack/react-query'; // Added React Query
+import { useQuery, useQueryClient } from '@tanstack/react-query'; 
 
-// --- IMPORT YOUR NEW INSTALL PROMPT ---
 import InstallPrompt from '../InstallPrompt'; 
-
 import clearTrackLogo from '../../assets/clear_track_logo.png';
 
-// --- Shared Modal Animation Styles (UPDATED FOR FASTER NATIVE FEEL) ---
+// --- Shared Modal Animation Styles ---
 const modalAnimationStyles = `
     @keyframes customFadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes iosSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -33,18 +31,16 @@ const modalAnimationStyles = `
         .animate-responsive-modal-close { animation: desktopZoomOut 0.2s ease-in forwards; }
     }
 
-    /* Hide scrollbar for the scrollable areas */
     .scrollbar-hide::-webkit-scrollbar { display: none; }
     .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 `;
 
-// --- TypeScript Interfaces ---
 interface NavItemProps {
     icon: React.ReactElement<{ size?: number | string; strokeWidth?: number | string }>;
-    label: string;
+    label?: string;
     to: string;
     isActive: boolean;
-    notificationCount?: number; // Added Notification Support
+    notificationCount?: number; 
 }
 
 export default function AppLayout() {
@@ -53,34 +49,33 @@ export default function AppLayout() {
   const queryClient = useQueryClient();
   const activeTab = location.pathname.replace('/', '') || 'dashboard';
 
+  // Extract both states from UI Store
   const isCreateModalOpen = useUiStore((state) => state.isCreateModalOpen);
+  const openCreateModal = useUiStore((state) => state.openCreateModal);
 
-  // --- DYNAMIC AUTHENTICATION ROLE ---
   const [currentUserRole, setCurrentUserRole] = useState<'admin' | 'pho_staff' | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // --- LOGOUT MODAL STATES ---
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [isClosingLogout, setIsClosingLogout] = useState(false);
 
-  // --- PHT DATE STATE ---
-  const [dateInfo, setDateInfo] = useState({ long: '', short: '' });
+  const [dateInfo, setDateInfo] = useState({ long: '', short: '', time: '' });
 
-  // Handle live date formatting for PHT
   useEffect(() => {
       const updateDate = () => {
           const now = new Date();
           setDateInfo({
               long: now.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }),
-              short: now.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' })
+              short: now.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' }),
+              time: now.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: '2-digit', minute: '2-digit', hour12: true })
           });
       };
       updateDate();
-      const interval = setInterval(updateDate, 60000);
+      // Update every second to ensure the minute ticks over precisely
+      const interval = setInterval(updateDate, 1000);
       return () => clearInterval(interval);
   }, []);
 
-  // Fetch the real user role and Global Settings from Supabase on load
   useEffect(() => {
     const fetchUserAndSettings = async () => {
       try {
@@ -118,7 +113,6 @@ export default function AppLayout() {
     fetchUserAndSettings();
   }, [navigate]);
 
-  // --- GLOBAL NOTIFICATION QUERY ---
   const { data: unreadCount } = useQuery({
       queryKey: ['globalNavNotifications'],
       queryFn: async () => {
@@ -149,34 +143,25 @@ export default function AppLayout() {
 
           return count;
       },
-      refetchInterval: 15000, // Poll every 15s in background
+      refetchInterval: 15000, 
       enabled: currentUserRole === 'pho_staff'
   });
 
-  // When activeTab changes, invalidate query so dot doesn't return falsely
   useEffect(() => {
       queryClient.invalidateQueries({ queryKey: ['globalNavNotifications'] });
   }, [activeTab, queryClient]);
 
-  // Instantly clear the badge if the user is currently on the Processing tab
   const processingNotificationCount = activeTab === 'processing' ? 0 : (unreadCount || 0);
 
-  // --- ROLE-BASED ROUTING ENFORCEMENT ---
   useEffect(() => {
     if (!currentUserRole) return; 
-
     if (currentUserRole === 'admin') {
-      if (['dashboard', 'processing', 'history'].includes(activeTab)) {
-        navigate('/admin', { replace: true });
-      }
+      if (['dashboard', 'processing', 'history'].includes(activeTab)) navigate('/admin', { replace: true });
     } else if (currentUserRole === 'pho_staff') {
-      if (activeTab === 'admin') {
-        navigate('/dashboard', { replace: true });
-      }
+      if (activeTab === 'admin') navigate('/dashboard', { replace: true });
     }
   }, [activeTab, currentUserRole, navigate]);
 
-  // --- LOGOUT ACTIONS ---
   const openLogoutModal = () => setIsLogoutModalOpen(true);
   
   const closeLogoutModal = () => {
@@ -186,16 +171,32 @@ export default function AppLayout() {
 
   const confirmLogout = async () => {
       await supabase.auth.signOut();
-      
-      // Force a complete browser refresh to wipe all memory, cache, and state.
-      // Do NOT use navigate('/login') here.
       window.location.href = '/login'; 
+  };
+
+  // Logic to calculate the "liquid" sliding bubble position
+  const getActiveTranslateStaff = () => {
+      switch(activeTab) {
+          case 'dashboard': return 'left-[10%] opacity-100 scale-100';
+          case 'processing': return 'left-[30%] opacity-100 scale-100';
+          case 'history': return 'left-[70%] opacity-100 scale-100';
+          case 'settings': return 'left-[90%] opacity-100 scale-100';
+          default: return 'left-[50%] opacity-0 scale-50'; // hidden
+      }
+  };
+
+  const getActiveTranslateAdmin = () => {
+      switch(activeTab) {
+          case 'admin': return 'left-[25%] opacity-100 scale-100';
+          case 'settings': return 'left-[75%] opacity-100 scale-100';
+          default: return 'left-[50%] opacity-0 scale-50';
+      }
   };
 
   if (isLoading || !currentUserRole) {
       return (
           <div className="flex flex-col items-center justify-center h-screen bg-slate-50">
-              <div className="w-10 h-10 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin"></div>
+              <div className="w-10 h-10 border-4 border-[#213C51]/20 border-t-[#213C51] rounded-full animate-spin"></div>
               <p className="mt-4 text-slate-500 font-bold">Authenticating...</p>
           </div>
       );
@@ -207,31 +208,27 @@ export default function AppLayout() {
 
       {/* Sidebar Navigation (Desktop) */}
       <nav className="hidden md:flex flex-col w-64 bg-slate-900 text-slate-300 shadow-xl z-20">
-        
-        {/* BRANDING: Desktop Sidebar */}
         <div className="p-6 flex items-start gap-4 border-b border-slate-800 bg-gradient-to-b from-slate-800/50 to-slate-900 relative overflow-hidden">
-          <div className="absolute top-0 left-0 -ml-8 -mt-8 w-32 h-32 bg-blue-500 rounded-full mix-blend-screen filter blur-[40px] opacity-20 animate-pulse"></div>
+          <div className="absolute top-0 left-0 -ml-8 -mt-8 w-32 h-32 bg-[#213C51] rounded-full mix-blend-screen filter blur-[40px] opacity-40 animate-pulse"></div>
           
-          {/* Logo as a white button-like container */}
           <div className="flex items-center justify-center w-12 h-12 shrink-0 bg-white rounded-xl p-1.5 border border-slate-200 shadow-[0_4px_12px_rgba(0,0,0,0.5)] relative z-10">
-            <img 
-              src={clearTrackLogo} 
-              alt="filetrackr logo" 
-              className="w-full h-full object-contain"
-            />
+            <img src={clearTrackLogo} alt="filetrackr logo" className="w-full h-full object-contain" />
           </div>
           
           <div className="flex flex-col relative z-10">
-            <h1 className="text-2xl font-black text-white tracking-tight leading-none mt-1">filetrackr<span className="text-blue-500">.</span></h1>
-            <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mt-1.5">
+            <h1 className="text-2xl font-black text-white tracking-tight leading-none mt-1">filetrackr<span className="text-[#4D6787]">.</span></h1>
+            <p className="text-[10px] font-black text-[#4D6787] uppercase tracking-widest mt-1.5">
               {currentUserRole === 'admin' ? 'Admin Portal' : 'by Abra PHO'}
             </p>
-            {/* Displaying Version on Desktop */}
             <p className="text-[9px] font-bold text-slate-500 tracking-wider mt-0.5">v{__APP_VERSION__}</p>
             
-            <div className="flex items-center gap-1.5 mt-3 text-slate-300 bg-slate-800/50 py-1.5 px-2.5 rounded-lg border border-slate-700/50 w-fit">
-              <Calendar size={12} className="text-blue-400 shrink-0" />
-              <span className="text-[10px] font-bold leading-none">{dateInfo.long}</span>
+            <div className="flex flex-col mt-3 gap-1">
+              <div className="flex items-center gap-1.5 text-slate-300 bg-slate-800/50 py-1.5 px-2.5 rounded-lg border border-slate-700/50 w-fit">
+                <Calendar size={12} className="text-[#4D6787] shrink-0" />
+                <span className="text-[10px] font-bold leading-none">{dateInfo.long}</span>
+              </div>
+              {/* Added Desktop Time */}
+              <span className="text-[10px] font-bold text-slate-500 pl-1">{dateInfo.time}</span>
             </div>
           </div>
         </div>
@@ -239,27 +236,27 @@ export default function AppLayout() {
         <div className="flex-1 py-6 px-4 space-y-2">
           {currentUserRole === 'pho_staff' && (
             <>
-              <NavItem icon={<Activity />} label="Dashboard" to="/dashboard" isActive={activeTab === 'dashboard'} />
-              <NavItem 
+              <DesktopNavItem icon={<Activity />} label="Dashboard" to="/dashboard" isActive={activeTab === 'dashboard'} />
+              <DesktopNavItem 
                   icon={<FileText />} 
                   label="Processing" 
                   to="/processing" 
                   isActive={activeTab === 'processing'} 
                   notificationCount={processingNotificationCount} 
               />
-              <NavItem icon={<History />} label="History" to="/history" isActive={activeTab === 'history'} />
+              <DesktopNavItem icon={<History />} label="History" to="/history" isActive={activeTab === 'history'} />
             </>
           )}
           {currentUserRole === 'admin' && (
-            <NavItem icon={<Shield />} label="System Admin" to="/admin" isActive={activeTab === 'admin'} />
+            <DesktopNavItem icon={<Shield />} label="System Admin" to="/admin" isActive={activeTab === 'admin'} />
           )}
-          <NavItem icon={<Settings />} label="Settings" to="/settings" isActive={activeTab === 'settings'} />
+          <DesktopNavItem icon={<Settings />} label="Settings" to="/settings" isActive={activeTab === 'settings'} />
         </div>
 
         <div className="p-4 border-t border-slate-800">
-          <button onClick={openLogoutModal} className="flex items-center gap-3 px-4 py-3 w-full text-left text-slate-400 hover:text-red-400 hover:bg-slate-800 rounded-lg transition-colors">
-            <LogOut size={20} />
-            <span className="font-medium">Logout</span>
+          <button onClick={openLogoutModal} className="flex items-center gap-3 px-4 py-3 w-full text-left text-red-400 hover:text-white hover:bg-red-600 rounded-lg transition-colors group">
+            <LogOut size={20} className="group-hover:scale-110 transition-transform" />
+            <span className="font-bold">Logout</span>
           </button>
         </div>
       </nav>
@@ -267,36 +264,41 @@ export default function AppLayout() {
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
         
-        {/* BRANDING: Mobile Header - Dark colorful gradient with white logo button */}
-        <header className="md:hidden flex items-center justify-between p-4 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white shadow-lg z-20 relative shrink-0 overflow-hidden border-b border-slate-800">
-          <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-blue-500 rounded-full mix-blend-screen filter blur-3xl opacity-30 animate-pulse"></div>
+        {/* Mobile Header (Includes Logout Button) */}
+        <header className="md:hidden flex items-center justify-between p-4 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow-lg z-20 relative shrink-0 overflow-hidden border-b border-slate-800">
+          <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-[#4D6787] rounded-full mix-blend-screen filter blur-3xl opacity-30 animate-pulse"></div>
 
           <div className="flex items-center gap-3 relative z-10">
-            {/* Logo as a white button-like container */}
             <div className="flex items-center justify-center w-12 h-12 shrink-0 bg-white rounded-xl p-1.5 border-2 border-slate-200 shadow-md">
-              <img 
-                src={clearTrackLogo} 
-                alt="filetrackr logo" 
-                className="w-full h-full object-contain"
-              />
+              <img src={clearTrackLogo} alt="filetrackr logo" className="w-full h-full object-contain" />
             </div>
             <div className="flex flex-col">
-              <h1 className="text-xl font-black leading-none text-white tracking-tight">filetrackr<span className="text-blue-400">.</span></h1>
-              <span className="text-[10px] font-black text-blue-300 uppercase tracking-widest mt-1">
+              <h1 className="text-xl font-black leading-none text-white tracking-tight">filetrackr<span className="text-[#4D6787]">.</span></h1>
+              <span className="text-[10px] font-black text-[#4D6787] uppercase tracking-widest mt-1">
                 {currentUserRole === 'admin' ? 'Admin Portal' : 'by Abra PHO'}
               </span>
-              {/* Displaying Version on Mobile */}
               <span className="text-[9px] font-bold text-slate-400 tracking-wider mt-0.5">v{__APP_VERSION__}</span>
             </div>
           </div>
 
           <div className="relative z-10 flex flex-col items-end text-right">
-             <span className="text-[9px] font-black text-blue-300 uppercase tracking-widest flex items-center gap-1 mb-0.5">
-                <Calendar size={10} strokeWidth={3} /> PHT
-             </span>
-             <span className="text-[11px] font-bold text-slate-200">
-                {dateInfo.short}
-             </span>
+             <div className="flex items-center gap-3">
+                 <div className="flex flex-col items-end">
+                     <span className="text-[9px] font-black text-[#4D6787] uppercase tracking-widest flex items-center gap-1 mb-0.5">
+                        <Calendar size={10} strokeWidth={3} /> PHT
+                     </span>
+                     <span className="text-[11px] font-bold text-slate-200">
+                        {dateInfo.short}
+                     </span>
+                     {/* Added Mobile Time */}
+                     <span className="text-[10px] font-bold text-slate-400 mt-0.5">
+                        {dateInfo.time}
+                     </span>
+                 </div>
+                 <button onClick={openLogoutModal} className="p-2.5 bg-red-500 hover:bg-red-600 rounded-full transition-all active:scale-90 shadow-md" title="Logout">
+                     <LogOut size={16} className="text-white" strokeWidth={2.5} />
+                 </button>
+             </div>
           </div>
         </header>
 
@@ -307,63 +309,83 @@ export default function AppLayout() {
       </main>
 
       {/* 
-        NEW CATCHY MOBILE NAVIGATION 
-        Floating Pill + Glassmorphism + Expanding Active States + Pronounced Outline & Shadow
+        NEW MOBILE NAVIGATION
+        Solid custom background (#213C51) with a liquid sliding bubble.
+        The center button is now a perfect circle with a crisp white border.
+        Bottom padding is reduced to tighten the overall look.
       */}
-      <div className="md:hidden fixed bottom-5 left-0 right-0 z-40 flex justify-center px-4 pointer-events-none pb-safe">
-          <nav className="flex items-center justify-between w-full max-w-md bg-white/95 backdrop-blur-2xl border-[1.5px] border-slate-300 shadow-[0_15px_40px_-10px_rgba(0,0,0,0.3)] p-2 rounded-[2rem] pointer-events-auto">
-            
-            {/* STAFF NAVIGATION */}
-            {currentUserRole === 'pho_staff' && (
-              <>
-                <MobileBottomNavItem icon={<Activity />} label="Dashboard" to="/dashboard" isActive={activeTab === 'dashboard'} />
-                <MobileBottomNavItem 
-                    icon={<FileText />} 
-                    label="Processing" 
-                    to="/processing" 
-                    isActive={activeTab === 'processing'} 
-                    notificationCount={processingNotificationCount} 
-                />
-                <MobileBottomNavItem icon={<History />} label="History" to="/history" isActive={activeTab === 'history'} />
-              </>
-            )}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#213C51] border-t border-[#213C51] shadow-[0_-15px_40px_rgba(33,60,81,0.25)] rounded-t-[1.5rem] pb-[env(safe-area-inset-bottom)] overflow-visible">
+          
+          {currentUserRole === 'pho_staff' && (
+             <nav className="relative grid grid-cols-5 items-center w-full px-0 h-[4.25rem]">
+                
+                {/* Liquid Sliding Background Bubble */}
+                <div 
+                    className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-11 h-11 bg-white rounded-[1.15rem] transition-all duration-500 ease-[cubic-bezier(0.68,-0.55,0.26,1.55)] shadow-md z-0 ${getActiveTranslateStaff()}`}
+                ></div>
 
-            {/* ADMIN NAVIGATION */}
-            {currentUserRole === 'admin' && (
-              <MobileBottomNavItem icon={<Shield />} label="Admin" to="/admin" isActive={activeTab === 'admin'} />
-            )}
+                <div className="flex justify-center z-10">
+                    <MobileIconNav icon={<Activity />} to="/dashboard" isActive={activeTab === 'dashboard'} />
+                </div>
+                <div className="flex justify-center z-10">
+                    <MobileIconNav icon={<FileText />} to="/processing" isActive={activeTab === 'processing'} notificationCount={processingNotificationCount} />
+                </div>
+                
+                {/* CENTER BUTTON (Route Document) */}
+                <div className="flex justify-center relative -mt-6 z-20">
+                    {/* Dark circular backdrop cutout matching the nav bar */}
+                    <div className="absolute inset-0 bg-[#213C51] rounded-full w-[3.5rem] h-[3.5rem] mx-auto scale-[1.18] shadow-[0_-8px_15px_rgba(33,60,81,0.15)] z-0"></div>
+                    
+                    {/* Circular Cyan Button with White Border */}
+                    <button 
+                        onClick={openCreateModal}
+                        className="relative flex items-center justify-center w-[3.5rem] h-[3.5rem] bg-cyan-400 hover:bg-cyan-300 text-[#213C51] rounded-full border-[3px] border-white shadow-[0_0_25px_rgba(34,211,238,0.4)] hover:shadow-[0_0_30px_rgba(34,211,238,0.6)] transition-all duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.275)] active:scale-75 active:rotate-12 z-10"
+                    >
+                        <FilePlus size={26} strokeWidth={2} className="text-[#213C51] translate-x-[1px]" />
+                    </button>
+                </div>
 
-            {/* SHARED NAVIGATION & LOGOUT */}
-            <MobileBottomNavItem icon={<Settings />} label="Settings" to="/settings" isActive={activeTab === 'settings'} />
-            
-            {/* Divider Dot */}
-            <div className="w-1.5 h-1.5 rounded-full bg-slate-300 mx-1"></div>
+                <div className="flex justify-center z-10">
+                    <MobileIconNav icon={<History />} to="/history" isActive={activeTab === 'history'} />
+                </div>
+                <div className="flex justify-center z-10">
+                    <MobileIconNav icon={<Settings />} to="/settings" isActive={activeTab === 'settings'} />
+                </div>
+             </nav>
+          )}
 
-            {/* Logout Button */}
-            <button 
-              onClick={openLogoutModal}
-              title="Logout"
-              className="relative flex items-center justify-center w-12 h-12 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-full transition-all duration-300 active:scale-90"
-            >
-              <LogOut size={22} strokeWidth={2.5} />
-            </button>
-          </nav>
+          {currentUserRole === 'admin' && (
+             <nav className="relative grid grid-cols-2 items-center w-full px-0 h-[4.25rem]">
+                {/* Liquid Sliding Background Bubble for Admin */}
+                <div 
+                    className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-11 h-11 bg-white rounded-[1.15rem] transition-all duration-500 ease-[cubic-bezier(0.68,-0.55,0.26,1.55)] shadow-md z-0 ${getActiveTranslateAdmin()}`}
+                ></div>
+
+                <div className="flex justify-center z-10">
+                    <MobileIconNav icon={<Shield />} to="/admin" isActive={activeTab === 'admin'} />
+                </div>
+                <div className="flex justify-center z-10">
+                    <MobileIconNav icon={<Settings />} to="/settings" isActive={activeTab === 'settings'} />
+                </div>
+             </nav>
+          )}
+
       </div>
 
       {/* GLOBAL LOGOUT CONFIRMATION MODAL */}
       {isLogoutModalOpen && (
         <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosingLogout ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
-          <div className={`bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden ${isClosingLogout ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
+          <div className={`bg-white w-full max-w-md rounded-t-[1.5rem] sm:rounded-2xl shadow-2xl overflow-hidden ${isClosingLogout ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
             <div className="bg-red-700 text-white p-5 flex items-center justify-between">
               <h3 className="font-black text-xl flex items-center gap-2"><AlertCircle size={22} /> Confirm Logout</h3>
-              <button onClick={closeLogoutModal} className="p-2 bg-white/10 hover:bg-white/20 rounded-full"><X size={20} /></button>
+              <button onClick={closeLogoutModal} className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition-colors"><X size={20} /></button>
             </div>
             <div className="p-6 space-y-4">
               <p className="text-base text-slate-700 font-medium">
                 Are you sure you want to securely log out of your account?
               </p>
               <div className="pt-4 flex gap-3">
-                <button type="button" onClick={closeLogoutModal} className="flex-1 py-3.5 bg-white border-2 border-slate-300 text-slate-700 font-bold rounded-xl active:scale-95 transition-transform text-base">Cancel</button>
+                <button type="button" onClick={closeLogoutModal} className="flex-1 py-3.5 bg-white border-2 border-slate-300 hover:bg-slate-50 text-slate-700 font-bold rounded-xl active:scale-95 transition-transform text-base">Cancel</button>
                 <button type="button" onClick={confirmLogout} className="flex-1 py-3.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl border-2 border-red-700 active:scale-95 transition-transform text-base shadow-md">Yes, Logout</button>
               </div>
             </div>
@@ -374,7 +396,7 @@ export default function AppLayout() {
       {/* Global Create Document Modal */}
       {isCreateModalOpen && <CreateDocumentModal />}
       
-      {/* --- NEW PWA INSTALL PROMPT --- */}
+      {/* PWA Install Prompt */}
       <InstallPrompt />
     </div>
   );
@@ -382,15 +404,15 @@ export default function AppLayout() {
 
 // --- Helper Components --- //
 
-function NavItem({ icon, label, to, isActive, notificationCount = 0 }: NavItemProps) {
+// DESKTOP NAVIGATION ITEM
+function DesktopNavItem({ icon, label, to, isActive, notificationCount = 0 }: NavItemProps) {
   return (
     <Link to={to} className={`flex items-center gap-3 px-4 py-3 w-full text-left rounded-lg transition-all ${
-        isActive ? 'bg-blue-600 text-white shadow-md' : 'hover:bg-slate-800 hover:text-white'
+        isActive ? 'bg-[#4D6787] text-white shadow-md' : 'hover:bg-slate-800 hover:text-white'
       }`}
     >
       <div className="relative flex items-center justify-center">
           {React.cloneElement(icon, { size: 20 })}
-          {/* RED DOT NOTIFICATION - DESKTOP */}
           {notificationCount > 0 && !isActive && (
               <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
@@ -400,7 +422,6 @@ function NavItem({ icon, label, to, isActive, notificationCount = 0 }: NavItemPr
       </div>
       <span className="font-medium flex-1">{label}</span>
       
-      {/* "NEW" BADGE - DESKTOP */}
       {notificationCount > 0 && !isActive && (
           <span className="text-[10px] font-black text-white bg-red-500 px-2 py-0.5 rounded shadow-sm">
               {notificationCount} NEW
@@ -410,39 +431,30 @@ function NavItem({ icon, label, to, isActive, notificationCount = 0 }: NavItemPr
   );
 }
 
-// THE NEW CATCHY MAGIC NAV ITEM
-function MobileBottomNavItem({ icon, label, to, isActive, notificationCount = 0 }: NavItemProps) {
+// MOBILE ICON-ONLY NAVIGATION ITEM
+function MobileIconNav({ icon, to, isActive, notificationCount = 0 }: NavItemProps) {
     return (
       <Link 
         to={to} 
-        className={`relative flex items-center justify-center transition-all duration-500 ease-out overflow-hidden pointer-events-auto ${
+        className={`relative flex items-center justify-center w-12 h-12 rounded-2xl transition-colors duration-300 ${
           isActive 
-            ? 'w-auto px-4 py-2.5 bg-blue-600 text-white rounded-[1.25rem] shadow-[0_0_20px_rgba(37,99,235,0.4)]' 
-            : 'w-12 h-12 bg-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full'
+            ? 'text-[#213C51]' // Icon turns dark blue when white bubble slides behind it
+            : 'text-white/60 hover:text-white hover:bg-white/10' // Subtle transparent white when inactive
         }`}
       >
-        <div className="flex items-center gap-2 relative z-10">
-           <div className={`relative transition-transform duration-500 ${isActive ? 'scale-110' : 'scale-100'}`}>
-              {React.cloneElement(icon, { 
-                size: 20, 
-                strokeWidth: isActive ? 2.5 : 2 
-              })}
-              
-              {/* RED DOT NOTIFICATION - MOBILE */}
-              {notificationCount > 0 && !isActive && (
-                  <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 border border-white"></span>
-                  </span>
-              )}
-           </div>
-           
-           {isActive && (
-              <span className="text-sm font-bold tracking-wide whitespace-nowrap animate-in slide-in-from-right-2 fade-in duration-300">
-                {label}
-              </span>
-           )}
+        <div className={`transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${isActive ? 'scale-110 -translate-y-0.5' : 'scale-100'}`}>
+            {React.cloneElement(icon, { 
+              size: 22, 
+              strokeWidth: isActive ? 2 : 1.5 
+            })}
         </div>
+        
+        {notificationCount > 0 && !isActive && (
+            <span className="absolute top-2.5 right-2.5 flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500 border-2 border-[#213C51]"></span>
+            </span>
+        )}
       </Link>
     );
 }

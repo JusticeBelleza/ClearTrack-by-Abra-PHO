@@ -2,7 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { 
     Search, MapPin, Clock, CheckCircle, AlertCircle, 
-    Archive, FileText, X, Eye, Ban, ChevronDown, FolderTree, User
+    Archive, FileText, X, Eye, Ban, ChevronDown, FolderTree, User, RefreshCw
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -15,15 +15,15 @@ const modalAnimationStyles = `
     @keyframes customFadeIn { from { opacity: 0; } to { opacity: 1; } }
     @keyframes iosSlideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
     @keyframes desktopZoomIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-    
-    .animate-overlay-fade { animation: customFadeIn 0.4s ease-out forwards; }
-    .animate-responsive-modal { animation: iosSlideUp 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+    .animate-overlay-fade { animation: customFadeIn 0.3s ease-out forwards; }
+    .animate-responsive-modal { animation: iosSlideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 
     .scrollbar-hide::-webkit-scrollbar { display: none; }
     .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
 
     @media (min-width: 640px) {
-        .animate-responsive-modal { animation: desktopZoomIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .animate-responsive-modal { animation: desktopZoomIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
     }
 `;
 
@@ -42,7 +42,7 @@ interface DocumentItem {
     status: string;
     assigned_clerk?: string;
     created_by?: string;
-    creator_name?: string; // New field to hold the mapped profile name
+    creator_name?: string; 
     custodian_id?: string;
     final_destination?: string;
     current_location?: string;
@@ -75,7 +75,6 @@ const fetchHistoryData = async (): Promise<HistoryData> => {
     if (!session) throw new Error("No authenticated session");
     const currentUserId = session.user.id;
 
-    // Fetch documents AND profiles simultaneously so we can map IDs to actual names
     const [docsRes, profilesRes] = await Promise.all([
         supabase.from('documents')
             .select(`
@@ -91,7 +90,6 @@ const fetchHistoryData = async (): Promise<HistoryData> => {
 
     if (docsRes.error) throw docsRes.error;
 
-    // Create a dictionary to quickly look up a user's name by their ID
     const creatorMap: Record<string, string> = {};
     if (profilesRes.data) {
         profilesRes.data.forEach((p: { id: string; full_name: string }) => {
@@ -111,10 +109,8 @@ const fetchHistoryData = async (): Promise<HistoryData> => {
 
         const processedDocs = myRelevantDocs.map((doc) => {
             const logs = doc.document_logs || [];
-            
-            // Map the UUID to the real name
             doc.creator_name = creatorMap[doc.created_by || ''] || 'System User';
-            
+
             if (doc.status === 'sealed') {
                 const deliveryLog = logs.filter((l) => l.action === 'Delivered')
                                         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
@@ -148,11 +144,9 @@ export default function History() {
   // --- Accordion & Pagination State ---
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
   const [categoryPages, setCategoryPages] = useState<Record<string, number>>({});
-  
-  // Collapsible cards state
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
 
-  const { data, isLoading } = useQuery<HistoryData>({
+  const { data, isLoading, refetch, isFetching } = useQuery<HistoryData>({
       queryKey: ['historyDocuments'],
       queryFn: fetchHistoryData
   });
@@ -167,9 +161,9 @@ export default function History() {
   const filteredDocs = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
     const sourceList = documents[activeTab] || []; 
-    
+
     if (!query) return sourceList;
-    
+
     return sourceList.filter((doc: DocumentItem) => 
         (doc.title || '').toLowerCase().includes(query) ||
         (doc.reference_no || '').toLowerCase().includes(query) ||
@@ -183,7 +177,7 @@ export default function History() {
   // --- Group Documents by Category ---
   const groupedDocs = useMemo(() => {
       const grouped: Record<string, DocumentItem[]> = {};
-      
+
       filteredDocs.forEach(doc => {
           const category = doc.category || 'Uncategorized';
           if (!grouped[category]) grouped[category] = [];
@@ -222,41 +216,52 @@ export default function History() {
     <div className="space-y-6 max-w-5xl mx-auto animate-in fade-in duration-500 pb-12">
       <style>{modalAnimationStyles}</style>
 
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between md:items-end gap-4 mb-4">
+      {/* Elegant Header */}
+      <div className="flex flex-col md:flex-row justify-between md:items-end gap-4 mb-2">
         <div>
           <h2 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
               <Archive className="text-emerald-600" size={32} /> Document History
           </h2>
-          <p className="text-base text-slate-600 mt-1">Search through your completed and voided documents.</p>
+          <p className="text-base text-slate-500 font-medium mt-1">Review your completed and voided document archives.</p>
         </div>
       </div>
 
-      {/* Flat Search & Filters */}
+      {/* Enhanced Search & Compact Refresh Bar */}
       <div className="flex flex-col gap-4 mb-8">
-          <div className="relative w-full">
-              <Search className="absolute left-4 sm:left-5 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5 sm:w-6 sm:h-6" />
-              <input 
-                type="text" 
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search archives by Title, ID, Category, or Location..." 
-                className="w-full pl-11 sm:pl-14 pr-11 sm:pr-14 py-3 sm:py-4 rounded-xl border-2 border-slate-300 focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none font-bold text-slate-900 placeholder:text-slate-400 transition-all text-base sm:text-lg shadow-sm bg-slate-50" 
-              />
-              {searchQuery && (
-                  <button 
-                    onClick={() => setSearchQuery("")} 
-                    className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 p-1 sm:p-1.5 text-slate-400 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-full transition-all duration-200 active:scale-90"
-                  >
-                      <X className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={3} />
-                  </button>
-              )}
+          <div className="flex items-center gap-2 sm:gap-3 w-full">
+              <div className="relative flex-1">
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-5 h-5" />
+                  <input 
+                    type="text" 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search archives by Title, ID, Category..." 
+                    className="w-full pl-11 pr-11 py-3.5 rounded-2xl border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 outline-none font-bold text-slate-800 placeholder:text-slate-400 transition-all text-sm sm:text-base shadow-sm bg-white hover:border-slate-300" 
+                  />
+                  {searchQuery && (
+                      <button 
+                        onClick={() => setSearchQuery("")} 
+                        className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-full transition-all duration-200 active:scale-90"
+                      >
+                          <X className="w-4 h-4" strokeWidth={3} />
+                      </button>
+                  )}
+              </div>
+              {/* Compact Square Refresh Button */}
+              <button 
+                  onClick={() => refetch()} 
+                  disabled={isFetching}
+                  className="w-[52px] h-[52px] shrink-0 bg-white border border-slate-200 text-slate-500 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-600 rounded-2xl shadow-sm transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center group"
+                  title="Refresh History"
+              >
+                  <RefreshCw size={20} className={`${isFetching ? "animate-spin text-emerald-600" : "group-hover:rotate-180 transition-transform duration-500"}`} />
+              </button>
           </div>
 
-          <div className="flex flex-nowrap overflow-x-auto scrollbar-hide gap-2 sm:gap-3 w-full mt-2">
+          <div className="flex flex-nowrap overflow-x-auto scrollbar-hide gap-2 sm:gap-3 w-full">
               <TabButton 
                 label="Completed" 
-                icon={<CheckCircle size={20} strokeWidth={activeTab === 'completed' ? 3 : 2} />}
+                icon={<CheckCircle size={18} strokeWidth={activeTab === 'completed' ? 3 : 2} />}
                 count={documents.completed.length} 
                 isActive={activeTab === 'completed'} 
                 onClick={() => { setActiveTab('completed'); setSearchQuery(''); }} 
@@ -265,7 +270,7 @@ export default function History() {
               />
               <TabButton 
                 label="Cancelled" 
-                icon={<Ban size={20} strokeWidth={activeTab === 'cancelled' ? 3 : 2} />}
+                icon={<Ban size={18} strokeWidth={activeTab === 'cancelled' ? 3 : 2} />}
                 count={documents.cancelled.length} 
                 isActive={activeTab === 'cancelled'} 
                 onClick={() => { setActiveTab('cancelled'); setSearchQuery(''); }} 
@@ -275,144 +280,144 @@ export default function History() {
           </div>
       </div>
 
-      <div key={activeTab} className="animate-in fade-in zoom-in-[0.97] duration-300 ease-out fill-mode-both">
+      <div key={activeTab} className="animate-in fade-in zoom-in-[0.98] duration-300 ease-out fill-mode-both">
           {filteredDocs.length === 0 ? (
-              <div className="bg-slate-50 border-2 border-slate-200 rounded-3xl p-10 flex flex-col items-center justify-center text-center">
-                  <div className="bg-white p-4 border-2 border-slate-100 rounded-full mb-4 shadow-sm">
-                    <FileText size={36} className="text-slate-400" />
+              <div className="bg-white border border-slate-200 rounded-[2rem] p-10 sm:p-14 flex flex-col items-center justify-center text-center shadow-sm">
+                  <div className="bg-slate-50 p-4 border border-slate-100 rounded-2xl mb-4 shadow-inner">
+                    <FileText size={32} className="text-slate-400" strokeWidth={1.5} />
                   </div>
-                  <h3 className="text-xl font-black text-slate-900 mb-2">No records found</h3>
-                  <p className="text-base font-medium text-slate-500 max-w-md">
-                      We couldn't find any {activeTab} documents matching your search criteria.
+                  <h3 className="text-xl font-black text-slate-800 mb-1.5">No records found</h3>
+                  <p className="text-sm sm:text-base font-medium text-slate-500 max-w-sm">
+                      {searchQuery 
+                        ? `We couldn't find any ${activeTab} documents matching "${searchQuery}".`
+                        : `Your ${activeTab} document history is currently empty.`}
                   </p>
               </div>
           ) : (
-              <div className="bg-white rounded-3xl border-2 border-slate-200 shadow-sm overflow-hidden animate-in fade-in">
-                  <div className="bg-slate-50 px-6 py-4 border-b-2 border-slate-200 flex justify-between items-center">
-                      <h3 className="text-lg font-black text-slate-900">
-                          {activeTab === 'completed' ? 'Completed Archives' : 'Voided Archives'}
-                      </h3>
-                  </div>
-                  
-                  <div className="p-4 sm:p-6 space-y-4 bg-white">
-                      {groupedDocs.map(({ category, docs }) => {
-                          const isCategoryExpanded = expandedCategories[category];
-                          const currentPage = categoryPages[category] || 1;
-                          const itemsPerPage = 5;
-                          const totalPages = Math.ceil(docs.length / itemsPerPage);
-                          const paginatedDocs = docs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+              <div className="bg-transparent space-y-4">
+                  {groupedDocs.map(({ category, docs }) => {
+                      const isCategoryExpanded = expandedCategories[category];
+                      const currentPage = categoryPages[category] || 1;
+                      const itemsPerPage = 5;
+                      const totalPages = Math.ceil(docs.length / itemsPerPage);
+                      const paginatedDocs = docs.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-                          return (
-                              <div key={category} className="bg-white border-2 border-slate-200 rounded-xl overflow-hidden hover:border-slate-300 transition-colors shadow-sm">
-                                  {/* MINIMAL FOLDER HEADER */}
-                                  <button 
-                                      onClick={() => toggleCategoryAccordion(category)}
-                                      className={`w-full py-4 px-4 flex items-start sm:items-center justify-between transition-all duration-200 ease-in-out focus:outline-none group active:bg-slate-100 ${isCategoryExpanded ? 'bg-slate-50' : 'bg-transparent hover:bg-slate-50/50'}`}
-                                  >
-                                      <div className="flex flex-col text-left flex-1 min-w-0 pr-4 gap-1">
-                                          <div className="flex items-center gap-2">
-                                              <FolderTree size={16} className={activeTab === 'completed' ? 'text-emerald-500' : 'text-rose-500'} />
-                                              <h4 className="font-bold text-slate-800 text-sm sm:text-base leading-snug break-words">{category}</h4>
-                                          </div>
-                                          <span className="text-[10px] font-bold px-2 py-0.5 rounded text-slate-500 bg-slate-200 w-fit mt-0.5">
-                                              {docs.length} document{docs.length !== 1 ? 's' : ''}
-                                          </span>
+                      return (
+                          <div key={category} className={`bg-white border rounded-[1.5rem] overflow-hidden transition-all duration-300 shadow-sm ${isCategoryExpanded ? 'border-slate-300 shadow-md ring-4 ring-slate-50/50' : 'border-slate-200 hover:border-slate-300'}`}>
+                              {/* FOLDER HEADER */}
+                              <button 
+                                  onClick={() => toggleCategoryAccordion(category)}
+                                  className={`w-full py-4 px-5 flex items-center justify-between transition-colors duration-200 ease-in-out focus:outline-none group active:bg-slate-50 ${isCategoryExpanded ? 'bg-slate-50/80 border-b border-slate-100' : 'bg-transparent hover:bg-slate-50/50'}`}
+                              >
+                                  <div className="flex flex-col text-left flex-1 min-w-0 pr-4 gap-1">
+                                      <div className="flex items-center gap-2.5">
+                                          <FolderTree size={20} className={activeTab === 'completed' ? 'text-emerald-500' : 'text-rose-500'} strokeWidth={2.5} />
+                                          <h4 className="font-bold text-slate-800 text-base sm:text-lg leading-snug break-words group-hover:text-slate-900 transition-colors">{category}</h4>
                                       </div>
-                                      <ChevronDown 
-                                          size={18} 
-                                          className={`shrink-0 text-slate-400 transition-transform duration-200 mt-1 sm:mt-0 ${isCategoryExpanded ? 'rotate-180 text-slate-800' : 'group-hover:text-slate-600'}`} 
-                                      />
-                                  </button>
+                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md text-slate-500 bg-white border border-slate-200 w-fit mt-1 shadow-sm">
+                                          {docs.length} document{docs.length !== 1 ? 's' : ''}
+                                      </span>
+                                  </div>
+                                  <div className={`p-2 rounded-full transition-colors ${isCategoryExpanded ? 'bg-slate-200 text-slate-800' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200 group-hover:text-slate-600'}`}>
+                                    <ChevronDown 
+                                        size={18} 
+                                        strokeWidth={2.5}
+                                        className={`shrink-0 transition-transform duration-300 ${isCategoryExpanded ? 'rotate-180' : ''}`} 
+                                    />
+                                  </div>
+                              </button>
 
-                                  {/* COLLAPSIBLE CARDS CONTENT */}
-                                  {isCategoryExpanded && (
-                                      <div className="animate-in fade-in slide-in-from-top-1 duration-200 bg-slate-50 border-t-2 border-slate-100 p-4">
-                                          <div className="flex flex-col gap-3">
+                              {/* COLLAPSIBLE CARDS CONTENT */}
+                              <div className={`grid transition-[grid-template-rows,opacity] duration-[400ms] ease-in-out ${isCategoryExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+                                  <div className="overflow-hidden">
+                                      <div className="bg-slate-50/50 p-4 sm:p-5">
+                                          <div className="flex flex-col gap-3.5">
                                               {paginatedDocs.map((doc) => {
                                                   const isCardExpanded = !!expandedCards[doc.id];
                                                   const themeColor = activeTab === 'completed' ? 'emerald' : 'rose';
-                                                  
+
                                                   return (
-                                                      <div key={doc.id} className="bg-white rounded-2xl border-2 border-slate-200 hover:border-slate-300 transition-all relative overflow-hidden shadow-sm">
-                                                          <div className={`absolute top-0 left-0 w-1.5 h-full bg-${themeColor}-500`}></div>
-                                                          
+                                                      <div key={doc.id} className="group relative bg-white rounded-2xl border border-slate-200 hover:border-slate-300 transition-all overflow-hidden shadow-sm hover:shadow-md">
+                                                          {/* Ticket-style colored left border */}
+                                                          <div className={`absolute top-0 left-0 bottom-0 w-1.5 bg-${themeColor}-500 transition-colors`}></div>
+
                                                           {/* CARD HEADER */}
                                                           <div 
                                                               onClick={() => toggleCardCollapse(doc.id)}
-                                                              className="p-4 pl-5 flex items-center justify-between gap-3 cursor-pointer select-none hover:bg-slate-50/70 transition-colors"
+                                                              className="p-4 pl-6 flex items-center justify-between gap-3 cursor-pointer select-none hover:bg-slate-50/70 transition-colors"
                                                           >
                                                               <div className="flex items-center gap-2.5 flex-1 min-w-0">
                                                                   <div className="flex flex-col min-w-0 flex-1">
-                                                                      <div className="flex items-center gap-2 mb-0.5">
-                                                                          <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 shrink-0">
+                                                                      <div className="flex items-center gap-2 mb-1.5">
+                                                                          <span className="text-[10px] font-mono font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 shrink-0 shadow-sm">
                                                                               {doc.reference_no || doc.id.substring(0, 8)}
                                                                           </span>
-                                                                          <span className={`flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded border uppercase tracking-wider shrink-0 text-${themeColor}-700 bg-${themeColor}-50 border-${themeColor}-200`}>
-                                                                              {activeTab === 'completed' ? 'Completed' : 'Cancelled'}
+                                                                          <span className={`flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded border uppercase tracking-wider shrink-0 text-${themeColor}-700 bg-${themeColor}-50 border-${themeColor}-200 shadow-sm`}>
+                                                                              {activeTab === 'completed' ? 'Completed' : 'Voided'}
                                                                           </span>
                                                                       </div>
-                                                                      <h4 className="font-bold text-slate-900 text-sm sm:text-base leading-snug truncate mt-1">
+                                                                      <h4 className="font-bold text-slate-900 text-sm sm:text-base leading-snug truncate">
                                                                           {doc.title || doc.subject}
                                                                       </h4>
                                                                   </div>
                                                               </div>
 
                                                               <ChevronDown 
-                                                                  size={18} 
+                                                                  size={20} 
                                                                   className={`text-slate-400 shrink-0 transition-transform duration-200 ease-in-out ${isCardExpanded ? `rotate-180 text-${themeColor}-600` : ''}`} 
                                                               />
                                                           </div>
-                                                          
+
                                                           {/* SLIDE-DOWN DETAILS */}
                                                           <div 
-                                                              className={`grid transition-[grid-template-rows,opacity] duration-[400ms] ease-in-out ${
+                                                              className={`grid transition-[grid-template-rows,opacity] duration-[300ms] ease-in-out ${
                                                                   isCardExpanded ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'
                                                               }`}
                                                           >
                                                               <div className="overflow-hidden">
-                                                                  <div className="p-4 pl-5 pt-1 border-t border-slate-100 bg-white space-y-4">
-                                                                      
-                                                                      <div className="flex items-center gap-1.5 pt-1">
-                                                                          <User size={13} className="text-slate-400 shrink-0" />
-                                                                          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                                                                              Created by: <span className="text-slate-800">{doc.creator_name}</span>
+                                                                  <div className="p-4 pl-6 pt-2 border-t border-slate-100 bg-white space-y-4">
+
+                                                                      <div className="flex items-center gap-2">
+                                                                          <div className="p-1.5 bg-slate-100 rounded-lg border border-slate-200"><User size={14} className="text-slate-500" /></div>
+                                                                          <p className="text-xs font-bold text-slate-500 tracking-wide">
+                                                                              Created by <span className="text-slate-800">{doc.creator_name}</span>
                                                                           </p>
                                                                       </div>
-                                                                      
-                                                                      <div className="p-3.5 rounded-xl border border-slate-200 space-y-2.5 bg-slate-50">
+
+                                                                      <div className={`p-4 rounded-xl border space-y-3 ${activeTab === 'completed' ? 'bg-emerald-50/50 border-emerald-100' : 'bg-rose-50/50 border-rose-100'}`}>
                                                                           {activeTab === 'completed' ? (
-                                                                              <div className="flex items-start gap-2">
-                                                                                  <MapPin size={15} className="text-slate-400 mt-0.5 shrink-0" />
-                                                                                  <p className="text-xs sm:text-sm text-slate-900 font-bold leading-snug">
-                                                                                      <span className="text-slate-500 text-[10px] block font-bold uppercase tracking-wider mb-0.5">Final Destination</span>
-                                                                                      {doc.final_destination || 'Archived'}
-                                                                                  </p>
+                                                                              <div className="flex items-start gap-3">
+                                                                                  <MapPin size={18} className="text-emerald-500 shrink-0" />
+                                                                                  <div className="flex flex-col -mt-0.5">
+                                                                                      <span className="text-emerald-700/70 text-[10px] font-black uppercase tracking-wider mb-0.5">Final Destination</span>
+                                                                                      <span className="text-sm text-slate-900 font-bold leading-snug">{doc.final_destination || 'Archived'}</span>
+                                                                                  </div>
                                                                               </div>
                                                                           ) : (
-                                                                              <div className="flex items-start gap-2">
-                                                                                  <AlertCircle size={15} className="text-rose-500 mt-0.5 shrink-0" />
-                                                                                  <p className="text-xs sm:text-sm text-slate-900 font-bold leading-snug">
-                                                                                      <span className="text-rose-500 text-[10px] block font-bold uppercase tracking-wider mb-0.5">Reason for Cancellation</span>
-                                                                                      {doc.remarks || 'No reason provided'}
-                                                                                  </p>
+                                                                              <div className="flex items-start gap-3">
+                                                                                  <AlertCircle size={18} className="text-rose-500 shrink-0" />
+                                                                                  <div className="flex flex-col -mt-0.5">
+                                                                                      <span className="text-rose-600/70 text-[10px] font-black uppercase tracking-wider mb-0.5">Reason for Cancellation</span>
+                                                                                      <span className="text-sm text-slate-900 font-bold leading-snug">{doc.remarks || 'No reason provided'}</span>
+                                                                                  </div>
                                                                               </div>
                                                                           )}
-                                                                          <div className="flex items-start gap-2">
-                                                                              <Clock size={15} className="text-slate-400 mt-0.5 shrink-0" />
-                                                                              <p className="text-xs sm:text-sm text-slate-900 font-bold leading-snug">
-                                                                                  <span className="text-slate-500 text-[10px] block font-bold uppercase tracking-wider mb-0.5">
+                                                                          <div className="flex items-start gap-3">
+                                                                              <Clock size={18} className={activeTab === 'completed' ? 'text-emerald-500' : 'text-rose-500'} />
+                                                                              <div className="flex flex-col -mt-0.5">
+                                                                                  <span className={`text-[10px] font-black uppercase tracking-wider mb-0.5 ${activeTab === 'completed' ? 'text-emerald-700/70' : 'text-rose-600/70'}`}>
                                                                                       {activeTab === 'completed' ? 'Completed On' : 'Cancelled On'}
                                                                                   </span>
-                                                                                  {formatPHDateTime(doc.action_time || doc.created_at)}
-                                                                              </p>
+                                                                                  <span className="text-sm text-slate-900 font-bold leading-snug">{formatPHDateTime(doc.action_time || doc.created_at)}</span>
+                                                                              </div>
                                                                           </div>
                                                                       </div>
-                                                                      
-                                                                      <div className="flex gap-2 pt-1">
+
+                                                                      <div className="flex gap-2 pt-1 pb-1">
                                                                           {doc.attachment_url && (
                                                                               <button 
                                                                                   onClick={() => setPreviewDocUrl(doc.attachment_url as string)} 
-                                                                                  className="shrink-0 py-2.5 px-3 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl flex items-center justify-center transition-all active:scale-95 border-2 border-slate-300 shadow-sm"
+                                                                                  className="shrink-0 py-2.5 px-4 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl flex items-center justify-center transition-all active:scale-95 border border-slate-200 shadow-sm"
                                                                                   title="View Attached File"
                                                                               >
                                                                                   <Eye size={18} />
@@ -420,9 +425,9 @@ export default function History() {
                                                                           )}
                                                                           <button 
                                                                               onClick={() => setTrailDoc(doc)}
-                                                                              className="flex-1 py-2 px-2 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-xs sm:text-sm border-2 border-slate-300 shadow-sm"
+                                                                              className="flex-1 py-2.5 px-4 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 text-xs sm:text-sm border border-slate-200 shadow-sm"
                                                                           >
-                                                                              <Clock size={14} /> View Digital Trail
+                                                                              <Clock size={16} /> View Digital Trail
                                                                           </button>
                                                                       </div>
                                                                   </div>
@@ -435,7 +440,7 @@ export default function History() {
 
                                           {/* PAGINATION CONTROLS */}
                                           {totalPages > 1 && (
-                                              <div className="p-3 sm:p-4 bg-transparent mt-2 flex items-center justify-between">
+                                              <div className="p-3 sm:p-4 bg-white rounded-xl border border-slate-200 mt-4 flex items-center justify-between shadow-sm">
                                                   <span className="text-[10px] sm:text-xs font-bold text-slate-500">
                                                       Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, docs.length)} of {docs.length}
                                                   </span>
@@ -443,14 +448,14 @@ export default function History() {
                                                       <button 
                                                           disabled={currentPage === 1}
                                                           onClick={() => setCategoryPages(prev => ({...prev, [category]: currentPage - 1}))}
-                                                          className="px-3 py-1.5 bg-white border-2 border-slate-300 text-slate-700 rounded-lg text-[11px] sm:text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-95 active:shadow-inner transition-all duration-200 ease-in-out"
+                                                          className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-lg text-[11px] sm:text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 active:scale-95 transition-all shadow-sm"
                                                       >
                                                           Prev
                                                       </button>
                                                       <button 
                                                           disabled={currentPage === totalPages}
                                                           onClick={() => setCategoryPages(prev => ({...prev, [category]: currentPage + 1}))}
-                                                          className="px-3 py-1.5 bg-white border-2 border-slate-300 text-slate-700 rounded-lg text-[11px] sm:text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-95 active:shadow-inner transition-all duration-200 ease-in-out"
+                                                          className="px-3 py-1.5 bg-white border border-slate-200 text-slate-700 rounded-lg text-[11px] sm:text-xs font-bold disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 active:scale-95 transition-all shadow-sm"
                                                       >
                                                           Next
                                                       </button>
@@ -458,11 +463,11 @@ export default function History() {
                                               </div>
                                           )}
                                       </div>
-                                  )}
+                                  </div>
                               </div>
-                          );
-                      })}
-                  </div>
+                          </div>
+                      );
+                  })}
               </div>
           )}
       </div>
@@ -479,13 +484,13 @@ function TabButton({ label, icon, count, isActive, onClick, colorClass, badgeCla
         <button 
             onClick={onClick}
             title={label}
-            className={`flex-none shrink-0 flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl font-bold transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-95 active:shadow-inner text-sm whitespace-nowrap overflow-hidden border-2 ${
-                isActive ? `${colorClass} border-transparent shadow-sm` : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50 hover:text-slate-700'
+            className={`flex-none shrink-0 flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-95 active:shadow-inner text-sm whitespace-nowrap overflow-hidden border ${
+                isActive ? `${colorClass} border-transparent shadow-md` : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50 hover:text-slate-700'
             }`}
         >
             {icon}
             {isActive && <span className="animate-in fade-in slide-in-from-left-2 duration-200">{label}</span>}
-            <span className={`px-2 py-0.5 rounded-md text-[10px] border ${isActive ? badgeClass : 'bg-slate-100 border-slate-200 text-slate-600'}`}>
+            <span className={`px-2 py-0.5 rounded-md text-[10px] font-black border shadow-sm ${isActive ? badgeClass : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
                 {count}
             </span>
         </button>

@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { 
-  Search, Activity, AlertCircle, MapPin, Clock, 
-  ChevronRight, CheckCircle, FileText, XCircle, Eye, X, Plus,
-  Inbox, CornerUpLeft, Folder, User, UserPlus, ChevronDown, Bell
+    Search, Activity, AlertCircle, MapPin, Clock, 
+    ChevronRight, CheckCircle, FileText, XCircle, Eye, X, Plus,
+    Inbox, CornerUpLeft, Folder, User, UserPlus, ChevronDown, Bell
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
@@ -237,7 +237,7 @@ export default function Dashboard() {
   const stats = dashboardData?.stats || { active: 0, urgent: 0, actionNeeded: 0, completed: 0 };
   const userName = dashboardData?.userName || '';
   const currentUserName = dashboardData?.currentUserName || '';
-  const currentUserId = dashboardData?.currentUserId || ''; // FIXED: Extracted missing currentUserId
+  const currentUserId = dashboardData?.currentUserId || '';
   const userDepartment = dashboardData?.userDepartment || '';
   const departments = dashboardData?.departments || [];
 
@@ -267,7 +267,6 @@ export default function Dashboard() {
                   const isForMe = newDoc.current_location === userDepartment || newDoc.assigned_clerk === currentUserName;
                   
                   if (isForMe) {
-                      // FIX: Strongly typed the cache check to remove 'any' warnings
                       const currentData = queryClient.getQueryData<DashboardCache>(['dashboardData']);
                       if (currentData) {
                           const wasAlreadyHere = 
@@ -380,7 +379,7 @@ export default function Dashboard() {
       <style>{modalAnimationStyles}</style>
 
       {/* Flat Professional Header */}
-      <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 mb-6">
+      <div className="flex flex-col sm:flex-row justify-between sm:items-end gap-4 mb-4 sm:mb-6">
           <div>
               <h1 className="text-3xl sm:text-4xl font-black text-slate-900 tracking-tight leading-tight">
                   Welcome, {userName || 'User'}! 👋
@@ -392,19 +391,18 @@ export default function Dashboard() {
 
           <button 
               onClick={openCreateModal}
-              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-6 rounded-xl flex items-center justify-center gap-2 shadow-sm hover:shadow-md transition-all active:scale-95 border-2 border-blue-600"
+              className="hidden sm:flex w-auto bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 px-6 rounded-xl items-center justify-center gap-2 shadow-sm hover:shadow-md transition-all active:scale-95 border-2 border-blue-600"
           >
               <Plus size={20} strokeWidth={3} />
               <span>Route Document</span>
           </button>
       </div>
 
-      {/* Minimalist Stats Grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 mb-8">
-          <StatCard title="Active Routing" value={stats.active} icon={<Activity size={24} />} color="blue" />
-          <StatCard title="Priority / Rush" value={stats.urgent} icon={<AlertCircle size={24} />} color="red" />
-          <StatCard title="Action Needed" value={stats.actionNeeded} icon={<XCircle size={24} />} color="orange" />
-          <StatCard title="Completed" value={stats.completed} icon={<CheckCircle size={24} />} color="emerald" />
+      {/* Ultra-Compact Stats Grid (3 Columns) */}
+      <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6 sm:mb-8">
+          <StatCard title="Active" value={stats.active} icon={<Activity size={18} className="sm:w-5 sm:h-5" />} color="blue" />
+          <StatCard title="Rush" value={stats.urgent} icon={<AlertCircle size={18} className="sm:w-5 sm:h-5" />} color="red" />
+          <StatCard title="Done" value={stats.completed} icon={<CheckCircle size={18} className="sm:w-5 sm:h-5" />} color="emerald" />
       </div>
 
       {/* Flat Search & Filters */}
@@ -429,9 +427,9 @@ export default function Dashboard() {
           </div>
 
           {/* Clean Expandable Icon Tabs */}
-          <div className="flex flex-nowrap overflow-x-auto scrollbar-hide gap-2 sm:gap-3 w-full">
+          <div className="flex flex-nowrap overflow-x-auto scrollbar-hide gap-2 sm:gap-3 w-full pb-1">
               <TabButton 
-                label="Assigned to Me" 
+                label="Assigned" 
                 icon={<Inbox size={18} strokeWidth={activeTab === 'assigned' ? 3 : 2} />}
                 count={documents.assigned.length} 
                 isActive={activeTab === 'assigned'} 
@@ -440,7 +438,7 @@ export default function Dashboard() {
                 badgeClass="bg-purple-500 text-white border-purple-400"
               />
               <TabButton 
-                label="My Documents" 
+                label="My Docs" 
                 icon={<Folder size={18} strokeWidth={activeTab === 'myDocuments' ? 3 : 2} />}
                 count={documents.myDocuments.length} 
                 isActive={activeTab === 'myDocuments'} 
@@ -449,7 +447,7 @@ export default function Dashboard() {
                 badgeClass="bg-indigo-500 text-white border-indigo-400"
               />
               <TabButton 
-                label="Processing" 
+                label="Routing" 
                 icon={<Activity size={18} strokeWidth={activeTab === 'processing' ? 3 : 2} />}
                 count={documents.processing.length} 
                 isActive={activeTab === 'processing'} 
@@ -458,7 +456,7 @@ export default function Dashboard() {
                 badgeClass="bg-blue-500 text-white border-blue-400"
               />
               <TabButton 
-                label="Action Needed" 
+                label="Returned" 
                 icon={<CornerUpLeft size={18} strokeWidth={activeTab === 'rejected' ? 3 : 2} />}
                 count={documents.rejected.length} 
                 isActive={activeTab === 'rejected'} 
@@ -614,7 +612,7 @@ export default function Dashboard() {
           )}
       </div>
 
-      {/* RE-ASSIGN MODAL (Fixed Clipping & Added Search) */}
+      {/* RE-ASSIGN MODAL */}
       {reassignDoc && (
           <div className={`fixed inset-0 z-[999] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosingReassign ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
               <div className={`bg-white w-full max-w-md flex flex-col shadow-2xl rounded-t-[1.5rem] sm:rounded-3xl ${isClosingReassign ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
@@ -686,13 +684,13 @@ function StatCard({ title, value, icon, color }: StatCardProps) {
     };
     
     return (
-        <div className="bg-white p-5 rounded-[1.5rem] border-2 border-slate-200 shadow-sm flex flex-col justify-between hover:shadow-md transition-all hover:-translate-y-0.5 min-h-[140px]">
-            <div className={`w-fit p-3 rounded-xl border-2 ${colorClasses[color]}`}>
+        <div className="bg-white p-2.5 sm:p-4 rounded-[1rem] sm:rounded-2xl border-2 border-slate-200 shadow-sm flex flex-col sm:flex-row items-center sm:items-center justify-center sm:justify-start gap-1.5 sm:gap-3 hover:shadow-md transition-all hover:border-slate-300 hover:-translate-y-0.5">
+            <div className={`shrink-0 p-1.5 sm:p-2.5 rounded-lg sm:rounded-xl border-2 ${colorClasses[color]}`}>
                 {icon}
             </div>
-            <div className="mt-4">
-                <p className="text-3xl sm:text-4xl font-black text-slate-900 leading-none">{value}</p>
-                <p className="text-xs sm:text-sm font-bold text-slate-500 mt-1.5 tracking-wide">{title}</p>
+            <div className="flex flex-col min-w-0 text-center sm:text-left">
+                <p className="text-lg sm:text-2xl font-black text-slate-900 leading-none truncate">{value}</p>
+                <p className="text-[9px] sm:text-xs font-bold text-slate-500 mt-0.5 truncate uppercase tracking-wider">{title}</p>
             </div>
         </div>
     );
@@ -774,7 +772,6 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false,
         {isOpen && !disabled && (
           <div ref={menuRef} className={`${isRelative ? 'relative mt-2 mb-4' : 'absolute mt-1.5'} z-50 w-full bg-white border-2 border-slate-300 rounded-xl shadow-xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200`}>
             
-            {/* SEARCH INPUT ALWAYS SHOWS NOW */}
             <div className="p-2 border-b-2 border-slate-100 bg-slate-50 shrink-0">
                 <div className="relative">
                     <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
@@ -814,7 +811,6 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false,
               )}
             </div>
 
-            {/* --- Information Footer for Hidden Items --- */}
             {hiddenCount > 0 && (
                 <div className="p-2.5 bg-slate-50 border-t-2 border-slate-100 shrink-0 text-center">
                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
