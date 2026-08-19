@@ -72,7 +72,6 @@ export default function Login() {
     setIsBiometricLoading(true);
     try {
       // 2. Pass the captchaToken into the options
-      // @ts-expect-error - Passkey with CAPTCHA options
       const { data, error } = await supabase.auth.signInWithPasskey({
         options: {
           captchaToken: turnstileToken
