@@ -351,16 +351,6 @@ function SignatureModal({ data, onClose }: { data: SignatureData, onClose: () =>
                         </div>
                     </div>
                 </div>
-                
-                {/* Footer Action */}
-                <div className="p-4 bg-white border-t border-slate-100">
-                    <button 
-                        onClick={handleClose}
-                        className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 active:bg-slate-950 text-white font-bold rounded-xl transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:shadow-lg active:translate-y-0 active:scale-[0.96] active:shadow-inner border-2 border-slate-900 select-none"
-                    >
-                        Close Certificate
-                    </button>
-                </div>
             </div>
         </div>
     );

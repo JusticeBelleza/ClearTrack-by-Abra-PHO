@@ -1,3 +1,4 @@
+// src/routes/history.tsx
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { 
@@ -356,9 +357,19 @@ export default function History() {
                                                                               {activeTab === 'completed' ? 'Completed' : 'Voided'}
                                                                           </span>
                                                                       </div>
-                                                                      <h4 className="font-bold text-slate-900 text-sm sm:text-base leading-snug truncate">
+                                                                      
+                                                                      {/* CONDITIONAL TRUNCATION */}
+                                                                      <h4 className={`font-bold text-slate-900 text-sm sm:text-base leading-snug ${isCardExpanded ? '' : 'truncate'}`}>
                                                                           {doc.title || doc.subject}
                                                                       </h4>
+                                                                      
+                                                                      {/* DATE/TIME BELOW TITLE */}
+                                                                      <div className="flex items-center gap-1.5 mt-1.5 shrink-0 text-slate-400">
+                                                                          <Clock size={12} strokeWidth={2.5} />
+                                                                          <span className="text-[10px] font-bold tracking-wide font-mono whitespace-nowrap">
+                                                                              {formatPHDateTime(doc.action_time || doc.created_at)}
+                                                                          </span>
+                                                                      </div>
                                                                   </div>
                                                               </div>
 
@@ -402,15 +413,6 @@ export default function History() {
                                                                                   </div>
                                                                               </div>
                                                                           )}
-                                                                          <div className="flex items-start gap-3">
-                                                                              <Clock size={18} className={activeTab === 'completed' ? 'text-emerald-500' : 'text-rose-500'} />
-                                                                              <div className="flex flex-col -mt-0.5">
-                                                                                  <span className={`text-[10px] font-black uppercase tracking-wider mb-0.5 ${activeTab === 'completed' ? 'text-emerald-700/70' : 'text-rose-600/70'}`}>
-                                                                                      {activeTab === 'completed' ? 'Completed On' : 'Cancelled On'}
-                                                                                  </span>
-                                                                                  <span className="text-sm text-slate-900 font-bold leading-snug">{formatPHDateTime(doc.action_time || doc.created_at)}</span>
-                                                                              </div>
-                                                                          </div>
                                                                       </div>
 
                                                                       <div className="flex gap-2 pt-1 pb-1">
