@@ -1,7 +1,7 @@
 // src/routes/processing.tsx
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search, X, Activity, CornerUpLeft, RefreshCw, CheckCircle, MapPin, ChevronDown, User, Clock, Eye, UserPlus, Ban, Square, CheckSquare, AlertCircle, Plus, Layers, PenTool, Camera, Paperclip, ChevronRight, UploadCloud } from 'lucide-react';
+import { Search, X, Activity, CornerUpLeft, RefreshCw, CheckCircle, MapPin, ChevronDown, User, Clock, Eye, UserPlus, Ban, Square, CheckSquare, AlertCircle, Plus, Layers, PenTool, Camera, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import { jsPDF } from 'jspdf';
