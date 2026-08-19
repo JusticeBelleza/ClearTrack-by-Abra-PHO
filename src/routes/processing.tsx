@@ -6,7 +6,6 @@ import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import { jsPDF } from 'jspdf';
 import type { ProcessingData, DocumentItem, OptionType } from '../types/processing';
-import { formatPHDateTime } from '../lib/utils';
 import HandoverScreen from '../components/system/HandoverScreen';
 import DigitalTrailModal from '../components/system/DigitalTrailModal';
 import FilePreviewModal from '../components/system/FilePreviewModal';
@@ -71,8 +70,6 @@ export default function Processing() {
   const [trailDoc, setTrailDoc] = useState<DocumentItem | null>(null);
   const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
   const [reassignDoc, setReassignDoc] = useState<DocumentItem | null>(null);
-  const [reviseDoc, setReviseDoc] = useState<DocumentItem | null>(null);
-  const [cancelDoc, setCancelDoc] = useState<DocumentItem | null>(null);
 
   const [lastViewedProcessing, setLastViewedProcessing] = useState(() => localStorage.getItem('filetrackr_viewed_processing') || '0');
   const [lastViewedReturned, setLastViewedReturned] = useState(() => localStorage.getItem('filetrackr_viewed_returned') || '0');
@@ -249,14 +246,13 @@ export default function Processing() {
                                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
                                           {clerkDocs.map(doc => (
                                               <DocumentCard 
-                                                key={doc.id} doc={doc} activeTab={activeTab} isSelected={selectedDocs.some(d => d.id === doc.id)}
+                                                key={doc.id} doc={doc} isSelected={selectedDocs.some(d => d.id === doc.id)}
                                                 isExpanded={!!expandedCards[doc.id]} showCheckbox={clerkDocCounts[doc.assigned_clerk || 'Unassigned'] > 1 && (!selectedDocs.length || selectedDocs[0].assigned_clerk === (doc.assigned_clerk || 'Unassigned'))}
                                                 currentUserName={data?.currentUserName || ''} currentUserId={data?.currentUserId || ''}
                                                 onToggleSelection={(d: DocumentItem) => setSelectedDocs((prev: DocumentItem[]) => prev.some((x: DocumentItem) => x.id === d.id) ? prev.filter((x: DocumentItem) => x.id !== d.id) : [...prev, d])}
                                                 onToggleCollapse={(id: string) => setExpandedCards((prev: Record<string, boolean>) => ({...prev, [id]: !prev[id]}))}
                                                 onPreview={(url: string) => setPreviewDocUrl(url)} onTrack={(d: DocumentItem) => setTrailDoc(d)}
-                                                onReassign={(d: DocumentItem) => setReassignDoc(d)} onCancel={(d: DocumentItem) => setCancelDoc(d)}
-                                                onRevise={(d: DocumentItem) => setReviseDoc(d)} onAction={(d: DocumentItem) => setSelectedDoc(d)}
+                                                onReassign={(d: DocumentItem) => setReassignDoc(d)} onAction={(d: DocumentItem) => setSelectedDoc(d)}
                                               />
                                           ))}
                                       </div>
@@ -271,14 +267,13 @@ export default function Processing() {
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
                       {filteredDocs.map((doc: DocumentItem) => (
                           <DocumentCard 
-                            key={doc.id} doc={doc} activeTab={activeTab} isSelected={selectedDocs.some(d => d.id === doc.id)}
+                            key={doc.id} doc={doc} isSelected={selectedDocs.some(d => d.id === doc.id)}
                             isExpanded={!!expandedCards[doc.id]} showCheckbox={clerkDocCounts[doc.assigned_clerk || 'Unassigned'] > 1 && (!selectedDocs.length || selectedDocs[0].assigned_clerk === (doc.assigned_clerk || 'Unassigned'))}
                             currentUserName={data?.currentUserName || ''} currentUserId={data?.currentUserId || ''}
                             onToggleSelection={(d: DocumentItem) => setSelectedDocs((prev: DocumentItem[]) => prev.some((x: DocumentItem) => x.id === d.id) ? prev.filter((x: DocumentItem) => x.id !== d.id) : [...prev, d])}
                             onToggleCollapse={(id: string) => setExpandedCards((prev: Record<string, boolean>) => ({...prev, [id]: !prev[id]}))}
                             onPreview={(url: string) => setPreviewDocUrl(url)} onTrack={(d: DocumentItem) => setTrailDoc(d)}
-                            onReassign={(d: DocumentItem) => setReassignDoc(d)} onCancel={(d: DocumentItem) => setCancelDoc(d)}
-                            onRevise={(d: DocumentItem) => setReviseDoc(d)} onAction={(d: DocumentItem) => setSelectedDoc(d)}
+                            onReassign={(d: DocumentItem) => setReassignDoc(d)} onAction={(d: DocumentItem) => setSelectedDoc(d)}
                           />
                       ))}
                   </div>
@@ -374,10 +369,8 @@ export default function Processing() {
       {trailDoc && <DigitalTrailModal doc={trailDoc} onBack={() => setTrailDoc(null)} />}
       {previewDocUrl && <FilePreviewModal url={previewDocUrl} onClose={() => setPreviewDocUrl(null)} />}
       
-      {/* Inline Fallback Modals (Revise/Cancel/Reassign) */}
+      {/* Inline Fallback Modals (Reassign) */}
       {reassignDoc && <ReassignModal doc={reassignDoc} currentUserName={data?.currentUserName || ''} currentUserId={data?.currentUserId || ''} colleagues={availableColleagues} onClose={() => setReassignDoc(null)} onSuccess={() => refetch()} />}
-      {reviseDoc && <ReviseModal doc={reviseDoc} departments={departments} onClose={() => setReviseDoc(null)} onSuccess={() => refetch()} />}
-      {cancelDoc && <CancelModal doc={cancelDoc} onClose={() => setCancelDoc(null)} onSuccess={() => refetch()} />}
     </div>
   );
 }
@@ -473,7 +466,7 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false,
     );
 }
 
-function DocumentCard({ doc, activeTab, isSelected, isExpanded, showCheckbox, currentUserName, currentUserId, onToggleSelection, onToggleCollapse, onPreview, onTrack, onReassign, onCancel, onRevise, onAction }: { doc: DocumentItem, activeTab: string, isSelected: boolean, isExpanded: boolean, showCheckbox: boolean, currentUserName: string, currentUserId: string, onToggleSelection: (d: DocumentItem) => void, onToggleCollapse: (id: string) => void, onPreview: (url: string) => void, onTrack: (d: DocumentItem) => void, onReassign: (d: DocumentItem) => void, onCancel: (d: DocumentItem) => void, onRevise: (d: DocumentItem) => void, onAction: (d: DocumentItem) => void }) {
+function DocumentCard({ doc, isSelected, isExpanded, showCheckbox, currentUserName, currentUserId, onToggleSelection, onToggleCollapse, onPreview, onTrack, onReassign, onAction }: { doc: DocumentItem, isSelected: boolean, isExpanded: boolean, showCheckbox: boolean, currentUserName: string, currentUserId: string, onToggleSelection: (d: DocumentItem) => void, onToggleCollapse: (id: string) => void, onPreview: (url: string) => void, onTrack: (d: DocumentItem) => void, onReassign: (d: DocumentItem) => void, onAction: (d: DocumentItem) => void }) {
     const isManager = doc.assigned_clerk === currentUserName;
     const isCreator = doc.created_by === currentUserId;
     const canReassign = isManager || isCreator;
@@ -779,140 +772,6 @@ function ReassignModal({ doc, currentUserName, currentUserId, colleagues, onClos
                 <div className="p-4 sm:p-5 bg-white border-t border-slate-200 flex gap-3 shrink-0 relative z-0 sm:rounded-b-3xl">
                     <button onClick={handleClose} className="flex-1 py-3.5 bg-white border-2 border-slate-300 hover:bg-slate-50 rounded-xl font-bold text-slate-700 transition-all active:scale-95 text-sm sm:text-base">Cancel</button>
                     <button onClick={handleConfirm} disabled={!selectedColleague || isReassigning} className="flex-[1.5] py-3.5 bg-teal-600 border-2 border-teal-700 text-white rounded-xl font-bold shadow-sm hover:bg-teal-700 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100 flex justify-center items-center gap-2 text-sm sm:text-base">{isReassigning ? 'Updating...' : 'Confirm Re-assign'}</button>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function ReviseModal({ doc, departments, onClose, onSuccess }: { doc: DocumentItem, departments: OptionType[], onClose: () => void, onSuccess: () => void }) {
-    const [isClosing, setIsClosing] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    
-    const [destination, setDestination] = useState(doc.final_destination || '');
-    const [isProcessingFile, setIsProcessingFile] = useState(false);
-    const [attachment, setAttachment] = useState<File | Blob | null>(null);
-    const [attachmentName, setAttachmentName] = useState<string>('');
-    const [remarks, setRemarks] = useState(''); 
-
-    const handleClose = () => { setIsClosing(true); setTimeout(onClose, 250); };
-
-    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0]; if (!file) return;
-        setIsProcessingFile(true); setAttachmentName("Processing file...");
-        try {
-            if (file.type === 'application/pdf') { setAttachment(file); setAttachmentName(file.name); } 
-            else if (file.type.startsWith('image/')) {
-                const pdfBlob = await new Promise<Blob>((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onload = (event) => {
-                        const img = new Image();
-                        img.onload = () => {
-                            const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d'); if (!ctx) return reject("Canvas error");
-                            canvas.width = img.width; canvas.height = img.height; ctx.filter = 'grayscale(100%) contrast(150%) brightness(110%)'; ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                            const processedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
-                            const pdf = new jsPDF({ orientation: img.width > img.height ? 'landscape' : 'portrait', unit: 'px', format: [img.width, img.height] });
-                            pdf.addImage(processedDataUrl, 'JPEG', 0, 0, img.width, img.height); resolve(pdf.output('blob'));
-                        }; img.onerror = reject; img.src = event.target?.result as string;
-                    }; reader.onerror = reject; reader.readAsDataURL(file);
-                });
-                setAttachment(pdfBlob); setAttachmentName(`Revised_${doc.reference_no}.pdf`);
-            } else { toast.error("Unsupported file type."); setAttachmentName(""); }
-        } catch { toast.error("Failed to process the document."); setAttachmentName(""); } finally { setIsProcessingFile(false); }
-    };
-
-    const handleSubmit = async () => {
-        if (!destination) { toast.error("Validation Error", { description: "Please provide a destination." }); return; }
-        setIsSubmitting(true);
-        try {
-            const { data: { session } } = await supabase.auth.getSession();
-            let newUrl = doc.attachment_url;
-
-            if (attachment) {
-                const fileName = `revised-${doc.reference_no}-${Date.now()}.pdf`;
-                const { error: uploadError } = await supabase.storage.from('attachments').upload(fileName, attachment, { contentType: 'application/pdf' });
-                if (uploadError) throw uploadError;
-                const { data } = supabase.storage.from('attachments').getPublicUrl(fileName);
-                newUrl = data.publicUrl;
-            }
-
-            await supabase.from('documents').update({ current_location: destination, assigned_clerk: null, status: 'routing', remarks: null, attachment_url: newUrl, updated_at: new Date().toISOString() }).eq('id', doc.id);
-            const logRemarks = remarks.trim() ? `Document revised and routed to ${destination}\nRemarks: ${remarks.trim()}` : `Document revised and routed to ${destination}`;
-            await supabase.from('document_logs').insert([{ document_id: doc.id, action: 'Resubmitted', location: destination, assigned_to: 'Office Queue', remarks: logRemarks, created_by: session?.user?.id || null }]);
-
-            toast.success("Document Successfully Revised & Resubmitted!"); onSuccess(); handleClose();
-        } catch { toast.error("Failed to resubmit the document."); } finally { setIsSubmitting(false); }
-    };
-
-    return (
-        <div className={`fixed inset-0 z-[999] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosing ? 'animate-overlay-fade-out pointer-events-none' : 'animate-overlay-fade'}`}>
-            <div className={`bg-white w-full max-w-xl max-h-[90vh] flex flex-col shadow-2xl rounded-t-[1.5rem] sm:rounded-3xl overflow-hidden ${isClosing ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
-                <div className="bg-slate-900 p-5 sm:p-6 flex justify-between items-center text-white relative shrink-0">
-                    <div className="w-12 h-1.5 bg-white/20 rounded-full absolute top-2 left-1/2 -translate-x-1/2 sm:hidden"></div>
-                    <div><h3 className="font-black text-xl flex items-center gap-2 mt-2 sm:mt-0"><UploadCloud size={24} className="text-blue-400" /> Revise & Resubmit</h3><p className="text-slate-400 text-sm font-medium mt-1">Make adjustments and re-route document.</p></div>
-                    <button onClick={handleClose} disabled={isSubmitting} className="p-1.5 -mr-1.5 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-full transition-colors mt-2 sm:mt-0 disabled:opacity-50"><X size={20} /></button>
-                </div>
-                <div className="p-5 sm:p-6 overflow-y-auto space-y-6 bg-slate-50 flex-1 custom-scrollbar">
-                    <div className="bg-white p-4 rounded-xl border-2 border-slate-200 shadow-sm"><p className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Document</p><p className="text-base font-black text-slate-900">{doc.title || doc.subject}</p><p className="text-xs font-mono text-slate-500 mt-1">{doc.reference_no}</p></div>
-                    <div>
-                        <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Upload Corrected Document (Optional)</label>
-                        <div className="flex items-center gap-3">
-                            <label className={`hidden sm:flex flex-1 items-center justify-center gap-2 p-3 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${attachment ? 'bg-blue-50 border-blue-400 text-blue-700' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`}><input type="file" accept="image/*,application/pdf" className="hidden" onChange={handleFileChange} disabled={isProcessingFile || isSubmitting} />{isProcessingFile ? <span className="animate-pulse font-bold text-sm">Processing PDF...</span> : attachment ? <><CheckCircle size={18}/> <span className="font-bold text-sm truncate max-w-[200px]">{attachmentName}</span></> : <><Paperclip size={18}/> <span className="font-bold text-sm">Attach New PDF</span></>}</label>
-                            <label className={`flex sm:hidden flex-1 items-center justify-center gap-2 p-3 border-2 border-dashed rounded-xl cursor-pointer transition-colors active:scale-95 ${attachment ? 'bg-blue-50 border-blue-400 text-blue-700' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`}><input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} disabled={isProcessingFile || isSubmitting} />{isProcessingFile ? <span className="animate-pulse font-bold text-sm">Processing PDF...</span> : attachment ? <><CheckCircle size={18}/> <span className="font-bold text-sm truncate max-w-[150px]">{attachmentName}</span></> : <><Camera size={18}/> <span className="font-bold text-sm">Re-Scan Document</span></>}</label>
-                            {attachment && !isProcessingFile && <button type="button" onClick={() => { setAttachment(null); setAttachmentName(''); }} className="p-3 bg-red-50 text-red-600 rounded-xl border-2 border-red-200 hover:bg-red-100 active:scale-95 transition-all"><X size={18} strokeWidth={3} /></button>}
-                        </div>
-                    </div>
-                    <div className="relative z-10"><label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Remarks / Notes</label><textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="What was revised? Or provide additional notes..." className="w-full p-3 sm:p-3.5 bg-white border-2 border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 rounded-xl outline-none font-bold text-slate-900 text-sm sm:text-base min-h-[100px] resize-y transition-colors"></textarea></div>
-                    <div className="relative z-20"><label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Next Destination Office *</label><CustomSelect options={departments} value={destination} onChange={setDestination} placeholder="Select destination office..." isRelative={true} itemType="office"/></div>
-                </div>
-                <div className="p-4 sm:p-5 bg-white border-t border-slate-200 flex gap-3 shrink-0">
-                    <button onClick={handleClose} className="flex-1 py-3 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl transition-all active:scale-95 border-2 border-slate-300 text-sm sm:text-base">Cancel</button>
-                    <button onClick={handleSubmit} disabled={isSubmitting || isProcessingFile || !destination} className="flex-[2] py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 border-2 border-blue-700 shadow-sm disabled:opacity-50 text-sm sm:text-base">{isSubmitting ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : 'Submit Revision'}</button>
-                </div>
-            </div>
-        </div>
-    );
-}
-
-function CancelModal({ doc, onClose, onSuccess }: { doc: DocumentItem, onClose: () => void, onSuccess: () => void }) {
-    const [isClosing, setIsClosing] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [reason, setReason] = useState('');
-
-    const handleClose = () => { setIsClosing(true); setTimeout(onClose, 250); };
-
-    const handleSubmit = async () => {
-        if (!reason.trim()) { toast.error("Validation Error", { description: "Please provide a reason for cancellation." }); return; }
-        setIsSubmitting(true);
-        try {
-            const { data: { session } } = await supabase.auth.getSession();
-            await supabase.from('documents').update({ status: 'cancelled', assigned_clerk: null, remarks: reason.trim(), updated_at: new Date().toISOString() }).eq('id', doc.id);
-            await supabase.from('document_logs').insert([{ document_id: doc.id, action: 'Cancelled', location: doc.current_location || 'Origin', remarks: `Document cancelled by creator. Reason: ${reason.trim()}`, created_by: session?.user?.id || null }]);
-            toast.success("Document Cancelled", { description: "It has been moved to your cancelled history." });
-            onSuccess(); handleClose();
-        } catch { toast.error("Failed to cancel the document."); } finally { setIsSubmitting(false); }
-    };
-
-    return (
-        <div className={`fixed inset-0 z-[999] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosing ? 'animate-overlay-fade-out pointer-events-none' : 'animate-overlay-fade'}`}>
-            <div className={`bg-white w-full max-w-md flex flex-col shadow-2xl rounded-t-[1.5rem] sm:rounded-3xl overflow-hidden ${isClosing ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
-                <div className="bg-slate-900 p-5 sm:p-6 flex justify-between items-center text-white relative shrink-0">
-                    <div className="w-12 h-1.5 bg-white/20 rounded-full absolute top-2 left-1/2 -translate-x-1/2 sm:hidden"></div>
-                    <h3 className="font-black text-xl flex items-center gap-2 mt-2 sm:mt-0"><Ban size={22} className="text-red-500" /> Cancel Document</h3>
-                    <button onClick={handleClose} disabled={isSubmitting} className="p-1.5 -mr-1.5 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-full transition-colors mt-2 sm:mt-0 disabled:opacity-50"><X size={20} /></button>
-                </div>
-                <div className="p-5 sm:p-6 overflow-y-auto space-y-5 bg-slate-50 flex-1">
-                    <p className="text-slate-600 font-medium text-sm">Cancelling will permanently stop this document from routing and move it to your archives as a voided record.</p>
-                    <div className="bg-white p-4 rounded-xl border-2 border-slate-200 shadow-sm">
-                        <p className="text-[10px] sm:text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-0.5">Target Document</p>
-                        <p className="text-base font-black text-slate-900">{doc.title || doc.subject}</p>
-                        <p className="text-xs font-mono text-slate-500 mt-1">{doc.reference_no}</p>
-                    </div>
-                    <div><label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Reason for Cancellation *</label><textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="E.g., Made a mistake, duplicate record, no longer needed..." className="w-full p-3 sm:p-3.5 bg-white border-2 border-slate-200 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 rounded-xl outline-none font-bold text-slate-900 text-sm sm:text-base min-h-[100px] resize-y transition-colors"></textarea></div>
-                </div>
-                <div className="p-4 sm:p-5 bg-white border-t border-slate-200 flex gap-3 shrink-0">
-                    <button onClick={handleClose} className="flex-1 py-3 bg-white hover:bg-slate-50 text-slate-700 font-bold rounded-xl transition-all active:scale-95 border-2 border-slate-300 text-sm sm:text-base">Go Back</button>
-                    <button onClick={handleSubmit} disabled={isSubmitting || !reason.trim()} className="flex-[1.5] py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-all active:scale-95 border-2 border-red-700 shadow-md disabled:opacity-50 text-sm sm:text-base">{isSubmitting ? <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : 'Confirm Cancel'}</button>
                 </div>
             </div>
         </div>
