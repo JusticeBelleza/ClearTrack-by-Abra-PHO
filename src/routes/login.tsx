@@ -1,6 +1,7 @@
+// src/routes/login.tsx
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Lock, Mail, ArrowRight, Loader2, Eye, EyeOff, Fingerprint } from 'lucide-react';
+import { Lock, Mail, ArrowRight, Loader2, Eye, EyeOff, Fingerprint, Info } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { toast } from 'sonner';
 import { Turnstile } from '@marsidev/react-turnstile';
@@ -19,6 +20,9 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [isBiometricLoading, setIsBiometricLoading] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  
+  // New state for the Biometric Notification Modal
+  const [showBiometricNotice, setShowBiometricNotice] = useState(false);
 
   // Added a reference to the Turnstile widget so we can reset it on failure
   const turnstileRef = useRef<TurnstileInstance>(null);
@@ -85,10 +89,11 @@ export default function Login() {
       }
     } catch (err: unknown) {
       console.error("Biometric Login Error:", err);
-      const errorMessage = err instanceof Error ? err.message : "Authentication failed.";
-      toast.error("Biometric Login Failed", { description: errorMessage });
       
-      // 3. Reset the CAPTCHA token on failure so they can try again
+      // 3. If it fails (no passkey found, cancelled, etc.), show the instructional modal
+      setShowBiometricNotice(true);
+      
+      // Reset the CAPTCHA token on failure so they can try again
       setTurnstileToken(null);
       turnstileRef.current?.reset();
     } finally {
@@ -226,54 +231,42 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Standard Login Button */}
-          <button 
-            type="submit" 
-            disabled={isLoading || isBiometricLoading || !turnstileToken}
-            className="w-full py-4 mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl shadow-[0_8px_16px_-6px_rgba(37,99,235,0.4)] hover:shadow-[0_12px_20px_-8px_rgba(37,99,235,0.6)] transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-base border border-blue-500 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:shadow-none"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="animate-spin h-5 w-5" />
-                Authenticating...
-              </>
-            ) : (
-              <>
-                Sign In <ArrowRight size={20} strokeWidth={2.5} />
-              </>
-            )}
-          </button>
-        </form>
+          {/* Action Buttons Row */}
+          <div className="flex gap-3 mt-2">
+            {/* Standard Login Button */}
+            <button 
+              type="submit" 
+              disabled={isLoading || isBiometricLoading || !turnstileToken}
+              className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl shadow-[0_8px_16px_-6px_rgba(37,99,235,0.4)] hover:shadow-[0_12px_20px_-8px_rgba(37,99,235,0.6)] transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-base border border-blue-500 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:shadow-none"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="animate-spin h-5 w-5" />
+                  Authenticating...
+                </>
+              ) : (
+                <>
+                  Sign In <ArrowRight size={20} strokeWidth={2.5} />
+                </>
+              )}
+            </button>
 
-        {/* CONDITIONAL RENDER: Only show if device is registered */}
-        {localStorage.getItem('filetrackr_passkey_registered') === 'true' && (
-          <>
-            <div className="relative flex items-center justify-center py-5">
-                <div className="w-full h-px bg-slate-200"></div>
-                <span className="absolute bg-white px-4 text-xs font-bold text-slate-400 uppercase tracking-widest">or</span>
-            </div>
-
-            {/* NEW: Biometric Login Button */}
+            {/* ALWAYS VISIBLE Biometric Login Button */}
             <button 
                 type="button"
                 onClick={handleBiometricLogin}
                 disabled={isLoading || isBiometricLoading}
-                className="w-full py-3.5 bg-slate-50 hover:bg-slate-100 text-slate-900 font-bold rounded-2xl transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-sm border-2 border-slate-200 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
+                title="Sign in with Passkey or Face ID"
+                className="w-[60px] shrink-0 bg-white hover:bg-blue-50 text-blue-600 font-bold rounded-2xl transition-all active:scale-[0.95] flex items-center justify-center border-2 border-slate-200 hover:border-blue-200 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
             >
                 {isBiometricLoading ? (
-                    <>
-                        <Loader2 className="animate-spin h-5 w-5 text-blue-600" />
-                        Scanning...
-                    </>
+                    <Loader2 className="animate-spin h-6 w-6" />
                 ) : (
-                    <>
-                        <Fingerprint size={20} className="text-blue-600" />
-                        Sign in with Passkey / Face ID
-                    </>
+                    <Fingerprint size={28} strokeWidth={2.5} />
                 )}
             </button>
-          </>
-        )}
+          </div>
+        </form>
 
         <div className="mt-8 text-center border-t border-slate-100 pt-6">
           <p className="text-xs text-slate-400 font-medium mb-3">
@@ -285,6 +278,28 @@ export default function Login() {
         </div>
 
       </div>
+
+      {/* --- INSTRUCTIONAL NOTIFICATION MODAL --- */}
+      {showBiometricNotice && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white max-w-sm w-full rounded-[2rem] shadow-2xl p-6 text-center animate-in zoom-in-95 duration-200 border border-slate-100">
+                <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-blue-100">
+                    <Info size={32} />
+                </div>
+                <h3 className="text-xl font-black text-slate-900 mb-2">Biometrics Not Setup</h3>
+                <p className="text-sm text-slate-500 font-medium mb-6 leading-relaxed">
+                    We couldn't verify your Face ID or Fingerprint. If you haven't set this up yet, please <strong>sign in with your password first</strong>, then go to Account Settings to register your device.
+                </p>
+                <button 
+                    onClick={() => setShowBiometricNotice(false)}
+                    className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-all active:scale-95 border-2 border-slate-900"
+                >
+                    Got it, thanks!
+                </button>
+            </div>
+        </div>
+      )}
+
     </div>
   );
 }
