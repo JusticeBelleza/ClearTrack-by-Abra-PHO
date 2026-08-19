@@ -64,9 +64,20 @@ export default function Login() {
   };
 
   const handleBiometricLogin = async () => {
+    // 1. Add the CAPTCHA security check
+    if (!turnstileToken) {
+      toast.error("Security Check Required", { description: "Please complete the Cloudflare security verification." });
+      return;
+    }
+
     setIsBiometricLoading(true);
     try {
-      const { data, error } = await supabase.auth.signInWithPasskey();
+      // 2. Pass the captchaToken into the options
+      const { data, error } = await supabase.auth.signInWithPasskey({
+        options: {
+          captchaToken: turnstileToken
+        }
+      });
       
       if (error) throw error;
       
@@ -77,6 +88,10 @@ export default function Login() {
       console.error("Biometric Login Error:", err);
       const errorMessage = err instanceof Error ? err.message : "Authentication failed.";
       toast.error("Biometric Login Failed", { description: errorMessage });
+      
+      // 3. Reset the CAPTCHA token on failure so they can try again
+      setTurnstileToken(null);
+      turnstileRef.current?.reset();
     } finally {
       setIsBiometricLoading(false);
     }
