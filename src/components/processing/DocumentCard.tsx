@@ -1,5 +1,5 @@
 // src/components/processing/DocumentCard.tsx
-import { AlertCircle, MapPin, Eye, Clock, ChevronRight, User, MessageSquareWarning, CheckSquare, Square, ChevronDown, UserPlus, Ban, Send } from 'lucide-react';
+import { AlertCircle, MapPin, Eye, Clock, ChevronRight, User, MessageSquareWarning, CheckSquare, Square, ChevronDown, UserPlus, Ban, } from 'lucide-react';
 import { formatPHDateTime } from '../../lib/utils';
 import type { DocumentItem } from '../../types/processing';
 
@@ -19,12 +19,11 @@ interface DocumentCardProps {
     onCancel?: (doc: DocumentItem) => void;
     onRevise?: (doc: DocumentItem) => void;
     onAction?: (doc: DocumentItem) => void;
-    onReRoute?: (doc: DocumentItem) => void;
 }
 
 export default function DocumentCard({
     doc, activeTab, isSelected, isExpanded, showCheckbox, currentUserName, currentUserId,
-    onToggleSelection, onToggleCollapse, onPreview, onTrack, onReassign, onCancel, onRevise, onAction, onReRoute
+    onToggleSelection, onToggleCollapse, onPreview, onTrack, onReassign, onCancel, onRevise, onAction
 }: DocumentCardProps) {
     
     const isManager = doc.assigned_clerk === currentUserName;
