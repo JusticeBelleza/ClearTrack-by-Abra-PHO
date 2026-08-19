@@ -34,6 +34,7 @@ interface DocumentItem {
     is_urgent?: boolean;
     current_location?: string;
     final_destination?: string;
+    created_by?: string; 
 }
 
 interface HandoverScreenProps {
@@ -169,7 +170,6 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
 
     const [destination, setDestination] = useState('');
     const [receivingClerk, setReceivingClerk] = useState('');
-    const [rejectOffice, setRejectOffice] = useState('');
     const [rejectReason, setRejectReason] = useState('');
 
     const [isProcessingFile, setIsProcessingFile] = useState(false);
@@ -178,6 +178,11 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
     const [releasedBy, setReleasedBy] = useState('');
     const [completionRemarks, setCompletionRemarks] = useState('');
     const [retentionFate, setRetentionFate] = useState<'originator' | 'destination' | null>(null);
+
+    // Dynamic Origin States for Rejection
+    const [originOffice, setOriginOffice] = useState('Originating Office');
+    const [originCreator, setOriginCreator] = useState('Creator');
+    const [isLoadingOrigin, setIsLoadingOrigin] = useState(false);
 
     const overlayAnimation = isClosing 
         ? "animate-out fade-out duration-200 ease-in fill-mode-forwards" 
@@ -200,6 +205,28 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
         setActiveAction(null);
         setHasSignature(false); 
     };
+
+    // Auto-fetch the actual originating office when "Reject" is clicked
+    useEffect(() => {
+        if (activeAction === 'reject' && doc.created_by) {
+            setIsLoadingOrigin(true);
+            const fetchOriginData = async () => {
+                try {
+                    const { data: creatorData } = await supabase.from('profiles').select('full_name').eq('id', doc.created_by).single();
+                    if (creatorData?.full_name) {
+                        setOriginCreator(creatorData.full_name);
+                        const { data: empData } = await supabase.from('employees').select('department').eq('name', creatorData.full_name).single();
+                        if (empData?.department) setOriginOffice(empData.department);
+                    }
+                } catch (err) {
+                    console.error("Failed to fetch origin office");
+                } finally {
+                    setIsLoadingOrigin(false);
+                }
+            };
+            fetchOriginData();
+        }
+    }, [activeAction, doc.created_by]);
 
     useEffect(() => {
         if (activeAction !== 'route' && activeAction !== 'complete') return;
@@ -402,17 +429,32 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
     };
 
     const handleReject = async () => {
-        if (!rejectOffice || !rejectReason.trim()) { toast.error("Validation Error", { description: "Please provide the returning office and reason." }); return; }
         setIsSubmitting(true);
         try {
             const { data: { session } } = await supabase.auth.getSession();
-            const { error: logError } = await supabase.from('document_logs').insert([{ document_id: doc.id, action: 'Returned', location: rejectOffice, remarks: rejectReason.trim(), created_by: session?.user?.id || null }]);
+            const finalRemarks = rejectReason.trim() || 'Returned without remarks';
+
+            const { error: logError } = await supabase.from('document_logs').insert([{ 
+                document_id: doc.id, 
+                action: 'Returned', 
+                location: originOffice, 
+                assigned_to: originCreator,
+                remarks: finalRemarks, 
+                created_by: session?.user?.id || null 
+            }]);
             if (logError) throw logError;
-            const { error } = await supabase.from('documents').update({ status: 'pending', current_location: rejectOffice, remarks: rejectReason.trim() }).eq('id', doc.id);
+
+            const { error } = await supabase.from('documents').update({ 
+                status: 'pending', 
+                current_location: originOffice, 
+                remarks: finalRemarks,
+                assigned_clerk: originCreator
+            }).eq('id', doc.id);
             if (error) throw error;
-            toast.success("Document Returned");
+
+            toast.success("Document Returned", { description: `Sent back to ${originCreator} at ${originOffice}` });
             onSuccess(); handleClose();
-        } catch { toast.error("Failed to reject document"); } 
+        } catch { toast.error("Failed to return document"); } 
         finally { setIsSubmitting(false); }
     };
 
@@ -458,7 +500,7 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
                         <div className="flex flex-col gap-3">
                             <ActionCard title="Add Step" description="Route this document to its next destination." icon={<MapPin size={20} strokeWidth={2.5} />} colorTheme="blue" onClick={() => setActiveAction('route')} />
                             <ActionCard title="Complete Document" description="Finalize, log remarks, and secure the record." icon={<CheckCircle size={20} strokeWidth={2.5} />} colorTheme="emerald" onClick={() => setActiveAction('complete')} />
-                            <ActionCard title="Return / Reject" description="Bounce this document back to a previous office." icon={<Ban size={20} strokeWidth={2.5} />} colorTheme="rose" onClick={() => setActiveAction('reject')} />
+                            <ActionCard title="Return / Reject" description="Bounce this document back to the originating office." icon={<Ban size={20} strokeWidth={2.5} />} colorTheme="rose" onClick={() => setActiveAction('reject')} />
                         </div>
                     ) : null}
 
@@ -568,12 +610,18 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
                     {/* ------------------------------- */}
                     {activeAction === 'reject' && (
                         <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
-                            <div className="relative z-20">
-                                <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Returning To Office *</label>
-                                <CustomSelect options={departments} value={rejectOffice} onChange={setRejectOffice} placeholder="Select office..." isRelative={true}/>
+                            <div className="bg-rose-50 border border-rose-200 p-4 rounded-xl text-rose-700 text-sm font-bold flex items-start gap-3">
+                                <Ban size={20} className="shrink-0 mt-0.5" />
+                                <p>
+                                    {isLoadingOrigin ? (
+                                        <span className="animate-pulse">Locating originating office...</span>
+                                    ) : (
+                                        <>This document will be automatically returned to <strong>{originOffice}</strong> for <strong>{originCreator}</strong>.</>
+                                    )}
+                                </p>
                             </div>
                             <div className="relative z-10">
-                                <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Reason for Rejection *</label>
+                                <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Reason for Rejection (Optional)</label>
                                 <textarea value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} placeholder="E.g., Missing signature, incorrect attachments..." className="w-full p-3.5 bg-slate-50 border border-slate-200 focus:bg-white focus:border-red-500 focus:ring-4 focus:ring-red-500/10 rounded-xl outline-none font-bold text-slate-900 text-sm sm:text-base min-h-[140px] resize-y transition-all" ></textarea>
                             </div>
                         </div>
@@ -594,7 +642,7 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
                             </button>
                         )}
                         {activeAction === 'reject' && (
-                            <button onClick={handleReject} disabled={isSubmitting} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all active:scale-[0.98] text-sm sm:text-base flex items-center justify-center gap-2 border border-red-600 disabled:opacity-50">
+                            <button onClick={handleReject} disabled={isSubmitting || isLoadingOrigin} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all active:scale-[0.98] text-sm sm:text-base flex items-center justify-center gap-2 border border-red-600 disabled:opacity-50">
                                 {isSubmitting ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : <><Ban size={20} strokeWidth={2.5} /> Confirm Return</>}
                             </button>
                         )}

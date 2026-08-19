@@ -29,7 +29,6 @@ export default function BatchActionModal({ selectedDocs, currentUserId, currentU
     const [destination, setDestination] = useState('');
     const [receivingClerk, setReceivingClerk] = useState('');
     const [remarks, setRemarks] = useState('');
-    const [rejectOffice, setRejectOffice] = useState('');
     const [selectedColleague, setSelectedColleague] = useState('');
     
     const [releasedBy, setReleasedBy] = useState('');
@@ -37,6 +36,10 @@ export default function BatchActionModal({ selectedDocs, currentUserId, currentU
     const [isProcessingFile, setIsProcessingFile] = useState(false);
     const [attachment, setAttachment] = useState<File | Blob | null>(null);
     const [attachmentName, setAttachmentName] = useState<string>('');
+
+    // DYNAMIC BATCH REJECT STATES
+    const [originData, setOriginData] = useState<Record<string, { office: string, creator: string }>>({});
+    const [isLoadingOrigins, setIsLoadingOrigins] = useState(false);
 
     const canProcessBatch = useMemo(() => {
         return selectedDocs.every((doc) => doc.assigned_clerk === currentUserName);
@@ -54,12 +57,43 @@ export default function BatchActionModal({ selectedDocs, currentUserId, currentU
         setRemarks('');
         setDestination('');
         setReceivingClerk('');
-        setRejectOffice('');
         setSelectedColleague('');
         setReleasedBy('');
         setRetentionFate(null);
         setAttachment(null);
     };
+
+    // PRE-FETCH ORIGINS FOR BATCH REJECT
+    useEffect(() => {
+        if (activeAction === 'reject' && selectedDocs.length > 0) {
+            setIsLoadingOrigins(true);
+            const fetchOrigins = async () => {
+                const newOriginData: Record<string, { office: string, creator: string }> = {};
+                
+                await Promise.all(selectedDocs.map(async (doc) => {
+                    let originOffice = 'Originating Office';
+                    let creatorName = 'Creator';
+                    if (doc.created_by) {
+                        try {
+                            const { data: creatorData } = await supabase.from('profiles').select('full_name').eq('id', doc.created_by).single();
+                            if (creatorData?.full_name) {
+                                creatorName = creatorData.full_name;
+                                const { data: empData } = await supabase.from('employees').select('department').eq('name', creatorName).single();
+                                if (empData?.department) originOffice = empData.department;
+                            }
+                        } catch (err) {
+                            console.error("Failed to fetch origin for document:", doc.id);
+                        }
+                    }
+                    newOriginData[doc.id] = { office: originOffice, creator: creatorName };
+                }));
+
+                setOriginData(newOriginData);
+                setIsLoadingOrigins(false);
+            };
+            fetchOrigins();
+        }
+    }, [activeAction, selectedDocs]);
 
     useEffect(() => {
         if (activeAction !== 'add_step' && activeAction !== 'complete') return;
@@ -137,7 +171,7 @@ export default function BatchActionModal({ selectedDocs, currentUserId, currentU
 
     const handleBatchSubmit = async () => {
         if (activeAction === 'reject') {
-            if (!rejectOffice) { toast.error("Validation Error", { description: "Please provide the returning office." }); return; }
+            if (isLoadingOrigins) { toast.error("Please wait", { description: "Still locating the origin offices for your batch." }); return; }
             if (!remarks.trim()) { toast.error("Validation Error", { description: "Please provide a reason for returning the documents." }); return; }
         }
         if (activeAction === 'add_step') {
@@ -192,8 +226,26 @@ export default function BatchActionModal({ selectedDocs, currentUserId, currentU
                     await supabase.from('document_logs').insert([{ document_id: doc.id, action: 'Delivered', location: doc.final_destination || doc.current_location, assigned_to: currentUserName, remarks: detailedRemarks, created_by: currentUserId, signature_url: sharedSignatureUrl, attachment_url: sharedAttachmentUrl }]);
                 
                 } else if (activeAction === 'reject') {
-                    await supabase.from('documents').update({ status: 'pending', remarks: remarks, updated_at: nowIso, assigned_clerk: null }).eq('id', doc.id);
-                    await supabase.from('document_logs').insert([{ document_id: doc.id, action: 'Returned', location: rejectOffice, assigned_to: 'Creator', remarks: remarks, created_by: currentUserId }]);
+                    // DYNAMIC BATCH REJECTION APPLY
+                    const originInfo = originData[doc.id] || { office: 'Originating Office', creator: 'Creator' };
+                    const finalRemarks = remarks.trim() || 'Returned without remarks';
+
+                    await supabase.from('documents').update({ 
+                        status: 'pending', 
+                        remarks: finalRemarks, 
+                        current_location: originInfo.office, 
+                        updated_at: nowIso, 
+                        assigned_clerk: originInfo.creator 
+                    }).eq('id', doc.id);
+                    
+                    await supabase.from('document_logs').insert([{ 
+                        document_id: doc.id, 
+                        action: 'Returned', 
+                        location: originInfo.office, 
+                        assigned_to: originInfo.creator, 
+                        remarks: finalRemarks, 
+                        created_by: currentUserId 
+                    }]);
                 
                 } else if (activeAction === 'add_step') {
                     await supabase.from('documents').update({ status: 'routing', current_location: destination, remarks: null, updated_at: nowIso }).eq('id', doc.id);
@@ -282,14 +334,8 @@ export default function BatchActionModal({ selectedDocs, currentUserId, currentU
                         <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
                             {activeAction === 'add_step' && (
                                 <>
-                                    <div className="relative z-20">
-                                        <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Next Destination Office *</label>
-                                        <CustomSelect options={departments} value={destination} onChange={setDestination} placeholder="Select receiving office..." isRelative={true} />
-                                    </div>
-                                    <div className="relative z-10">
-                                        <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Receiving Clerk *</label>
-                                        <input type="text" value={receivingClerk} onChange={(e) => setReceivingClerk(e.target.value)} placeholder="Enter name of receiving clerk..." className="w-full px-4 py-3.5 bg-slate-50/50 border border-slate-200 focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 rounded-xl outline-none font-bold text-slate-700 text-sm transition-all" />
-                                    </div>
+                                    <div className="relative z-20"><label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Next Destination Office *</label><CustomSelect options={departments} value={destination} onChange={setDestination} placeholder="Select receiving office..." isRelative={true} /></div>
+                                    <div className="relative z-10"><label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Receiving Clerk *</label><input type="text" value={receivingClerk} onChange={(e) => setReceivingClerk(e.target.value)} placeholder="Enter name of receiving clerk..." className="w-full px-4 py-3.5 bg-slate-50/50 border border-slate-200 focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 rounded-xl outline-none font-bold text-slate-700 text-sm transition-all" /></div>
                                     <div>
                                         <div className="flex justify-between items-center mb-1.5">
                                             <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5"><PenTool size={13}/> Signature *</label>
@@ -305,43 +351,17 @@ export default function BatchActionModal({ selectedDocs, currentUserId, currentU
                             )}
                             {activeAction === 'complete' && (
                                 <>
+                                    <div><label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Scanned Signed Copy (Optional)</label><label className={`w-full flex items-center justify-center gap-2 p-3.5 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${attachment ? 'bg-emerald-50 border-emerald-400 text-emerald-700' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`}><input type="file" accept="image/*,application/pdf" className="hidden" onChange={handleFileChange} disabled={isProcessingFile} />{isProcessingFile ? <span className="animate-pulse font-bold text-sm">Processing...</span> : attachment ? <><CheckCircle size={18}/> <span className="font-bold text-sm truncate max-w-[200px]">{attachmentName}</span></> : <><Camera size={18}/> <span className="font-bold text-sm">Scan Signed Document</span></>}</label>{attachment && !isProcessingFile && (<div className="mt-2 text-right"><button type="button" onClick={() => { setAttachment(null); setAttachmentName(''); }} className="text-xs text-red-500 font-bold hover:underline">Remove Attachment</button></div>)}</div>
+                                    <div><label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Released By *</label><input type="text" value={releasedBy} onChange={(e) => setReleasedBy(e.target.value)} placeholder="Name of official releasing the documents..." className="w-full p-3.5 bg-slate-50/50 border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 rounded-xl outline-none font-bold text-slate-700 text-sm transition-all" /></div>
                                     <div>
-                                        <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Scanned Signed Copy (Optional)</label>
-                                        <label className={`w-full flex items-center justify-center gap-2 p-3.5 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${attachment ? 'bg-emerald-50 border-emerald-400 text-emerald-700' : 'bg-white border-slate-300 text-slate-600 hover:bg-slate-50'}`}>
-                                            <input type="file" accept="image/*,application/pdf" className="hidden" onChange={handleFileChange} disabled={isProcessingFile} />
-                                            {isProcessingFile ? <span className="animate-pulse font-bold text-sm">Processing...</span> : attachment ? <><CheckCircle size={18}/> <span className="font-bold text-sm truncate max-w-[200px]">{attachmentName}</span></> : <><Camera size={18}/> <span className="font-bold text-sm">Scan Signed Document</span></>}
-                                        </label>
-                                        {attachment && !isProcessingFile && (<div className="mt-2 text-right"><button type="button" onClick={() => { setAttachment(null); setAttachmentName(''); }} className="text-xs text-red-500 font-bold hover:underline">Remove Attachment</button></div>)}
-                                    </div>
-                                    <div>
-                                        <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Released By *</label>
-                                        <input type="text" value={releasedBy} onChange={(e) => setReleasedBy(e.target.value)} placeholder="Name of official releasing the documents..." className="w-full p-3.5 bg-slate-50/50 border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 rounded-xl outline-none font-bold text-slate-700 text-sm transition-all" />
-                                    </div>
-                                    <div>
-                                        <div className="flex justify-between items-center mb-1.5">
-                                            <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5"><PenTool size={13}/> Signature *</label>
-                                            <button onClick={clearSignature} type="button" className="text-[11px] text-slate-600 font-bold hover:text-slate-900 transition-colors bg-white px-3 py-1.5 rounded-lg border border-slate-200 active:scale-95 shadow-sm">Clear Pad</button>
-                                        </div>
-                                        <div className="border border-slate-200 rounded-xl bg-slate-50/50 overflow-hidden touch-none relative shadow-sm">
-                                            <div className="absolute top-1/2 left-4 right-4 h-0 border-b-2 border-dashed border-slate-200 pointer-events-none"></div>
-                                            <canvas ref={canvasRef} width={600} height={200} className="w-full h-[180px] sm:h-[200px] cursor-crosshair bg-transparent relative z-10" style={{ touchAction: 'none' }} />
-                                        </div>
+                                        <div className="flex justify-between items-center mb-1.5"><label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5"><PenTool size={13}/> Signature *</label><button onClick={clearSignature} type="button" className="text-[11px] text-slate-600 font-bold hover:text-slate-900 transition-colors bg-white px-3 py-1.5 rounded-lg border border-slate-200 active:scale-95 shadow-sm">Clear Pad</button></div>
+                                        <div className="border border-slate-200 rounded-xl bg-slate-50/50 overflow-hidden touch-none relative shadow-sm"><div className="absolute top-1/2 left-4 right-4 h-0 border-b-2 border-dashed border-slate-200 pointer-events-none"></div><canvas ref={canvasRef} width={600} height={200} className="w-full h-[180px] sm:h-[200px] cursor-crosshair bg-transparent relative z-10" style={{ touchAction: 'none' }} /></div>
                                     </div>
                                     <div>
                                         <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Document Retention *</label>
                                         <div className="flex flex-col gap-2">
-                                            <div onClick={() => setRetentionFate('originator')} className={`p-4 border rounded-xl cursor-pointer transition-all active:scale-[0.98] flex items-center gap-3 ${retentionFate === 'originator' ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
-                                                <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${retentionFate === 'originator' ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300'}`}>
-                                                    {retentionFate === 'originator' && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
-                                                </div>
-                                                <p className="font-bold text-sm text-slate-700">Return to Originator</p>
-                                            </div>
-                                            <div onClick={() => setRetentionFate('destination')} className={`p-4 border rounded-xl cursor-pointer transition-all active:scale-[0.98] flex items-center gap-3 ${retentionFate === 'destination' ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
-                                                <div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${retentionFate === 'destination' ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300'}`}>
-                                                    {retentionFate === 'destination' && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}
-                                                </div>
-                                                <p className="font-bold text-sm text-slate-700">Retain at Office</p>
-                                            </div>
+                                            <div onClick={() => setRetentionFate('originator')} className={`p-4 border rounded-xl cursor-pointer transition-all active:scale-[0.98] flex items-center gap-3 ${retentionFate === 'originator' ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-200 bg-white hover:border-slate-300'}`}><div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${retentionFate === 'originator' ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300'}`}>{retentionFate === 'originator' && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}</div><p className="font-bold text-sm text-slate-700">Return to Originator</p></div>
+                                            <div onClick={() => setRetentionFate('destination')} className={`p-4 border rounded-xl cursor-pointer transition-all active:scale-[0.98] flex items-center gap-3 ${retentionFate === 'destination' ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-200 bg-white hover:border-slate-300'}`}><div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${retentionFate === 'destination' ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300'}`}>{retentionFate === 'destination' && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}</div><p className="font-bold text-sm text-slate-700">Retain at Office</p></div>
                                         </div>
                                     </div>
                                     <div>
@@ -352,12 +372,37 @@ export default function BatchActionModal({ selectedDocs, currentUserId, currentU
                             )}
                             {activeAction === 'reject' && (
                                 <>
-                                    <div className="relative z-20">
-                                        <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Returning To Office *</label>
-                                        <CustomSelect options={departments} value={rejectOffice} onChange={setRejectOffice} placeholder="Select office..." isRelative={true}/>
+                                    <div className="bg-rose-50 border border-rose-200 p-4 rounded-xl text-rose-700 text-sm font-bold flex flex-col gap-3 shadow-sm">
+                                        <div className="flex items-start gap-3">
+                                            <Ban size={20} className="shrink-0 mt-0.5" />
+                                            <div className="flex-1">
+                                                <p className="mb-3 text-rose-800">These documents will be automatically returned to:</p>
+                                                {isLoadingOrigins ? (
+                                                    <div className="flex items-center gap-2 text-rose-600">
+                                                        <span className="w-3 h-3 border-2 border-rose-300 border-t-rose-600 rounded-full animate-spin"></span>
+                                                        <span className="text-xs uppercase tracking-wider font-bold">Locating offices...</span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="max-h-32 overflow-y-auto custom-scrollbar pr-2 space-y-2">
+                                                        {selectedDocs.map(doc => {
+                                                            const info = originData[doc.id];
+                                                            return (
+                                                                <div key={doc.id} className="bg-white/60 p-2 rounded-lg border border-rose-100/50 text-xs flex items-center justify-between shadow-sm">
+                                                                    <span className="font-mono text-[10px] text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded mr-2 shrink-0">{doc.reference_no || doc.id.substring(0,8)}</span>
+                                                                    <div className="text-right min-w-0 flex-1 truncate">
+                                                                        <span className="text-rose-900 font-bold block truncate">{info?.office || 'Originating Office'}</span>
+                                                                        <span className="text-rose-600/80 font-bold text-[10px] uppercase tracking-wider block truncate">For: {info?.creator || 'Creator'}</span>
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
                                     <div className="relative z-10">
-                                        <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Reason for Rejection *</label>
+                                        <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Reason for Rejection (Optional)</label>
                                         <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="E.g., Missing signature, incorrect attachments..." className="w-full p-3.5 bg-slate-50/50 border border-slate-200 focus:bg-white focus:border-red-500 focus:ring-4 focus:ring-red-500/10 rounded-xl outline-none font-bold text-slate-700 text-sm min-h-[140px] resize-y transition-all" ></textarea>
                                     </div>
                                 </>
@@ -378,7 +423,7 @@ export default function BatchActionModal({ selectedDocs, currentUserId, currentU
                     <div className="bg-white p-4 sm:p-5 flex shrink-0 border-t border-slate-100">
                         {activeAction === 'add_step' && <button onClick={handleBatchSubmit} disabled={isSubmitting || !destination || !receivingClerk.trim() || !hasSignature} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all active:scale-[0.98] text-sm flex justify-center items-center gap-2 border border-blue-600 disabled:opacity-50">{isSubmitting ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : <><MapPin size={18} strokeWidth={2.5} /> Confirm Add Step</>}</button>}
                         {activeAction === 'complete' && <button onClick={handleBatchSubmit} disabled={isSubmitting || !releasedBy.trim() || !retentionFate || !hasSignature || isProcessingFile} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all active:scale-[0.98] text-sm flex items-center justify-center gap-2 border border-emerald-600 disabled:opacity-50">{isSubmitting ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : <><CheckCircle size={18} strokeWidth={2.5} /> Finalize Batch</>}</button>}
-                        {activeAction === 'reject' && <button onClick={handleBatchSubmit} disabled={isSubmitting || !remarks.trim() || !rejectOffice} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all active:scale-[0.98] text-sm flex items-center justify-center gap-2 border border-red-600 disabled:opacity-50">{isSubmitting ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : <><Ban size={18} strokeWidth={2.5} /> Confirm Return</>}</button>}
+                        {activeAction === 'reject' && <button onClick={handleBatchSubmit} disabled={isSubmitting || isLoadingOrigins} className="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all active:scale-[0.98] text-sm flex items-center justify-center gap-2 border border-red-600 disabled:opacity-50">{isSubmitting ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : <><Ban size={18} strokeWidth={2.5} /> Confirm Return</>}</button>}
                         {activeAction === 'reassign' && <button onClick={handleBatchSubmit} disabled={isSubmitting || !selectedColleague} className="w-full bg-teal-600 hover:bg-teal-700 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all active:scale-[0.98] text-sm flex items-center justify-center gap-2 border border-teal-600 disabled:opacity-50">{isSubmitting ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : <><UserPlus size={18} strokeWidth={2.5} /> Confirm Re-assign</>}</button>}
                     </div>
                 )}

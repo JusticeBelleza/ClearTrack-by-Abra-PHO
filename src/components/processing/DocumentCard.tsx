@@ -1,5 +1,5 @@
 // src/components/processing/DocumentCard.tsx
-import { AlertCircle, MapPin, Eye, Clock, ChevronRight, User, MessageSquareWarning, CheckSquare, Square, ChevronDown, UserPlus, Ban } from 'lucide-react';
+import { AlertCircle, MapPin, Eye, Clock, ChevronRight, User, MessageSquareWarning, CheckSquare, Square, ChevronDown, UserPlus, Ban, Send } from 'lucide-react';
 import { formatPHDateTime } from '../../lib/utils';
 import type { DocumentItem } from '../../types/processing';
 
@@ -16,14 +16,15 @@ interface DocumentCardProps {
     onPreview: (url: string) => void;
     onTrack: (doc: DocumentItem) => void;
     onReassign: (doc: DocumentItem) => void;
-    onCancel: (doc: DocumentItem) => void;
-    onRevise: (doc: DocumentItem) => void;
-    onAction: (doc: DocumentItem) => void;
+    onCancel?: (doc: DocumentItem) => void;
+    onRevise?: (doc: DocumentItem) => void;
+    onAction?: (doc: DocumentItem) => void;
+    onReRoute?: (doc: DocumentItem) => void;
 }
 
 export default function DocumentCard({
     doc, activeTab, isSelected, isExpanded, showCheckbox, currentUserName, currentUserId,
-    onToggleSelection, onToggleCollapse, onPreview, onTrack, onReassign, onCancel, onRevise, onAction
+    onToggleSelection, onToggleCollapse, onPreview, onTrack, onReassign, onCancel, onRevise, onAction, onReRoute
 }: DocumentCardProps) {
     
     const isManager = doc.assigned_clerk === currentUserName;
@@ -31,6 +32,20 @@ export default function DocumentCard({
     const canReassign = isManager || isCreator;
     const canRevise = isManager || isCreator;
 
+    // Helper for aging computation
+    const now = new Date().getTime(); 
+    const updatedTime = new Date(doc.updated_at || doc.created_at).getTime();
+    const diffHours = (now - updatedTime) / (1000 * 60 * 60); 
+    const days = Math.floor(diffHours / 24); 
+    const remainingHrs = Math.floor(diffHours % 24);
+    const displayTime = `${days.toString().padStart(2, '0')}d:${remainingHrs.toString().padStart(2, '0')}h`;
+    let agingColorTheme = "bg-slate-100 text-slate-600 border-slate-200"; 
+    if (diffHours >= 72) { agingColorTheme = "bg-rose-50 text-rose-700 border-rose-200 animate-pulse"; } 
+    else if (diffHours >= 48) { agingColorTheme = "bg-amber-50 text-amber-700 border-amber-200"; }
+
+    // ----------------------------------------------------
+    // ACTION NEEDED TAB VIEW
+    // ----------------------------------------------------
     if (activeTab === 'returned') {
         return (
             <div className="bg-white rounded-[1.5rem] border-2 border-amber-300 shadow-sm shadow-amber-100 hover:border-amber-400 transition-all relative overflow-hidden flex flex-col group">
@@ -38,7 +53,7 @@ export default function DocumentCard({
                 
                 <div className="p-5 flex-1 flex flex-col pl-6">
                     <div className="flex justify-between items-start mb-3">
-                        <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded font-mono border border-slate-200">{doc.reference_no || doc.id}</span>
+                        <span className="text-[11px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded font-mono border border-slate-200">{doc.reference_no || doc.id.substring(0, 8)}</span>
                         <span className="flex items-center gap-1 text-[10px] font-black text-amber-700 bg-amber-50 px-2.5 py-1 rounded-full border border-amber-200 uppercase tracking-wider">
                             <AlertCircle size={12} strokeWidth={3}/> Needs Revision
                         </span>
@@ -72,23 +87,22 @@ export default function DocumentCard({
                                 </button>
                             )}
                             <button onClick={() => onTrack(doc)} className="flex-1 py-2.5 px-2 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-sm border-2 border-slate-300 shadow-sm">
-                                History
+                                <Clock size={16} /> History
                             </button>
-                            {canReassign && (
-                                <button onClick={() => onReassign(doc)} className="flex-1 py-2.5 px-2 bg-white hover:bg-slate-50 text-slate-800 font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-sm border-2 border-slate-300 shadow-sm">
-                                    <UserPlus size={16} /> Re-assign
-                                </button>
-                            )}
                         </div>
                         
                         {canRevise ? (
                             <div className="flex gap-2 w-full mt-1">
-                                <button onClick={() => onCancel(doc)} className="flex-[1] py-2.5 px-2 bg-red-50 hover:bg-red-100 text-red-700 font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-sm border-2 border-red-200 shadow-sm">
-                                    <Ban size={16}/> Cancel
-                                </button>
-                                <button onClick={() => onRevise(doc)} className="flex-[2.5] py-2.5 px-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-sm border-2 border-amber-700 shadow-sm">
-                                    Revise & Resubmit
-                                </button>
+                                {onCancel && (
+                                    <button onClick={() => onCancel(doc)} className="flex-[1] py-2.5 px-2 bg-red-50 hover:bg-red-100 text-red-700 font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-sm border-2 border-red-200 shadow-sm">
+                                        <Ban size={16}/> Cancel
+                                    </button>
+                                )}
+                                {onRevise && (
+                                    <button onClick={() => onRevise(doc)} className="flex-[2.5] py-2.5 px-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-sm border-2 border-amber-700 shadow-sm">
+                                        Revise & Resubmit
+                                    </button>
+                                )}
                             </div>
                         ) : (
                             <div className="w-full py-2.5 px-3 bg-amber-50/50 border-2 border-amber-100 rounded-xl text-center mt-1">
@@ -101,6 +115,9 @@ export default function DocumentCard({
         );
     }
 
+    // ----------------------------------------------------
+    // ACTIVE ROUTING TAB VIEW
+    // ----------------------------------------------------
     return (
         <div className={`bg-white rounded-2xl border-2 transition-all relative overflow-hidden ${doc.is_urgent ? 'border-red-300 shadow-sm hover:border-red-400' : (isSelected ? 'border-blue-500 ring-4 ring-blue-500/10' : 'border-slate-200 hover:border-slate-300')}`}>
             <div className={`absolute top-0 left-0 w-full h-1 ${doc.is_urgent ? 'bg-red-600' : (isSelected ? 'bg-blue-500' : 'bg-transparent')}`}></div>
@@ -123,8 +140,13 @@ export default function DocumentCard({
                                     <AlertCircle size={10} strokeWidth={3}/> Rush
                                 </span>
                             )}
+
+                            <div className={`ml-auto px-1.5 py-0.5 rounded border flex items-center gap-1 shadow-sm shrink-0 ${agingColorTheme}`}>
+                                <Clock size={10} strokeWidth={2.5} />
+                                <span className="text-[10px] font-black tracking-widest font-mono">{displayTime}</span>
+                            </div>
                         </div>
-                        <h4 className="font-bold text-slate-900 text-sm sm:text-base leading-snug truncate">{doc.title || doc.subject}</h4>
+                        <h4 className={`font-bold text-slate-900 text-sm sm:text-base leading-snug ${isExpanded ? '' : 'truncate'}`}>{doc.title || doc.subject}</h4>
                     </div>
                 </div>
 
@@ -176,11 +198,28 @@ export default function DocumentCard({
                             </div>
                             
                             {isManager ? (
-                                <button onClick={() => onAction(doc)} className="w-full py-2.5 px-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-xs sm:text-sm border-2 border-blue-700 shadow-sm">
-                                    Action <ChevronRight size={15} />
-                                </button>
+                                <div className="flex gap-2 w-full mt-1">
+                                    {onAction && (
+                                        <button onClick={() => onAction(doc)} className="flex-1 py-2.5 px-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all active:scale-95 text-xs sm:text-sm border-2 border-blue-700 shadow-sm">
+                                            Action <ChevronRight size={15} />
+                                        </button>
+                                    )}
+
+                                    {/* RE-ROUTE BUTTON BECOMES SECONDARY OPTION */}
+                                    {onReRoute && (
+                                        <button onClick={(e) => { e.stopPropagation(); onReRoute(doc); }} className="w-[42px] shrink-0 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-xl flex items-center justify-center border border-blue-200 transition-all active:scale-95 shadow-sm" title="Re-route Document">
+                                            <Send size={15} />
+                                        </button>
+                                    )}
+
+                                    {onCancel && (
+                                        <button onClick={(e) => { e.stopPropagation(); onCancel(doc); }} title="Cancel Document" className="w-[42px] shrink-0 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-xl flex items-center justify-center border border-rose-200 transition-all active:scale-95 shadow-sm">
+                                            <Ban size={18} strokeWidth={2.5} />
+                                        </button>
+                                    )}
+                                </div>
                             ) : (
-                                <div className="w-full py-2 px-3 bg-slate-100 border border-slate-200 rounded-xl text-center">
+                                <div className="w-full py-2 px-3 bg-slate-100 border border-slate-200 rounded-xl text-center mt-1">
                                     <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Pending action by {doc.assigned_clerk}</p>
                                 </div>
                             )}

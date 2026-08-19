@@ -1,6 +1,6 @@
 import { useState, useEffect, type SyntheticEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Archive, Check, ArrowRight, FileText, UserPlus, PenTool, Ban, RefreshCcw, ShieldCheck } from 'lucide-react';
+import { X, Archive, Check, ArrowRight, FileText, UserPlus, PenTool, Ban, RefreshCcw, ShieldCheck, Send } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import FilePreviewModal from './FilePreviewModal';
 
@@ -176,6 +176,7 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
                             else if (log.action === 'Returned') { icon = <X size={14} strokeWidth={4} className="text-white" />; nodeBg = 'bg-red-500'; titleColor = 'text-red-700'; } 
                             else if (log.action === 'Resubmitted') { icon = <RefreshCcw size={14} strokeWidth={3} className="text-white" />; nodeBg = 'bg-indigo-500'; titleColor = 'text-indigo-700'; }
                             else if (log.action === 'In transit') { icon = <ArrowRight size={14} strokeWidth={3} className="text-white" />; nodeBg = 'bg-blue-500'; titleColor = 'text-blue-700'; } 
+                            else if (log.action === 'Re-routed') { icon = <Send size={14} strokeWidth={3} className="text-white" />; nodeBg = 'bg-blue-600'; titleColor = 'text-blue-800'; } 
                             else if (log.action === 'Document Logged' || log.action === 'Created') { icon = <Check size={14} strokeWidth={4} className="text-white" />; nodeBg = 'bg-slate-700'; titleColor = 'text-slate-800'; }
                             else if (log.action === 'REASSIGNED') { icon = <UserPlus size={14} strokeWidth={3} className="text-white" />; nodeBg = 'bg-amber-500'; titleColor = 'text-amber-700'; }
 
@@ -201,6 +202,7 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
                             if (log.action === 'REASSIGNED') desc = `Location: ${log.location}\nDetails: ${log.remarks}`;
                             if (log.action === 'Cancelled') desc = `Location: ${log.location}\n${log.remarks}`;
                             if (log.action === 'Resubmitted') desc = `Location: ${log.location}\n${log.remarks}`;
+                            if (log.action === 'Re-routed') desc = `Re-routed to: ${log.location}\nAssigned to: ${log.assigned_to}\nRemarks: ${log.remarks}`;
 
                             // --- Determine Action Label and Name for Signature ---
                             let sigActionLabel = "Signed By";

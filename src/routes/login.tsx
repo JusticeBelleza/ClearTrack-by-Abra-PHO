@@ -8,7 +8,7 @@ import { Turnstile } from '@marsidev/react-turnstile';
 import type { TurnstileInstance } from '@marsidev/react-turnstile';
 import { env } from '../lib/env';
 
-// Both logos are back!
+// Logos
 import clearTrackLogo from '../assets/clear_track_logo.png';
 import phoLogo from '../assets/pho_logo.png';
 
@@ -21,10 +21,10 @@ export default function Login() {
   const [isBiometricLoading, setIsBiometricLoading] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   
-  // New state for the Biometric Notification Modal
+  // State for the Biometric Notification Modal
   const [showBiometricNotice, setShowBiometricNotice] = useState(false);
 
-  // Added a reference to the Turnstile widget so we can reset it on failure
+  // Reference to the Turnstile widget
   const turnstileRef = useRef<TurnstileInstance>(null);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -124,39 +124,34 @@ export default function Login() {
   };
 
   return (
-    // min-h-[100dvh] for perfect mobile keyboard handling
     <div className="min-h-[100dvh] bg-slate-900 flex flex-col justify-center items-center p-4 sm:p-6 relative overflow-hidden">
       {/* Background Glow */}
-      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[30rem] h-[30rem] bg-blue-600/20 rounded-full blur-[100px] pointer-events-none"></div>
+      <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[35rem] h-[35rem] bg-blue-500/20 rounded-full blur-[120px] pointer-events-none"></div>
 
-      <div className="w-full max-w-md bg-white rounded-[2rem] shadow-2xl shadow-black/50 border border-slate-100 p-8 sm:p-10 relative z-10 animate-in fade-in zoom-in-95 duration-500">
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl shadow-black/50 p-8 sm:p-10 relative z-10 animate-in fade-in zoom-in-95 duration-500">
         
-        {/* Logos Section */}
-        <div className="flex items-center justify-center gap-4 mb-6">
-          <div className="w-14 h-14 flex items-center justify-center bg-slate-50 rounded-2xl p-2 border border-slate-100 shadow-sm">
-            <img 
-              src={clearTrackLogo} 
-              alt="App Logo" 
-              className="w-full h-full object-contain drop-shadow-sm" 
-            />
-          </div>
-
-          <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
-
-          <div className="w-14 h-14 flex items-center justify-center bg-slate-50 rounded-2xl p-2 border border-slate-100 shadow-sm">
-            <img 
-              src={phoLogo} 
-              alt="Abra PHO Logo" 
-              className="w-full h-full object-contain drop-shadow-sm" 
-            />
-          </div>
+        {/* Logos Section (Clean & Borderless) */}
+        <div className="flex items-center justify-center gap-6 mb-8">
+          <img 
+            src={clearTrackLogo} 
+            alt="ClearTrack Logo" 
+            className="w-14 h-14 object-contain" 
+          />
+          <img 
+            src={phoLogo} 
+            alt="Abra PHO Logo" 
+            className="w-14 h-14 object-contain" 
+          />
         </div>
 
         {/* Header */}
         <div className="text-center mb-8">
-          <h2 className="text-3xl font-black text-slate-900 tracking-tight">filetrackr<span className="text-blue-600">.</span></h2>
-          <p className="text-[11px] font-bold text-blue-600 uppercase tracking-widest mt-1">Abra Provincial Health Office</p>
-          <p className="text-sm text-slate-500 font-medium mt-2">Sign in to manage and route documents</p>
+          <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-1">
+            filetrackr<span className="text-blue-600">.</span>
+          </h2>
+          <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest">
+            Abra Provincial Health Office
+          </p>
         </div>
 
         <form onSubmit={handleLogin} className="space-y-5">
@@ -173,7 +168,7 @@ export default function Login() {
                 required
                 autoComplete="email"
                 disabled={isLoading || isBiometricLoading}
-                className="w-full pl-12 pr-4 py-3.5 bg-slate-50/50 border-2 border-slate-200 focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-600/10 rounded-2xl outline-none font-semibold text-slate-900 transition-all text-base placeholder:text-slate-400 placeholder:font-normal disabled:opacity-70"
+                className="w-full pl-11 pr-4 py-3 bg-white border border-slate-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 rounded-xl outline-none font-medium text-slate-900 transition-all text-base placeholder:text-slate-400 disabled:bg-slate-50 disabled:text-slate-500 shadow-sm"
               />
             </div>
           </div>
@@ -200,23 +195,22 @@ export default function Login() {
                 required
                 autoComplete="current-password"
                 disabled={isLoading || isBiometricLoading}
-                className="w-full pl-12 pr-14 py-3.5 bg-slate-50/50 border-2 border-slate-200 focus:border-blue-600 focus:bg-white focus:ring-4 focus:ring-blue-600/10 rounded-2xl outline-none font-semibold text-slate-900 transition-all text-base placeholder:text-slate-400 placeholder:font-normal disabled:opacity-70"
+                className="w-full pl-11 pr-12 py-3 bg-white border border-slate-300 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 rounded-xl outline-none font-medium text-slate-900 transition-all text-base placeholder:text-slate-400 disabled:bg-slate-50 disabled:text-slate-500 shadow-sm"
               />
-              {/* Touch-optimized password toggle */}
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 tabIndex={-1}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-slate-400 hover:text-blue-600 active:scale-90 transition-all"
+                className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-700 active:scale-90 transition-all rounded-md hover:bg-slate-100"
               >
-                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
               </button>
             </div>
           </div>
 
-          {/* Captcha Container */}
+          {/* Captcha Container (Borderless) */}
           <div className="flex justify-center pt-2">
-            <div className="w-full flex justify-center sm:rounded-2xl sm:bg-slate-50/80 sm:border-2 sm:border-slate-100 sm:p-1.5 sm:shadow-[inset_0_2px_4px_rgba(0,0,0,0.02)] [&_iframe]:!border-none [&_iframe]:!outline-none [&_iframe]:!rounded-none [&>div]:!border-none overflow-hidden">
+            <div className="w-full flex justify-center overflow-hidden [&_iframe]:!border-none [&_iframe]:!outline-none [&>div]:!border-none">
               <Turnstile
                 ref={turnstileRef}
                 siteKey={env.VITE_TURNSTILE_SITE_KEY}
@@ -232,12 +226,12 @@ export default function Login() {
           </div>
 
           {/* Action Buttons Row */}
-          <div className="flex gap-3 mt-2">
+          <div className="flex gap-3 pt-2">
             {/* Standard Login Button */}
             <button 
               type="submit" 
               disabled={isLoading || isBiometricLoading || !turnstileToken}
-              className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl shadow-[0_8px_16px_-6px_rgba(37,99,235,0.4)] hover:shadow-[0_12px_20px_-8px_rgba(37,99,235,0.6)] transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-base border border-blue-500 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:shadow-none"
+              className="flex-1 py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md shadow-blue-600/20 hover:shadow-lg hover:shadow-blue-600/30 transition-all active:scale-[0.98] flex items-center justify-center gap-2 text-base disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:shadow-none"
             >
               {isLoading ? (
                 <>
@@ -246,33 +240,35 @@ export default function Login() {
                 </>
               ) : (
                 <>
-                  Sign In <ArrowRight size={20} strokeWidth={2.5} />
+                  Sign In <ArrowRight size={18} strokeWidth={2.5} />
                 </>
               )}
             </button>
 
             {/* ALWAYS VISIBLE Biometric Login Button */}
-            <button 
-                type="button"
-                onClick={handleBiometricLogin}
-                disabled={isLoading || isBiometricLoading}
-                title="Sign in with Passkey or Face ID"
-                className="w-[60px] shrink-0 bg-white hover:bg-blue-50 text-blue-600 font-bold rounded-2xl transition-all active:scale-[0.95] flex items-center justify-center border-2 border-slate-200 hover:border-blue-200 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
-            >
-                {isBiometricLoading ? (
-                    <Loader2 className="animate-spin h-6 w-6" />
-                ) : (
-                    <Fingerprint size={28} strokeWidth={2.5} />
-                )}
-            </button>
+            {localStorage.getItem('filetrackr_passkey_registered') === 'true' && (
+              <button 
+                  type="button"
+                  onClick={handleBiometricLogin}
+                  disabled={isLoading || isBiometricLoading}
+                  title="Sign in with Passkey or Face ID"
+                  className="w-[56px] shrink-0 bg-white hover:bg-slate-50 text-blue-600 font-bold rounded-xl transition-all active:scale-[0.95] flex items-center justify-center border border-slate-300 hover:border-blue-300 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
+              >
+                  {isBiometricLoading ? (
+                      <Loader2 className="animate-spin h-5 w-5" />
+                  ) : (
+                      <Fingerprint size={24} strokeWidth={2} />
+                  )}
+              </button>
+            )}
           </div>
         </form>
 
-        <div className="mt-8 text-center border-t border-slate-100 pt-6">
-          <p className="text-xs text-slate-400 font-medium mb-3">
+        <div className="mt-8 text-center pt-6">
+          <p className="text-xs text-slate-500 font-medium mb-3">
             Authorized personnel only. All access attempts are monitored and logged.
           </p>
-          <p className="text-[10px] font-bold text-slate-300 uppercase tracking-widest">
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
             v{__APP_VERSION__}
           </p>
         </div>
@@ -282,7 +278,7 @@ export default function Login() {
       {/* --- INSTRUCTIONAL NOTIFICATION MODAL --- */}
       {showBiometricNotice && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white max-w-sm w-full rounded-[2rem] shadow-2xl p-6 text-center animate-in zoom-in-95 duration-200 border border-slate-100">
+            <div className="bg-white max-w-sm w-full rounded-3xl shadow-2xl p-6 text-center animate-in zoom-in-95 duration-200 border border-slate-100">
                 <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-blue-100">
                     <Info size={32} />
                 </div>
@@ -292,7 +288,7 @@ export default function Login() {
                 </p>
                 <button 
                     onClick={() => setShowBiometricNotice(false)}
-                    className="w-full py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-all active:scale-95 border-2 border-slate-900"
+                    className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-xl transition-all active:scale-95"
                 >
                     Got it, thanks!
                 </button>
