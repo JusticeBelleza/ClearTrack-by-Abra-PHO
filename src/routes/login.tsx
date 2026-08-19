@@ -66,7 +66,7 @@ export default function Login() {
   const handleBiometricLogin = async () => {
     setIsBiometricLoading(true);
     try {
-      // @ts-expect-error - Supabase Experimental Passkey Method
+      const { data, error } = await supabase.auth.signInWithPasskey();
       
       if (error) throw error;
       
