@@ -2,8 +2,25 @@
 import React from 'react';
 
 export interface DocumentLog {
+    id: string;
+    document_id: string;
     action: string;
+    location?: string;
+    assigned_to?: string;
+    remarks?: string;
     created_at: string;
+    created_by?: string;
+    signature_url?: string;
+    attachment_url?: string;
+    profiles?: {
+        full_name: string;
+    }; 
+}
+
+export interface SignatureData {
+    url: string;
+    signedAt?: string;
+    signedBy?: string;
 }
 
 export interface DocumentItem {
@@ -36,6 +53,7 @@ export interface SelectOption {
     label: string;
     value: string;
 }
+
 export type OptionType = SelectOption | string;
 
 export interface TabButtonProps {

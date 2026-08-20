@@ -3,18 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, Archive, Check, ArrowRight, FileText, UserPlus, PenTool, Ban, RefreshCcw, ShieldCheck, Send } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import FilePreviewModal from './FilePreviewModal';
-
-interface DocumentLog {
-    id: string;
-    document_id: string;
-    action: string;
-    location: string;
-    assigned_to?: string;
-    remarks?: string;
-    attachment_url?: string;
-    signature_url?: string; // Signature URL Column
-    created_at: string;
-}
+import type { DocumentLog, SignatureData } from '../../types/processing';
 
 interface DocumentTrailProps {
     doc: {
@@ -25,10 +14,8 @@ interface DocumentTrailProps {
     onBack: () => void;
 }
 
-interface SignatureData {
-    url: string;
-    name: string;
-    date: string;
+// Extends the global SignatureData specifically for this modal's UI labels
+interface SignatureModalState extends SignatureData {
     actionLabel: string;
 }
 
@@ -40,7 +27,7 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
     
     // Preview States
     const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-    const [signatureToView, setSignatureToView] = useState<SignatureData | null>(null);
+    const [signatureToView, setSignatureToView] = useState<SignatureModalState | null>(null);
 
     const headerClass = 'bg-slate-900';
 
@@ -181,7 +168,7 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
                             else if (log.action === 'REASSIGNED') { icon = <UserPlus size={14} strokeWidth={3} className="text-white" />; nodeBg = 'bg-amber-500'; titleColor = 'text-amber-700'; }
 
                             // Formats lines with colons (e.g. "Reason: Because...") to be bold
-                            const formatDescription = (text: string) => {
+                            const formatDescription = (text?: string) => {
                                 if(!text) return null;
                                 return text.split('\n').map((line, i) => {
                                     if(line.includes(':')) {
@@ -253,8 +240,8 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
                                                     <button 
                                                         onClick={() => setSignatureToView({
                                                             url: log.signature_url!,
-                                                            name: sigName,
-                                                            date: `${dateStr}, ${timeStr}`,
+                                                            signedBy: sigName,
+                                                            signedAt: `${dateStr}, ${timeStr}`,
                                                             actionLabel: sigActionLabel
                                                         })} 
                                                         className="flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 sm:px-3 sm:py-2 bg-indigo-50 text-indigo-600 rounded-lg text-[10px] sm:text-xs font-bold whitespace-nowrap transition-all active:scale-95 border border-indigo-200"
@@ -283,7 +270,7 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
 }
 
 // --- NEW PROFESSIONAL SIGNATURE MODAL COMPONENT ---
-function SignatureModal({ data, onClose }: { data: SignatureData, onClose: () => void }) {
+function SignatureModal({ data, onClose }: { data: SignatureModalState, onClose: () => void }) {
     const [isClosing, setIsClosing] = useState(false);
 
     const handleClose = () => {
@@ -329,10 +316,10 @@ function SignatureModal({ data, onClose }: { data: SignatureData, onClose: () =>
                                 <ShieldCheck size={20} strokeWidth={2.5} />
                                 <h4 className="text-xs font-black uppercase tracking-widest">Verified & Logged</h4>
                             </div>
-                            <span className="text-[11px] font-bold text-emerald-600/70 uppercase">{data.date}</span>
+                            <span className="text-[11px] font-bold text-emerald-600/70 uppercase">{data.signedAt}</span>
                         </div>
 
-                        {/* Signature Area - Android Bug Fix: Removed mix-blend-multiply */}
+                        {/* Signature Area */}
                         <div className="p-6 flex flex-col items-center text-center">
                             <p className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-3">E-Signature</p>
                             
@@ -349,7 +336,7 @@ function SignatureModal({ data, onClose }: { data: SignatureData, onClose: () =>
                             </div>
 
                             <p className="text-[11px] sm:text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">{data.actionLabel}</p>
-                            <p className="text-lg sm:text-xl font-black text-slate-900 leading-tight">{data.name}</p>
+                            <p className="text-lg sm:text-xl font-black text-slate-900 leading-tight">{data.signedBy}</p>
                         </div>
                     </div>
                 </div>

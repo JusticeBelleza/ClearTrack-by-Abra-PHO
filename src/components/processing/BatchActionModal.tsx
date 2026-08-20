@@ -1,78 +1,54 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { MapPin, CheckCircle, Ban, UserPlus, ArrowLeft, X, PenTool, Camera, ChevronRight, AlertCircle } from 'lucide-react';
+import { MapPin, CheckCircle, Ban, UserPlus, ArrowLeft, X, PenTool, Camera, ChevronRight, AlertCircle, Paperclip } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabase';
-import { jsPDF } from 'jspdf';
+import { convertImageToScannedPDF } from '../../lib/utils';
 import type { DocumentItem, OptionType } from '../../types/processing';
 import CustomSelect from '../ui/CustomSelect';
+import SignaturePad, { type SignaturePadRef } from '../ui/SignaturePad';
 
 interface BatchModalProps {
-    selectedDocs: DocumentItem[];
-    currentUserId: string;
-    currentUserName: string;
-    departments: OptionType[];
-    colleagues: string[];
-    onClose: () => void;
-    onSuccess: () => void;
+    selectedDocs: DocumentItem[]; currentUserId: string; currentUserName: string; departments: OptionType[]; colleagues: string[]; onClose: () => void; onSuccess: () => void;
 }
 
 export default function BatchActionModal({ selectedDocs, currentUserId, currentUserName, departments, colleagues, onClose, onSuccess }: BatchModalProps) {
-    const canvasRef = useRef<HTMLCanvasElement>(null);
-    const isDrawingRef = useRef(false);
+    const signaturePadRef = useRef<SignaturePadRef>(null);
 
     const [isClosing, setIsClosing] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [activeAction, setActiveAction] = useState<'add_step' | 'complete' | 'reject' | 'reassign' | null>(null);
     
     const [hasSignature, setHasSignature] = useState(false);
-
     const [destination, setDestination] = useState('');
     const [receivingClerk, setReceivingClerk] = useState('');
     const [remarks, setRemarks] = useState('');
     const [selectedColleague, setSelectedColleague] = useState('');
-    
     const [releasedBy, setReleasedBy] = useState('');
     const [retentionFate, setRetentionFate] = useState<'originator' | 'destination' | null>(null);
     const [isProcessingFile, setIsProcessingFile] = useState(false);
     const [attachment, setAttachment] = useState<File | Blob | null>(null);
     const [attachmentName, setAttachmentName] = useState<string>('');
 
-    // DYNAMIC BATCH REJECT STATES
     const [originData, setOriginData] = useState<Record<string, { office: string, creator: string }>>({});
     const [isLoadingOrigins, setIsLoadingOrigins] = useState(false);
 
-    const canProcessBatch = useMemo(() => {
-        return selectedDocs.every((doc) => doc.assigned_clerk === currentUserName);
-    }, [selectedDocs, currentUserName]);
+    const canProcessBatch = useMemo(() => selectedDocs.every((doc) => doc.assigned_clerk === currentUserName), [selectedDocs, currentUserName]);
 
-    const handleClose = () => {
-        setIsClosing(true);
-        setTimeout(onClose, 300);
-    };
+    const handleClose = () => { setIsClosing(true); setTimeout(onClose, 300); };
 
     const handleBackBtn = () => {
         if (isSubmitting) return;
-        setActiveAction(null);
-        setHasSignature(false);
-        setRemarks('');
-        setDestination('');
-        setReceivingClerk('');
-        setSelectedColleague('');
-        setReleasedBy('');
-        setRetentionFate(null);
-        setAttachment(null);
+        setActiveAction(null); setHasSignature(false); setRemarks(''); setDestination(''); setReceivingClerk('');
+        setSelectedColleague(''); setReleasedBy(''); setRetentionFate(null); setAttachment(null);
     };
 
-    // PRE-FETCH ORIGINS FOR BATCH REJECT
     useEffect(() => {
         if (activeAction === 'reject' && selectedDocs.length > 0) {
             setIsLoadingOrigins(true);
             const fetchOrigins = async () => {
                 const newOriginData: Record<string, { office: string, creator: string }> = {};
-                
                 await Promise.all(selectedDocs.map(async (doc) => {
-                    let originOffice = 'Originating Office';
-                    let creatorName = 'Creator';
+                    let originOffice = 'Originating Office'; let creatorName = 'Creator';
                     if (doc.created_by) {
                         try {
                             const { data: creatorData } = await supabase.from('profiles').select('full_name').eq('id', doc.created_by).single();
@@ -81,92 +57,53 @@ export default function BatchActionModal({ selectedDocs, currentUserId, currentU
                                 const { data: empData } = await supabase.from('employees').select('department').eq('name', creatorName).single();
                                 if (empData?.department) originOffice = empData.department;
                             }
-                        } catch (err) {
-                            console.error("Failed to fetch origin for document:", doc.id);
-                        }
+                        } catch (err) { console.error("Failed to fetch origin"); }
                     }
                     newOriginData[doc.id] = { office: originOffice, creator: creatorName };
                 }));
-
-                setOriginData(newOriginData);
-                setIsLoadingOrigins(false);
+                setOriginData(newOriginData); setIsLoadingOrigins(false);
             };
             fetchOrigins();
         }
     }, [activeAction, selectedDocs]);
 
-    useEffect(() => {
-        if (activeAction !== 'add_step' && activeAction !== 'complete') return;
-        const timer = setTimeout(() => {
-            const canvas = canvasRef.current;
-            if (!canvas) return;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) return;
-
-            ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 4; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-
-            const getCoordinates = (e: MouseEvent | TouchEvent) => {
-                const rect = canvas.getBoundingClientRect();
-                const scaleX = canvas.width / rect.width; const scaleY = canvas.height / rect.height;
-                const clientX = e.type.includes('touch') ? (e as TouchEvent).touches[0].clientX : (e as MouseEvent).clientX;
-                const clientY = e.type.includes('touch') ? (e as TouchEvent).touches[0].clientY : (e as MouseEvent).clientY;
-                return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
-            };
-
-            const startDrawing = (e: MouseEvent | TouchEvent) => { e.preventDefault(); isDrawingRef.current = true; setHasSignature(true); const { x, y } = getCoordinates(e); ctx.beginPath(); ctx.moveTo(x, y); };
-            const draw = (e: MouseEvent | TouchEvent) => { if (!isDrawingRef.current) return; e.preventDefault(); const { x, y } = getCoordinates(e); ctx.lineTo(x, y); ctx.stroke(); };
-            const stopDrawing = () => { isDrawingRef.current = false; ctx.closePath(); };
-
-            canvas.addEventListener('mousedown', startDrawing); canvas.addEventListener('mousemove', draw); canvas.addEventListener('mouseup', stopDrawing); canvas.addEventListener('mouseout', stopDrawing);
-            canvas.addEventListener('touchstart', startDrawing, { passive: false }); canvas.addEventListener('touchmove', draw, { passive: false }); canvas.addEventListener('touchend', stopDrawing);
-
-            return () => {
-                canvas.removeEventListener('mousedown', startDrawing); canvas.removeEventListener('mousemove', draw); canvas.removeEventListener('mouseup', stopDrawing); canvas.removeEventListener('mouseout', stopDrawing);
-                canvas.removeEventListener('touchstart', startDrawing); canvas.removeEventListener('touchmove', draw); canvas.removeEventListener('touchend', stopDrawing);
-            };
-        }, 50);
-        return () => clearTimeout(timer);
-    }, [activeAction]);
-
     const clearSignature = () => { 
-        const canvas = canvasRef.current; 
-        if(canvas) { canvas.getContext('2d')?.clearRect(0, 0, canvas.width, canvas.height); setHasSignature(false); }
+        signaturePadRef.current?.clear(); 
+        setHasSignature(false); 
     };
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
+        const file = e.target.files?.[0]; 
         if (!file) return;
-        setIsProcessingFile(true); setAttachmentName("Processing file...");
-        try {
-            if (file.type === 'application/pdf') { setAttachment(file); setAttachmentName(file.name); } 
-            else if (file.type.startsWith('image/')) {
-                const pdfBlob = await processImageToScannedPDF(file);
-                setAttachment(pdfBlob); setAttachmentName('Batch_Completed.pdf');
-            } else { toast.error("Unsupported file type."); setAttachmentName(""); }
-        } catch { toast.error("Failed to process the document."); setAttachmentName(""); } 
-        finally { setIsProcessingFile(false); }
-    };
 
-    const processImageToScannedPDF = (file: File): Promise<Blob> => {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d');
-                    if (!ctx) return reject("Canvas error");
-                    canvas.width = img.width; canvas.height = img.height;
-                    ctx.filter = 'grayscale(100%) contrast(150%) brightness(110%)';
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                    const processedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
-                    const pdf = new jsPDF({ orientation: img.width > img.height ? 'landscape' : 'portrait', unit: 'px', format: [img.width, img.height] });
-                    pdf.addImage(processedDataUrl, 'JPEG', 0, 0, img.width, img.height);
-                    resolve(pdf.output('blob'));
-                };
-                img.onerror = reject; img.src = event.target?.result as string;
-            };
-            reader.onerror = reject; reader.readAsDataURL(file);
-        });
+        // Ensure file does not exceed 25MB
+        if (file.size > 25 * 1024 * 1024) {
+            toast.error("File too large", { description: "Please select a document or image smaller than 25MB." });
+            return;
+        }
+
+        setIsProcessingFile(true); 
+        setAttachmentName("Processing file...");
+        
+        try {
+            if (file.type === 'application/pdf') { 
+                setAttachment(file); 
+                setAttachmentName(file.name); 
+            } 
+            else if (file.type.startsWith('image/')) {
+                const pdfBlob = await convertImageToScannedPDF(file);
+                setAttachment(pdfBlob); 
+                setAttachmentName('Batch_Completed.pdf');
+            } else { 
+                toast.error("Unsupported file type."); 
+                setAttachmentName(""); 
+            }
+        } catch { 
+            toast.error("Failed to process the document."); 
+            setAttachmentName(""); 
+        } finally { 
+            setIsProcessingFile(false); 
+        }
     };
 
     const handleBatchSubmit = async () => {
@@ -191,28 +128,21 @@ export default function BatchActionModal({ selectedDocs, currentUserId, currentU
         setIsSubmitting(true);
         try {
             const nowIso = new Date().toISOString();
-            let sharedSignatureUrl = null;
-            let sharedAttachmentUrl = null;
+            let sharedSignatureUrl = null; let sharedAttachmentUrl = null;
 
-            if (canvasRef.current && (activeAction === 'add_step' || activeAction === 'complete')) {
-                const blob = await new Promise<Blob | null>((resolve) => canvasRef.current!.toBlob(resolve, 'image/png'));
-                if (blob) {
-                    const fileName = `batch-signature-${Date.now()}.png`;
-                    const { error: uploadError } = await supabase.storage.from('attachments').upload(fileName, blob, { contentType: 'image/png' });
-                    if (!uploadError) {
-                        const { data } = supabase.storage.from('attachments').getPublicUrl(fileName);
-                        sharedSignatureUrl = data.publicUrl;
-                    }
-                }
+            const blob = await signaturePadRef.current?.getBlob();
+            if (blob && (activeAction === 'add_step' || activeAction === 'complete')) {
+                // CHANGED: Date.now() to crypto.randomUUID()
+                const fileName = `batch-signature-${crypto.randomUUID()}.png`;
+                const { error: uploadError } = await supabase.storage.from('attachments').upload(fileName, blob, { contentType: 'image/png' });
+                if (!uploadError) sharedSignatureUrl = supabase.storage.from('attachments').getPublicUrl(fileName).data.publicUrl;
             }
 
             if (attachment && activeAction === 'complete') {
-                const fileName = `batch-completed-${Date.now()}.pdf`;
+                // CHANGED: Date.now() to crypto.randomUUID()
+                const fileName = `batch-completed-${crypto.randomUUID()}.pdf`;
                 const { error: uploadError } = await supabase.storage.from('attachments').upload(fileName, attachment, { contentType: 'application/pdf' });
-                if (!uploadError) {
-                    const { data } = supabase.storage.from('attachments').getPublicUrl(fileName);
-                    sharedAttachmentUrl = data.publicUrl;
-                }
+                if (!uploadError) sharedAttachmentUrl = supabase.storage.from('attachments').getPublicUrl(fileName).data.publicUrl;
             }
 
             const promises = selectedDocs.map(async (doc: DocumentItem) => {
@@ -221,113 +151,90 @@ export default function BatchActionModal({ selectedDocs, currentUserId, currentU
                     const detailedRemarks = `Released By: ${releasedBy.trim()}\nDocument Retention: ${fateString}${remarks ? `\nRemarks: ${remarks.trim()}` : ''}`;
                     const updateData: Record<string, string | null> = { status: 'sealed', updated_at: nowIso };
                     if (sharedAttachmentUrl) updateData.completed_attachment_url = sharedAttachmentUrl;
+                    
+                    const { error: updateError } = await supabase.from('documents').update(updateData).eq('id', doc.id);
+                    if (updateError) throw updateError;
+                    
+                    const { error: logError } = await supabase.from('document_logs').insert([{ document_id: doc.id, action: 'Delivered', location: doc.final_destination || doc.current_location, assigned_to: currentUserName, remarks: detailedRemarks, created_by: currentUserId, signature_url: sharedSignatureUrl, attachment_url: sharedAttachmentUrl }]);
+                    if (logError) throw logError;
 
-                    await supabase.from('documents').update(updateData).eq('id', doc.id);
-                    await supabase.from('document_logs').insert([{ document_id: doc.id, action: 'Delivered', location: doc.final_destination || doc.current_location, assigned_to: currentUserName, remarks: detailedRemarks, created_by: currentUserId, signature_url: sharedSignatureUrl, attachment_url: sharedAttachmentUrl }]);
-                
                 } else if (activeAction === 'reject') {
-                    // DYNAMIC BATCH REJECTION APPLY
                     const originInfo = originData[doc.id] || { office: 'Originating Office', creator: 'Creator' };
                     const finalRemarks = remarks.trim() || 'Returned without remarks';
-
-                    await supabase.from('documents').update({ 
-                        status: 'pending', 
-                        remarks: finalRemarks, 
-                        current_location: originInfo.office, 
-                        updated_at: nowIso, 
-                        assigned_clerk: originInfo.creator 
-                    }).eq('id', doc.id);
                     
-                    await supabase.from('document_logs').insert([{ 
-                        document_id: doc.id, 
-                        action: 'Returned', 
-                        location: originInfo.office, 
-                        assigned_to: originInfo.creator, 
-                        remarks: finalRemarks, 
-                        created_by: currentUserId 
-                    }]);
-                
+                    const { error: updateError } = await supabase.from('documents').update({ status: 'pending', remarks: finalRemarks, current_location: originInfo.office, updated_at: nowIso, assigned_clerk: originInfo.creator }).eq('id', doc.id);
+                    if (updateError) throw updateError;
+                    
+                    const { error: logError } = await supabase.from('document_logs').insert([{ document_id: doc.id, action: 'Returned', location: originInfo.office, assigned_to: originInfo.creator, remarks: finalRemarks, created_by: currentUserId }]);
+                    if (logError) throw logError;
+
                 } else if (activeAction === 'add_step') {
-                    await supabase.from('documents').update({ status: 'routing', current_location: destination, remarks: null, updated_at: nowIso }).eq('id', doc.id);
-                    await supabase.from('document_logs').insert([{ document_id: doc.id, action: 'In transit', location: destination, assigned_to: receivingClerk.trim(), remarks: null, created_by: currentUserId, signature_url: sharedSignatureUrl }]);
-                
+                    const { error: updateError } = await supabase.from('documents').update({ status: 'routing', current_location: destination, remarks: null, updated_at: nowIso }).eq('id', doc.id);
+                    if (updateError) throw updateError;
+                    
+                    const { error: logError } = await supabase.from('document_logs').insert([{ document_id: doc.id, action: 'In transit', location: destination, assigned_to: receivingClerk.trim(), remarks: null, created_by: currentUserId, signature_url: sharedSignatureUrl }]);
+                    if (logError) throw logError;
+
                 } else if (activeAction === 'reassign') {
-                    await supabase.from('documents').update({ assigned_clerk: selectedColleague, updated_at: nowIso }).eq('id', doc.id);
                     const prevClerk = doc.assigned_clerk || 'Unassigned';
-                    await supabase.from('document_logs').insert([{ document_id: doc.id, action: 'REASSIGNED', location: doc.current_location || 'Processing', remarks: `Batch re-assigned from ${prevClerk} to ${selectedColleague} by ${currentUserName}`, created_by: currentUserId }]);
+                    const { error: updateError } = await supabase.from('documents').update({ assigned_clerk: selectedColleague, updated_at: nowIso }).eq('id', doc.id);
+                    if (updateError) throw updateError;
+                    
+                    const { error: logError } = await supabase.from('document_logs').insert([{ document_id: doc.id, action: 'REASSIGNED', location: doc.current_location || 'Processing', remarks: `Batch re-assigned from ${prevClerk} to ${selectedColleague} by ${currentUserName}`, created_by: currentUserId }]);
+                    if (logError) throw logError;
                 }
             });
-            
-            await Promise.all(promises);
-            toast.success(`Successfully processed ${selectedDocs.length} documents!`);
-            onSuccess();
-        } catch {
-            toast.error("An error occurred during batch processing.");
-        } finally {
-            setIsSubmitting(false);
+
+            // Process all promises safely
+            const results = await Promise.allSettled(promises);
+            const successful = results.filter(r => r.status === 'fulfilled').length;
+            const failed = results.filter(r => r.status === 'rejected').length;
+
+            if (successful > 0) {
+                if (failed > 0) {
+                    toast.warning("Partial Success", { description: `Processed ${successful} documents, but ${failed} failed.` });
+                } else {
+                    toast.success(`Successfully processed all ${successful} documents!`);
+                }
+                onSuccess(); // Close modal and refetch
+            } else {
+                toast.error("Batch Failed", { description: "Failed to process the selected documents. Please check your permissions." });
+            }
+
+        } catch (error) { 
+            toast.error("An error occurred during batch setup."); 
+        } finally { 
+            setIsSubmitting(false); 
         }
     };
 
-    const headerColorClass = !activeAction || activeAction === 'add_step' ? 'bg-slate-900' :
-        activeAction === 'reject' ? 'bg-red-700' :
-        activeAction === 'complete' ? 'bg-emerald-700' :
-        activeAction === 'reassign' ? 'bg-teal-700' : 'bg-slate-900';
+    const headerColorClass = !activeAction || activeAction === 'add_step' ? 'bg-slate-900' : activeAction === 'reject' ? 'bg-red-700' : activeAction === 'complete' ? 'bg-emerald-700' : activeAction === 'reassign' ? 'bg-teal-700' : 'bg-slate-900';
 
     return (
         <div className={`fixed inset-0 z-[999] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/70 backdrop-blur-sm ${isClosing ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
             <div className={`bg-white w-full max-w-xl max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden shadow-2xl rounded-t-[1.5rem] sm:rounded-3xl ${isClosing ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
-                
                 <div className={`text-white relative flex flex-col shrink-0 transition-colors duration-300 ${headerColorClass}`}>
                     <div className="w-16 h-1.5 bg-white/30 rounded-full mx-auto mt-3 sm:hidden shrink-0"></div>
                     <div className="p-5 pt-3 sm:pt-6 flex items-center justify-between">
-                        {activeAction ? (
-                            <button onClick={handleBackBtn} disabled={isSubmitting} className="p-2 -ml-2 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-full transition-all active:scale-90 disabled:opacity-50">
-                                <ArrowLeft size={24} />
-                            </button>
-                        ) : <div className="w-10"></div>}
-                        
-                        <h3 className="font-black text-xl tracking-tight absolute left-1/2 -translate-x-1/2 whitespace-nowrap">
-                            {!activeAction ? 'Batch Action' : activeAction === 'reject' ? 'Reject & Return' : activeAction === 'complete' ? 'Finalize Batch' : activeAction === 'reassign' ? 'Batch Re-assign' : 'Route Document'}
-                        </h3>
-                        
-                        <button onClick={handleClose} disabled={isSubmitting} className="p-2 -mr-2 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-full transition-all active:scale-90 disabled:opacity-50">
-                            <X size={24} />
-                        </button>
+                        {activeAction ? <button onClick={handleBackBtn} disabled={isSubmitting} className="p-2 -ml-2 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-full transition-all active:scale-90 disabled:opacity-50"><ArrowLeft size={24} /></button> : <div className="w-10"></div>}
+                        <h3 className="font-black text-xl tracking-tight absolute left-1/2 -translate-x-1/2 whitespace-nowrap">{!activeAction ? 'Batch Action' : activeAction === 'reject' ? 'Reject & Return' : activeAction === 'complete' ? 'Finalize Batch' : activeAction === 'reassign' ? 'Batch Re-assign' : 'Route Document'}</h3>
+                        <button onClick={handleClose} disabled={isSubmitting} className="p-2 -mr-2 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-full transition-all active:scale-90 disabled:opacity-50"><X size={24} /></button>
                     </div>
                 </div>
                 
                 <div className="flex-1 overflow-y-auto p-5 sm:p-8 space-y-6 custom-scrollbar bg-white">
                     {!activeAction && (
                         <div className="bg-slate-50 border border-slate-200 p-4 sm:p-5 rounded-2xl flex flex-col items-start mb-2">
-                            <p className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 font-mono">
-                                Selected Documents ({selectedDocs.length})
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                                {selectedDocs.map((doc: DocumentItem) => (
-                                    <span key={doc.id} className="text-xs font-bold font-mono bg-white text-slate-700 border border-slate-300 px-2 py-1 rounded-lg shadow-sm">
-                                        {doc.reference_no || doc.id.substring(0,8)}
-                                    </span>
-                                ))}
-                            </div>
+                            <p className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2 font-mono">Selected Documents ({selectedDocs.length})</p>
+                            <div className="flex flex-wrap gap-2">{selectedDocs.map((doc: DocumentItem) => <span key={doc.id} className="text-xs font-bold font-mono bg-white text-slate-700 border border-slate-300 px-2 py-1 rounded-lg shadow-sm">{doc.reference_no || doc.id.substring(0,8)}</span>)}</div>
                         </div>
                     )}
-                    
                     {!activeAction ? (
                         <div className="flex flex-col gap-3">
-                            {!canProcessBatch && (
-                                <div className="bg-amber-50 border border-amber-200 p-3.5 rounded-xl flex items-start gap-3 shadow-sm mb-1">
-                                    <AlertCircle size={18} className="text-amber-600 shrink-0 mt-0.5" />
-                                    <p className="text-xs sm:text-sm text-amber-800 font-medium leading-relaxed">
-                                        <strong>Processing Restricted:</strong> Some documents in this batch are managed by other employees. You may only <strong className="text-amber-900">Re-assign</strong> them.
-                                    </p>
-                                </div>
-                            )}
-
+                            {!canProcessBatch && <div className="bg-amber-50 border border-amber-200 p-3.5 rounded-xl flex items-start gap-3 shadow-sm mb-1"><AlertCircle size={18} className="text-amber-600 shrink-0 mt-0.5" /><p className="text-xs sm:text-sm text-amber-800 font-medium leading-relaxed"><strong>Processing Restricted:</strong> Some documents in this batch are managed by other employees. You may only <strong className="text-amber-900">Re-assign</strong> them.</p></div>}
                             {canProcessBatch && <ActionCard title="Add Step" description="Route this batch to a new destination and clerk." icon={<MapPin size={20} strokeWidth={2.5} />} colorTheme="blue" onClick={() => setActiveAction('add_step')} />}
                             {canProcessBatch && <ActionCard title="Complete Documents" description="Instantly finalize and seal all selected records." icon={<CheckCircle size={20} strokeWidth={2.5} />} colorTheme="emerald" onClick={() => setActiveAction('complete')} />}
-                            
                             <ActionCard title="Re-assign Documents" description="Transfer ownership of these documents to a colleague." icon={<UserPlus size={20} strokeWidth={2.5} />} colorTheme="teal" onClick={() => setActiveAction('reassign')} />
-                            
                             {canProcessBatch && <ActionCard title="Return / Reject" description="Send these documents back with a unified reason." icon={<Ban size={20} strokeWidth={2.5} />} colorTheme="rose" onClick={() => setActiveAction('reject')} />}
                         </div>
                     ) : (
@@ -341,10 +248,7 @@ export default function BatchActionModal({ selectedDocs, currentUserId, currentU
                                             <label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5"><PenTool size={13}/> Signature *</label>
                                             <button onClick={clearSignature} type="button" className="text-[11px] text-slate-600 font-bold hover:text-slate-900 transition-colors bg-white px-3 py-1.5 rounded-lg border border-slate-200 active:scale-95 shadow-sm">Clear Pad</button>
                                         </div>
-                                        <div className="border border-slate-200 rounded-xl bg-slate-50/50 overflow-hidden touch-none relative shadow-sm">
-                                            <div className="absolute top-1/2 left-4 right-4 h-0 border-b-2 border-dashed border-slate-200 pointer-events-none"></div>
-                                            <canvas ref={canvasRef} width={600} height={200} className="w-full h-[180px] sm:h-[200px] cursor-crosshair bg-transparent relative z-10" style={{ touchAction: 'none' }} />
-                                        </div>
+                                        <SignaturePad ref={signaturePadRef} onBegin={() => setHasSignature(true)} containerClassName="border border-slate-200 rounded-xl bg-slate-50/50 overflow-hidden touch-none relative shadow-sm" />
                                         <p className="text-center text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">Sign clearly within the box above</p>
                                     </div>
                                 </>
@@ -355,14 +259,11 @@ export default function BatchActionModal({ selectedDocs, currentUserId, currentU
                                     <div><label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Released By *</label><input type="text" value={releasedBy} onChange={(e) => setReleasedBy(e.target.value)} placeholder="Name of official releasing the documents..." className="w-full p-3.5 bg-slate-50/50 border border-slate-200 focus:bg-white focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 rounded-xl outline-none font-bold text-slate-700 text-sm transition-all" /></div>
                                     <div>
                                         <div className="flex justify-between items-center mb-1.5"><label className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5"><PenTool size={13}/> Signature *</label><button onClick={clearSignature} type="button" className="text-[11px] text-slate-600 font-bold hover:text-slate-900 transition-colors bg-white px-3 py-1.5 rounded-lg border border-slate-200 active:scale-95 shadow-sm">Clear Pad</button></div>
-                                        <div className="border border-slate-200 rounded-xl bg-slate-50/50 overflow-hidden touch-none relative shadow-sm"><div className="absolute top-1/2 left-4 right-4 h-0 border-b-2 border-dashed border-slate-200 pointer-events-none"></div><canvas ref={canvasRef} width={600} height={200} className="w-full h-[180px] sm:h-[200px] cursor-crosshair bg-transparent relative z-10" style={{ touchAction: 'none' }} /></div>
+                                        <SignaturePad ref={signaturePadRef} onBegin={() => setHasSignature(true)} containerClassName="border border-slate-200 rounded-xl bg-slate-50/50 overflow-hidden touch-none relative shadow-sm" />
                                     </div>
                                     <div>
                                         <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Document Retention *</label>
-                                        <div className="flex flex-col gap-2">
-                                            <div onClick={() => setRetentionFate('originator')} className={`p-4 border rounded-xl cursor-pointer transition-all active:scale-[0.98] flex items-center gap-3 ${retentionFate === 'originator' ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-200 bg-white hover:border-slate-300'}`}><div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${retentionFate === 'originator' ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300'}`}>{retentionFate === 'originator' && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}</div><p className="font-bold text-sm text-slate-700">Return to Originator</p></div>
-                                            <div onClick={() => setRetentionFate('destination')} className={`p-4 border rounded-xl cursor-pointer transition-all active:scale-[0.98] flex items-center gap-3 ${retentionFate === 'destination' ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-200 bg-white hover:border-slate-300'}`}><div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${retentionFate === 'destination' ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300'}`}>{retentionFate === 'destination' && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}</div><p className="font-bold text-sm text-slate-700">Retain at Office</p></div>
-                                        </div>
+                                        <div className="flex flex-col gap-2"><div onClick={() => setRetentionFate('originator')} className={`p-4 border rounded-xl cursor-pointer transition-all active:scale-[0.98] flex items-center gap-3 ${retentionFate === 'originator' ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-200 bg-white hover:border-slate-300'}`}><div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${retentionFate === 'originator' ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300'}`}>{retentionFate === 'originator' && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}</div><p className="font-bold text-sm text-slate-700">Return to Originator</p></div><div onClick={() => setRetentionFate('destination')} className={`p-4 border rounded-xl cursor-pointer transition-all active:scale-[0.98] flex items-center gap-3 ${retentionFate === 'destination' ? 'border-emerald-500 bg-emerald-50/30' : 'border-slate-200 bg-white hover:border-slate-300'}`}><div className={`w-4 h-4 rounded-full border flex items-center justify-center transition-colors ${retentionFate === 'destination' ? 'border-emerald-600 bg-emerald-600' : 'border-slate-300'}`}>{retentionFate === 'destination' && <div className="w-1.5 h-1.5 bg-white rounded-full"></div>}</div><p className="font-bold text-sm text-slate-700">Retain at Office</p></div></div>
                                     </div>
                                     <div>
                                         <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Unified Remarks (Optional)</label>
@@ -372,48 +273,12 @@ export default function BatchActionModal({ selectedDocs, currentUserId, currentU
                             )}
                             {activeAction === 'reject' && (
                                 <>
-                                    <div className="bg-rose-50 border border-rose-200 p-4 rounded-xl text-rose-700 text-sm font-bold flex flex-col gap-3 shadow-sm">
-                                        <div className="flex items-start gap-3">
-                                            <Ban size={20} className="shrink-0 mt-0.5" />
-                                            <div className="flex-1">
-                                                <p className="mb-3 text-rose-800">These documents will be automatically returned to:</p>
-                                                {isLoadingOrigins ? (
-                                                    <div className="flex items-center gap-2 text-rose-600">
-                                                        <span className="w-3 h-3 border-2 border-rose-300 border-t-rose-600 rounded-full animate-spin"></span>
-                                                        <span className="text-xs uppercase tracking-wider font-bold">Locating offices...</span>
-                                                    </div>
-                                                ) : (
-                                                    <div className="max-h-32 overflow-y-auto custom-scrollbar pr-2 space-y-2">
-                                                        {selectedDocs.map(doc => {
-                                                            const info = originData[doc.id];
-                                                            return (
-                                                                <div key={doc.id} className="bg-white/60 p-2 rounded-lg border border-rose-100/50 text-xs flex items-center justify-between shadow-sm">
-                                                                    <span className="font-mono text-[10px] text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded mr-2 shrink-0">{doc.reference_no || doc.id.substring(0,8)}</span>
-                                                                    <div className="text-right min-w-0 flex-1 truncate">
-                                                                        <span className="text-rose-900 font-bold block truncate">{info?.office || 'Originating Office'}</span>
-                                                                        <span className="text-rose-600/80 font-bold text-[10px] uppercase tracking-wider block truncate">For: {info?.creator || 'Creator'}</span>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        })}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                    <div className="relative z-10">
-                                        <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Reason for Rejection (Optional)</label>
-                                        <textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="E.g., Missing signature, incorrect attachments..." className="w-full p-3.5 bg-slate-50/50 border border-slate-200 focus:bg-white focus:border-red-500 focus:ring-4 focus:ring-red-500/10 rounded-xl outline-none font-bold text-slate-700 text-sm min-h-[140px] resize-y transition-all" ></textarea>
-                                    </div>
+                                    <div className="bg-rose-50 border border-rose-200 p-4 rounded-xl text-rose-700 text-sm font-bold flex flex-col gap-3 shadow-sm"><div className="flex items-start gap-3"><Ban size={20} className="shrink-0 mt-0.5" /><div className="flex-1"><p className="mb-3 text-rose-800">These documents will be automatically returned to:</p>{isLoadingOrigins ? <div className="flex items-center gap-2 text-rose-600"><span className="w-3 h-3 border-2 border-rose-300 border-t-rose-600 rounded-full animate-spin"></span><span className="text-xs uppercase tracking-wider font-bold">Locating offices...</span></div> : <div className="max-h-32 overflow-y-auto custom-scrollbar pr-2 space-y-2">{selectedDocs.map(doc => { const info = originData[doc.id]; return <div key={doc.id} className="bg-white/60 p-2 rounded-lg border border-rose-100/50 text-xs flex items-center justify-between shadow-sm"><span className="font-mono text-[10px] text-rose-700 bg-rose-100 px-1.5 py-0.5 rounded mr-2 shrink-0">{doc.reference_no || doc.id.substring(0,8)}</span><div className="text-right min-w-0 flex-1 truncate"><span className="text-rose-900 font-bold block truncate">{info?.office || 'Originating Office'}</span><span className="text-rose-600/80 font-bold text-[10px] uppercase tracking-wider block truncate">For: {info?.creator || 'Creator'}</span></div></div>;})}</div>}</div></div></div>
+                                    <div className="relative z-10"><label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Reason for Rejection (Optional)</label><textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="E.g., Missing signature, incorrect attachments..." className="w-full p-3.5 bg-slate-50/50 border border-slate-200 focus:bg-white focus:border-red-500 focus:ring-4 focus:ring-red-500/10 rounded-xl outline-none font-bold text-slate-700 text-sm min-h-[140px] resize-y transition-all" ></textarea></div>
                                 </>
                             )}
                             {activeAction === 'reassign' && (
-                                <>
-                                    <div className="relative z-20">
-                                        <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Select Colleague *</label>
-                                        <CustomSelect options={colleagues} value={selectedColleague} onChange={(val: string) => setSelectedColleague(val)} placeholder="Choose an employee..." emptyText="No employee found" isRelative={true} />
-                                    </div>
-                                </>
+                                <div className="relative z-20"><label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Select Colleague *</label><CustomSelect options={colleagues} value={selectedColleague} onChange={(val: string) => setSelectedColleague(val)} placeholder="Choose an employee..." emptyText="No employee found" isRelative={true} /></div>
                             )}
                         </div>
                     )}
@@ -439,10 +304,7 @@ function ActionCard({ title, description, icon, colorTheme, onClick }: { title: 
     return (
         <button onClick={onClick} className={`w-full text-left group bg-white border border-slate-200 p-4 sm:p-5 rounded-[1.25rem] transition-all duration-200 flex items-center gap-4 active:scale-[0.99] ${themeStyles[colorTheme]}`}>
             <div className={`p-3 rounded-xl border ${iconStyles[colorTheme]} transition-transform duration-300 group-hover:scale-110 shrink-0 shadow-sm`}>{icon}</div>
-            <div className="flex-1 min-w-0 pr-2">
-                <h5 className="font-black text-slate-900 text-base sm:text-lg leading-tight mb-0.5 truncate">{title}</h5>
-                <p className="text-xs sm:text-sm font-medium text-slate-500 leading-snug">{description}</p>
-            </div>
+            <div className="flex-1 min-w-0 pr-2"><h5 className="font-black text-slate-900 text-base sm:text-lg leading-tight mb-0.5 truncate">{title}</h5><p className="text-xs sm:text-sm font-medium text-slate-500 leading-snug">{description}</p></div>
             <ChevronRight className={`text-slate-300 transition-all duration-300 shrink-0 ${chevronStyles[colorTheme]}`} size={20} />
         </button>
     );

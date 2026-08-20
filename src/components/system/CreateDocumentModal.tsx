@@ -3,7 +3,7 @@ import { X, FileText, AlertCircle, MapPin, Send, ChevronDown, Hash, Camera, Pape
 import { toast } from 'sonner';
 import { useUiStore } from '../../store/uiStore';
 import { supabase } from '../../lib/supabase';
-import { jsPDF } from 'jspdf';
+import { convertImageToScannedPDF } from '../../lib/utils';
 
 // --- Shared Modal Animation Styles ---
 const modalAnimationStyles = `
@@ -245,6 +245,12 @@ export default function CreateDocumentModal() {
         const file = e.target.files?.[0];
         if (!file) return;
 
+        // Ensure file does not exceed 25MB (25 * 1024 * 1024 bytes)
+        if (file.size > 25 * 1024 * 1024) {
+            toast.error("File too large", { description: "Please select a document or image smaller than 25MB." });
+            return;
+        }
+
         setIsProcessingFile(true);
         setAttachmentName("Processing file...");
 
@@ -253,7 +259,7 @@ export default function CreateDocumentModal() {
                 setAttachment(file);
                 setAttachmentName(file.name);
             } else if (file.type.startsWith('image/')) {
-                const pdfBlob = await processImageToScannedPDF(file);
+                const pdfBlob = await convertImageToScannedPDF(file);
                 setAttachment(pdfBlob);
                 setAttachmentName(`Scanned_Doc_${formData.trackingNumber}.pdf`);
             } else {
@@ -267,41 +273,6 @@ export default function CreateDocumentModal() {
         } finally {
             setIsProcessingFile(false);
         }
-    };
-
-    const processImageToScannedPDF = (file: File): Promise<Blob> => {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    const ctx = canvas.getContext('2d');
-                    if (!ctx) return reject("Canvas not supported");
-
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-
-                    ctx.filter = 'grayscale(100%) contrast(150%) brightness(110%)';
-                    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-                    const processedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
-
-                    const pdf = new jsPDF({
-                        orientation: img.width > img.height ? 'landscape' : 'portrait',
-                        unit: 'px',
-                        format: [img.width, img.height]
-                    });
-
-                    pdf.addImage(processedDataUrl, 'JPEG', 0, 0, img.width, img.height);
-                    resolve(pdf.output('blob'));
-                };
-                img.onerror = reject;
-                img.src = event.target?.result as string;
-            };
-            reader.onerror = reject;
-            reader.readAsDataURL(file);
-        });
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -324,8 +295,8 @@ export default function CreateDocumentModal() {
             let attachmentUrl = null;
 
             if (attachment) {
-                const fileExt = 'pdf';
-                const fileName = `${formData.trackingNumber}-${Math.random()}.${fileExt}`;
+                // Use crypto.randomUUID() for mathematically guaranteed unique file names
+                const fileName = `${formData.trackingNumber}-${crypto.randomUUID()}.pdf`;
                 
                 const { error: uploadError } = await supabase.storage
                     .from('attachments')
@@ -364,7 +335,7 @@ export default function CreateDocumentModal() {
 
             toast.success('Document Routed Successfully!', { description: `Tracking No: ${formData.trackingNumber}` });
             
-            // Replaced window.location.reload() with graceful close
+            // Graceful close
             handleClose();
 
         } catch (error: unknown) {
