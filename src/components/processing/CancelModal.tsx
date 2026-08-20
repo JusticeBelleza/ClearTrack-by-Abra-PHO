@@ -1,74 +1,105 @@
-// src/components/processing/CancelModal.tsx
 import { useState } from 'react';
-import { Ban, X } from 'lucide-react';
+import { X, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabase';
-import type { DocumentItem } from '../../types/processing';
+
+// --- Interfaces ---
+interface DocumentItem {
+    id: string;
+    reference_no?: string;
+    title?: string;
+    subject?: string;
+    current_location?: string;
+    assigned_clerk?: string;
+}
 
 interface CancelModalProps {
     doc: DocumentItem;
-    currentUserName: string;
     currentUserId: string;
     onClose: () => void;
     onSuccess: () => void;
 }
 
-export default function CancelModal({ doc, currentUserName, currentUserId, onClose, onSuccess }: CancelModalProps) {
+export default function CancelModal({ doc, currentUserId, onClose, onSuccess }: CancelModalProps) {
     const [reason, setReason] = useState('');
     const [isCancelling, setIsCancelling] = useState(false);
-    const [isClosing, setIsClosing] = useState(false);
 
-    const handleClose = () => { setIsClosing(true); setTimeout(onClose, 250); };
-    
     const handleConfirm = async () => {
-        if (!reason.trim()) { toast.error("Validation Error", { description: "Please provide a reason for cancellation." }); return; }
+        if (!reason.trim()) {
+            toast.error("Validation Error", { description: "Please provide a reason for cancellation." });
+            return;
+        }
+        
         setIsCancelling(true);
         try {
-            const nowIso = new Date().toISOString();
-            const { data: creatorProfile } = await supabase.from('profiles').select('full_name').eq('id', doc.created_by).single();
-            const creatorName = creatorProfile?.full_name || 'Originator';
+            // ATOMIC RPC CALL: Explicitly mapping parameters
+            const { error: rpcError } = await supabase.rpc('process_document_action', {
+                p_doc_id: doc.id,
+                p_log_action: 'Cancelled',
+                p_log_location: doc.current_location || 'Processing',
+                p_log_created_by: currentUserId,
+                p_log_assigned_to: null,
+                p_log_remarks: `Reason: ${reason.trim()}`,
+                p_log_signature_url: null,
+                p_log_attachment_url: null,
+                p_new_status: 'cancelled',
+                p_new_location: null,
+                p_new_clerk: null,
+                p_new_remarks: reason.trim(), // Updates main document card
+                p_clear_remarks: false,
+                p_completed_attachment_url: null
+            });
 
-            await supabase.from('document_logs').insert([{ 
-                document_id: doc.id, 
-                action: 'Cancelled', 
-                remarks: `Cancelled by ${currentUserName || 'System User'}. Reason: ${reason.trim()}`, 
-                location: doc.current_location || 'Returned', 
-                assigned_to: creatorName,
-                created_by: currentUserId 
-            }]);
+            if (rpcError) throw rpcError;
 
-            await supabase.from('documents').update({ 
-                status: 'cancelled', 
-                assigned_clerk: creatorName,
-                updated_at: nowIso 
-            }).eq('id', doc.id);
-
-            toast.success(`Document Cancelled successfully`);
-            onSuccess(); handleClose();
-        } catch { toast.error("Failed to cancel document."); } finally { setIsCancelling(false); }
+            toast.success("Document Cancelled", { description: "The document has been marked as cancelled." });
+            onSuccess();
+            onClose();
+        } catch (err: any) {
+            toast.error("Cancellation Failed", { description: err.message });
+        } finally {
+            setIsCancelling(false);
+        }
     };
 
     return (
-        <div className={`fixed inset-0 z-[999] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosing ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
-            <div className={`bg-white w-full max-w-md flex flex-col shadow-2xl rounded-t-[1.5rem] sm:rounded-3xl ${isClosing ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
-                <div className="bg-rose-700 p-5 sm:p-6 flex justify-between items-center text-white relative shrink-0 rounded-t-[1.5rem] sm:rounded-t-3xl z-20">
-                    <div className="w-12 h-1.5 bg-white/30 rounded-full mx-auto absolute top-2 left-1/2 -translate-x-1/2 sm:hidden"></div>
-                    <h3 className="font-black text-xl flex items-center gap-2 mt-2 sm:mt-0"><Ban size={22} className="text-rose-200" /> Cancel Document</h3>
-                    <button onClick={handleClose} className="p-1.5 hover:bg-white/20 rounded-full transition-colors active:scale-95 mt-2 sm:mt-0"><X size={20} /></button>
-                </div>
-                <div className="p-5 sm:p-6 space-y-5 bg-slate-50 flex-1 relative z-10 overflow-y-auto custom-scrollbar">
-                    <div className="bg-white border-2 border-slate-200 p-4 rounded-xl shadow-sm">
-                        <p className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Document ID</p>
-                        <p className="font-mono text-base sm:text-lg font-black text-slate-900">{doc.reference_no || doc.id}</p>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+                <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <div className="flex items-center gap-2">
+                        <div className="p-2 bg-red-100 text-red-600 rounded-lg">
+                            <AlertCircle size={20} />
+                        </div>
+                        <h3 className="font-bold text-slate-800">Cancel Document</h3>
                     </div>
-                    <div className="relative z-20">
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase tracking-wider">Reason for Cancellation *</label>
-                        <textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why is this document being cancelled? Provide brief details..." className="w-full p-3.5 bg-white border border-slate-200 focus:border-rose-500 focus:ring-4 focus:ring-rose-500/10 rounded-xl outline-none font-bold text-slate-900 text-sm min-h-[120px] resize-y transition-all" />
+                    <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors" disabled={isCancelling}>
+                        <X size={20} />
+                    </button>
+                </div>
+                
+                <div className="p-5 space-y-4">
+                    <div className="bg-red-50 p-3 rounded-xl border border-red-100">
+                        <p className="text-sm text-red-800">
+                            You are about to cancel <strong>{doc.reference_no || 'this document'}</strong>. This action will halt all processing.
+                        </p>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Reason for Cancellation *</label>
+                        <textarea 
+                            value={reason} 
+                            onChange={(e) => setReason(e.target.value)} 
+                            placeholder="State why this document is being cancelled..." 
+                            className="w-full p-3 bg-white border border-slate-200 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 rounded-xl outline-none text-sm transition-all min-h-[100px] resize-y"
+                            disabled={isCancelling}
+                        ></textarea>
                     </div>
                 </div>
-                <div className="p-4 sm:p-5 bg-white border-t border-slate-200 flex gap-3 shrink-0 relative z-0 sm:rounded-b-3xl">
-                    <button onClick={handleClose} className="flex-1 py-3.5 bg-white border-2 border-slate-300 hover:bg-slate-50 rounded-xl font-bold text-slate-700 transition-all active:scale-95 text-sm sm:text-base">Go Back</button>
-                    <button onClick={handleConfirm} disabled={!reason.trim() || isCancelling} className="flex-[1.5] py-3.5 bg-rose-600 border-2 border-rose-700 text-white rounded-xl font-bold shadow-sm hover:bg-rose-700 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100 flex justify-center items-center gap-2 text-sm sm:text-base">{isCancelling ? 'Cancelling...' : 'Confirm Cancel'}</button>
+                
+                <div className="p-5 border-t border-slate-100 bg-slate-50 flex gap-3">
+                    <button onClick={onClose} disabled={isCancelling} className="flex-1 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-50">Back</button>
+                    <button onClick={handleConfirm} disabled={isCancelling} className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-sm transition-colors disabled:opacity-50 flex items-center justify-center">
+                        {isCancelling ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : 'Confirm Cancel'}
+                    </button>
                 </div>
             </div>
         </div>

@@ -145,18 +145,14 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
     };
 
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0]; 
-        if (!file) return;
+        const file = e.target.files?.[0]; if (!file) return;
 
-        // Ensure file does not exceed 25MB (25 * 1024 * 1024 bytes)
         if (file.size > 25 * 1024 * 1024) {
             toast.error("File too large", { description: "Please select a document or image smaller than 25MB." });
             return;
         }
 
-        setIsProcessingFile(true); 
-        setAttachmentName("Processing file...");
-        
+        setIsProcessingFile(true); setAttachmentName("Processing file...");
         try {
             if (file.type === 'application/pdf') { 
                 setAttachment(file); 
@@ -178,6 +174,7 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
         }
     };
 
+    // --- PHASE 3: UPDATED RPC ROUTING ---
     const handleSaveRouting = async () => {
         if (!destination || !receivingClerk.trim()) { toast.error("Validation Error", { description: "Please provide a destination and receiving clerk." }); return; }
         if (!hasSignature) { toast.error("Signature Required", { description: "The receiving clerk must sign the pad to confirm receipt." }); return; }
@@ -195,10 +192,25 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
                 signatureUrl = supabase.storage.from('attachments').getPublicUrl(fileName).data.publicUrl;
             }
 
-            const { error: logError } = await supabase.from('document_logs').insert([{ document_id: doc.id, action: 'In transit', location: destination, assigned_to: receivingClerk.trim(), created_by: session?.user?.id || null, signature_url: signatureUrl }]);
-            if (logError) throw logError;
+            // ATOMIC RPC CALL: Explicitly map every parameter
+            const { error: rpcError } = await supabase.rpc('process_document_action', {
+                p_doc_id: doc.id,
+                p_log_action: 'In transit',
+                p_log_location: destination,
+                p_log_created_by: session?.user?.id || null,
+                p_log_assigned_to: receivingClerk.trim(),
+                p_log_remarks: null,
+                p_log_signature_url: signatureUrl || null,
+                p_log_attachment_url: null,
+                p_new_status: 'routing',
+                p_new_location: destination,
+                p_new_clerk: null,
+                p_new_remarks: null,
+                p_clear_remarks: true,
+                p_completed_attachment_url: null
+            });
 
-            await supabase.from('documents').update({ current_location: destination, status: 'routing', remarks: null }).eq('id', doc.id);
+            if (rpcError) throw rpcError;
 
             toast.success("Document Routed Successfully!", { description: `Forwarded to ${destination}.`});
             onSuccess(); handleClose();
@@ -206,6 +218,7 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
         finally { setIsSubmitting(false); }
     };
 
+    // --- PHASE 3: UPDATED RPC COMPLETION ---
     const confirmComplete = async () => {
         if (!releasedBy.trim()) { toast.error("Validation Error", { description: "Please specify who released the document." }); return; }
         if (!retentionFate) { toast.error("Validation Error", { description: "Please select where the document will be retained." }); return; }
@@ -232,14 +245,28 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
                 signatureUrl = supabase.storage.from('attachments').getPublicUrl(fileName).data.publicUrl;
             }
 
-            const updateData: any = { status: 'sealed', remarks: completionRemarks.trim() || null };
-            if (attachmentUrl) { updateData.completed_attachment_url = attachmentUrl; }
-
             const fateString = retentionFate === 'originator' ? 'Returned to Originator' : 'Retained at Final Destination';
             const detailedRemarks = `Released By: ${releasedBy.trim()}\nDocument Retention: ${fateString}${completionRemarks ? `\nRemarks: ${completionRemarks.trim()}` : ''}`;
 
-            await supabase.from('document_logs').insert([{ document_id: doc.id, action: 'Delivered', location: doc.final_destination || doc.current_location, remarks: detailedRemarks, attachment_url: attachmentUrl, signature_url: signatureUrl, created_by: session?.user?.id || null }]);
-            await supabase.from('documents').update(updateData).eq('id', doc.id);
+            // ATOMIC RPC CALL: Explicitly map every parameter
+            const { error: rpcError } = await supabase.rpc('process_document_action', {
+                p_doc_id: doc.id,
+                p_log_action: 'Delivered',
+                p_log_location: doc.final_destination || doc.current_location || 'Processing',
+                p_log_created_by: session?.user?.id || null,
+                p_log_assigned_to: null,
+                p_log_remarks: detailedRemarks || null,
+                p_log_signature_url: signatureUrl || null,
+                p_log_attachment_url: attachmentUrl || null,
+                p_new_status: 'sealed',
+                p_new_location: null,
+                p_new_clerk: null,
+                p_new_remarks: completionRemarks.trim() || null,
+                p_clear_remarks: false,
+                p_completed_attachment_url: attachmentUrl || null
+            });
+
+            if (rpcError) throw rpcError;
 
             toast.success("Document Completed!", { description: "It has been moved to history." });
             onSuccess(); handleClose();
@@ -247,14 +274,32 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
         finally { setIsSubmitting(false); }
     };
 
+    // --- PHASE 3: UPDATED RPC REJECTION ---
     const handleReject = async () => {
         setIsSubmitting(true);
         try {
             const { data: { session } } = await supabase.auth.getSession();
             const finalRemarks = rejectReason.trim() || 'Returned without remarks';
 
-            await supabase.from('document_logs').insert([{ document_id: doc.id, action: 'Returned', location: originOffice, assigned_to: originCreator, remarks: finalRemarks, created_by: session?.user?.id || null }]);
-            await supabase.from('documents').update({ status: 'pending', current_location: originOffice, remarks: finalRemarks, assigned_clerk: originCreator }).eq('id', doc.id);
+            // ATOMIC RPC CALL: Explicitly map every parameter
+            const { error: rpcError } = await supabase.rpc('process_document_action', {
+                p_doc_id: doc.id,
+                p_log_action: 'Returned',
+                p_log_location: originOffice,
+                p_log_created_by: session?.user?.id || null,
+                p_log_assigned_to: originCreator,
+                p_log_remarks: finalRemarks || null,
+                p_log_signature_url: null,
+                p_log_attachment_url: null,
+                p_new_status: 'pending',
+                p_new_location: originOffice,
+                p_new_clerk: originCreator,
+                p_new_remarks: finalRemarks || null,
+                p_clear_remarks: false,
+                p_completed_attachment_url: null
+            });
+
+            if (rpcError) throw rpcError;
 
             toast.success("Document Returned", { description: `Sent back to ${originCreator} at ${originOffice}` });
             onSuccess(); handleClose();

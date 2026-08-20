@@ -309,8 +309,8 @@ export default function Processing() {
       )}
 
       {/* Modals */}
-      {reassignDoc && <ReassignModal doc={reassignDoc} currentUserName={data?.currentUserName || ''} currentUserId={data?.currentUserId || ''} colleagues={availableColleagues} onClose={() => setReassignDoc(null)} onSuccess={() => refetch()} />}
-      {cancelDoc && <CancelModal doc={cancelDoc} currentUserName={data?.currentUserName || ''} currentUserId={data?.currentUserId || ''} onClose={() => setCancelDoc(null)} onSuccess={() => refetch()} />}
+      {reassignDoc && <ReassignModal doc={reassignDoc} currentUserName={data?.currentUserName || ''} currentUserId={data?.currentUserId || ''} onClose={() => setReassignDoc(null)} onSuccess={() => refetch()} />}
+      {cancelDoc && <CancelModal doc={cancelDoc} currentUserId={data?.currentUserId || ''} onClose={() => setCancelDoc(null)} onSuccess={() => refetch()} />}
       {reRouteDoc && <ReRouteModal doc={reRouteDoc} currentUserName={data?.currentUserName || ''} currentUserId={data?.currentUserId || ''} departments={departments} colleagues={availableColleagues} onClose={() => setReRouteDoc(null)} onSuccess={() => refetch()} />}
       
       {selectedDoc && <HandoverScreen doc={selectedDoc} departments={departments} onBack={() => setSelectedDoc(null)} onSuccess={() => refetch()} />}

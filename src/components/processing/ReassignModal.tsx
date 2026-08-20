@@ -1,63 +1,133 @@
-// src/components/processing/ReassignModal.tsx
-import { useState } from 'react';
-import { UserPlus, X } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { X, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabase';
-import type { DocumentItem, OptionType } from '../../types/processing';
-import CustomSelect from '../ui/CustomSelect';
+
+// --- Interfaces ---
+interface DocumentItem {
+    id: string;
+    reference_no?: string;
+    title?: string;
+    current_location?: string;
+    assigned_clerk?: string;
+}
 
 interface ReassignModalProps {
     doc: DocumentItem;
-    currentUserName: string;
     currentUserId: string;
-    colleagues: string[];
+    currentUserName: string;
     onClose: () => void;
     onSuccess: () => void;
 }
 
-export default function ReassignModal({ doc, currentUserName, currentUserId, colleagues, onClose, onSuccess }: ReassignModalProps) {
+export default function ReassignModal({ doc, currentUserId, currentUserName, onClose, onSuccess }: ReassignModalProps) {
     const [selectedColleague, setSelectedColleague] = useState('');
     const [isReassigning, setIsReassigning] = useState(false);
-    const [isClosing, setIsClosing] = useState(false);
+    const [colleagues, setColleagues] = useState<string[]>([]);
+    const [isLoading, setIsLoading] = useState(true);
 
-    const handleClose = () => { setIsClosing(true); setTimeout(onClose, 250); };
-    
+    useEffect(() => {
+        const fetchColleagues = async () => {
+            setIsLoading(true);
+            try {
+                const { data: userData } = await supabase.from('employees').select('department').eq('name', currentUserName).single();
+                if (userData && userData.department) {
+                    const { data: deptUsers } = await supabase.from('employees').select('name').eq('department', userData.department).neq('name', currentUserName);
+                    if (deptUsers) {
+                        setColleagues(deptUsers.map(u => u.name));
+                    }
+                }
+            } catch (error) {
+                console.error("Failed to fetch colleagues", error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+        fetchColleagues();
+    }, [currentUserName]);
+
     const handleConfirm = async () => {
-        if (!selectedColleague) return;
+        if (!selectedColleague) {
+            toast.error("Validation Error", { description: "Please select a colleague to assign this to." });
+            return;
+        }
+        
         setIsReassigning(true);
         try {
-            const previousClerk = doc.assigned_clerk || 'Unassigned';
-            const nowIso = new Date().toISOString();
-            await supabase.from('document_logs').insert([{ document_id: doc.id, action: 'REASSIGNED', remarks: `Re-assigned from ${previousClerk} to ${selectedColleague} by ${currentUserName || 'System User'}`, location: doc.current_location || 'Processing', created_by: currentUserId }]);
-            await supabase.from('documents').update({ assigned_clerk: selectedColleague, updated_at: nowIso }).eq('id', doc.id);
-            toast.success(`Document re-assigned to ${selectedColleague}`);
-            onSuccess(); handleClose();
-        } catch { toast.error("Failed to re-assign document."); } finally { setIsReassigning(false); }
+            const prevClerk = doc.assigned_clerk || 'Unassigned';
+
+            // ATOMIC RPC CALL
+            const { error: rpcError } = await supabase.rpc('process_document_action', {
+                p_doc_id: doc.id,
+                p_log_action: 'REASSIGNED',
+                p_log_location: doc.current_location || 'Processing',
+                p_log_created_by: currentUserId,
+                p_log_assigned_to: null,
+                p_log_remarks: `Details: Reassigned from ${prevClerk} to ${selectedColleague} by ${currentUserName}`,
+                p_log_signature_url: null,
+                p_log_attachment_url: null,
+                p_new_status: null,
+                p_new_location: null,
+                p_new_clerk: selectedColleague,
+                p_new_remarks: null,
+                p_clear_remarks: false,
+                p_completed_attachment_url: null
+            });
+
+            if (rpcError) throw rpcError;
+
+            toast.success("Reassigned", { description: `Document assigned to ${selectedColleague}.` });
+            onSuccess();
+            onClose();
+        } catch (err: any) {
+            toast.error("Reassignment Failed", { description: err.message });
+        } finally {
+            setIsReassigning(false);
+        }
     };
 
-    const colleagueOptions: OptionType[] = colleagues.map(c => ({ label: c, value: c }));
-
     return (
-        <div className={`fixed inset-0 z-[999] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosing ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
-            <div className={`bg-white w-full max-w-md flex flex-col shadow-2xl rounded-t-[1.5rem] sm:rounded-3xl ${isClosing ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
-                <div className="bg-slate-900 p-5 sm:p-6 flex justify-between items-center text-white relative shrink-0 rounded-t-[1.5rem] sm:rounded-t-3xl z-20">
-                    <div className="w-12 h-1.5 bg-white/30 rounded-full mx-auto absolute top-2 left-1/2 -translate-x-1/2 sm:hidden"></div>
-                    <h3 className="font-black text-xl flex items-center gap-2 mt-2 sm:mt-0"><UserPlus size={22} className="text-teal-400" /> Re-assign</h3>
-                    <button onClick={handleClose} className="p-1.5 hover:bg-white/20 rounded-full transition-colors active:scale-95 mt-2 sm:mt-0"><X size={20} /></button>
-                </div>
-                <div className="p-5 sm:p-6 space-y-5 bg-slate-50 flex-1 relative z-10 overflow-y-auto custom-scrollbar">
-                    <div className="bg-white border-2 border-slate-200 p-4 rounded-xl shadow-sm">
-                        <p className="text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">Document ID</p>
-                        <p className="font-mono text-base sm:text-lg font-black text-slate-900">{doc.reference_no || doc.id}</p>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
+                <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+                    <div className="flex items-center gap-2">
+                        <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
+                            <UserPlus size={20} />
+                        </div>
+                        <h3 className="font-bold text-slate-800">Reassign Document</h3>
                     </div>
-                    <div className="relative z-20">
-                        <label className="block text-[11px] font-bold text-slate-700 mb-1.5 uppercase tracking-wider">Select Colleague</label>
-                        <CustomSelect options={colleagueOptions} value={selectedColleague} onChange={(val: string) => setSelectedColleague(val)} placeholder={colleagues.length === 0 ? "No other colleagues available" : "Choose an employee..."} emptyText="No employee found" isRelative={true} />
+                    <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors" disabled={isReassigning}>
+                        <X size={20} />
+                    </button>
+                </div>
+                
+                <div className="p-5 space-y-4">
+                    <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
+                        <p className="text-sm text-blue-800">
+                            Assigning <strong>{doc.reference_no || 'document'}</strong> to a colleague within your department.
+                        </p>
+                    </div>
+                    <div>
+                        <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Select Colleague *</label>
+                        <select 
+                            value={selectedColleague} 
+                            onChange={(e) => setSelectedColleague(e.target.value)}
+                            disabled={isReassigning || isLoading}
+                            className="w-full p-3 bg-white border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 rounded-xl outline-none text-sm transition-all"
+                        >
+                            <option value="" disabled>{isLoading ? 'Loading colleagues...' : 'Choose a colleague...'}</option>
+                            {colleagues.map((colleague, idx) => (
+                                <option key={idx} value={colleague}>{colleague}</option>
+                            ))}
+                        </select>
                     </div>
                 </div>
-                <div className="p-4 sm:p-5 bg-white border-t border-slate-200 flex gap-3 shrink-0 relative z-0 sm:rounded-b-3xl">
-                    <button onClick={handleClose} className="flex-1 py-3.5 bg-white border-2 border-slate-300 hover:bg-slate-50 rounded-xl font-bold text-slate-700 transition-all active:scale-95 text-sm sm:text-base">Cancel</button>
-                    <button onClick={handleConfirm} disabled={!selectedColleague || isReassigning} className="flex-[1.5] py-3.5 bg-teal-600 border-2 border-teal-700 text-white rounded-xl font-bold shadow-sm hover:bg-teal-700 transition-all active:scale-95 disabled:opacity-50 disabled:active:scale-100 flex justify-center items-center gap-2 text-sm sm:text-base">{isReassigning ? 'Updating...' : 'Confirm Re-assign'}</button>
+                
+                <div className="p-5 border-t border-slate-100 bg-slate-50 flex gap-3">
+                    <button onClick={onClose} disabled={isReassigning} className="flex-1 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-50">Back</button>
+                    <button onClick={handleConfirm} disabled={isReassigning} className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-sm transition-colors disabled:opacity-50 flex items-center justify-center">
+                        {isReassigning ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : 'Confirm Reassign'}
+                    </button>
                 </div>
             </div>
         </div>

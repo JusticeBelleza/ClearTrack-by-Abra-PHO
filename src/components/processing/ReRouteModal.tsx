@@ -62,7 +62,6 @@ export default function ReRouteModal({ doc, currentUserName, currentUserId, depa
         if (!destination || !selectedColleague || !remarks.trim()) { toast.error("Validation Error", { description: "Please provide the destination, the assigned clerk, and your remarks." }); return; }
         setIsSubmitting(true);
         try {
-            const nowIso = new Date().toISOString();
             let newAttachmentUrl = doc.attachment_url;
 
             if (attachment) {
@@ -73,8 +72,22 @@ export default function ReRouteModal({ doc, currentUserName, currentUserId, depa
                 newAttachmentUrl = data.publicUrl;
             }
 
-            await supabase.from('documents').update({ status: 'routing', current_location: destination, assigned_clerk: selectedColleague, attachment_url: newAttachmentUrl, remarks: null, updated_at: nowIso }).eq('id', doc.id);
-            await supabase.from('document_logs').insert([{ document_id: doc.id, action: 'Re-routed', remarks: `${remarks.trim()}\n(Re-routed by ${currentUserName})`, location: destination, assigned_to: selectedColleague, attachment_url: newAttachmentUrl, created_by: currentUserId }]);
+            // --- ATOMIC RPC CALL ---
+            const { error: rpcError } = await supabase.rpc('process_document_action', {
+                p_doc_id: doc.id,
+                p_log_action: 'Re-routed',
+                p_log_location: destination,
+                p_log_created_by: currentUserId,
+                p_log_assigned_to: selectedColleague,
+                p_log_remarks: `${remarks.trim()}\n(Re-routed by ${currentUserName})`,
+                p_log_attachment_url: newAttachmentUrl,
+                p_new_status: 'routing',
+                p_new_location: destination,
+                p_new_clerk: selectedColleague,
+                p_clear_remarks: true
+            });
+
+            if (rpcError) throw rpcError;
 
             toast.success(`Document re-routed to ${selectedColleague}`);
             onSuccess(); handleClose();

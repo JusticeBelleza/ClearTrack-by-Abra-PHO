@@ -127,7 +127,6 @@ export default function BatchActionModal({ selectedDocs, currentUserId, currentU
 
         setIsSubmitting(true);
         try {
-            const nowIso = new Date().toISOString();
             let sharedSignatureUrl = null; let sharedAttachmentUrl = null;
 
             const blob = await signaturePadRef.current?.getBlob();
@@ -149,39 +148,65 @@ export default function BatchActionModal({ selectedDocs, currentUserId, currentU
                 if (activeAction === 'complete') {
                     const fateString = retentionFate === 'originator' ? 'Returned to Originator' : 'Retained at Final Destination';
                     const detailedRemarks = `Released By: ${releasedBy.trim()}\nDocument Retention: ${fateString}${remarks ? `\nRemarks: ${remarks.trim()}` : ''}`;
-                    const updateData: Record<string, string | null> = { status: 'sealed', updated_at: nowIso };
-                    if (sharedAttachmentUrl) updateData.completed_attachment_url = sharedAttachmentUrl;
                     
-                    const { error: updateError } = await supabase.from('documents').update(updateData).eq('id', doc.id);
-                    if (updateError) throw updateError;
-                    
-                    const { error: logError } = await supabase.from('document_logs').insert([{ document_id: doc.id, action: 'Delivered', location: doc.final_destination || doc.current_location, assigned_to: currentUserName, remarks: detailedRemarks, created_by: currentUserId, signature_url: sharedSignatureUrl, attachment_url: sharedAttachmentUrl }]);
-                    if (logError) throw logError;
+                    const { error: rpcError } = await supabase.rpc('process_document_action', {
+                        p_doc_id: doc.id,
+                        p_log_action: 'Delivered',
+                        p_log_location: doc.final_destination || doc.current_location,
+                        p_log_created_by: currentUserId,
+                        p_log_assigned_to: currentUserName,
+                        p_log_remarks: detailedRemarks,
+                        p_log_signature_url: sharedSignatureUrl,
+                        p_log_attachment_url: sharedAttachmentUrl,
+                        p_new_status: 'sealed',
+                        p_completed_attachment_url: sharedAttachmentUrl
+                    });
+                    if (rpcError) throw rpcError;
 
                 } else if (activeAction === 'reject') {
                     const originInfo = originData[doc.id] || { office: 'Originating Office', creator: 'Creator' };
                     const finalRemarks = remarks.trim() || 'Returned without remarks';
                     
-                    const { error: updateError } = await supabase.from('documents').update({ status: 'pending', remarks: finalRemarks, current_location: originInfo.office, updated_at: nowIso, assigned_clerk: originInfo.creator }).eq('id', doc.id);
-                    if (updateError) throw updateError;
-                    
-                    const { error: logError } = await supabase.from('document_logs').insert([{ document_id: doc.id, action: 'Returned', location: originInfo.office, assigned_to: originInfo.creator, remarks: finalRemarks, created_by: currentUserId }]);
-                    if (logError) throw logError;
+                    const { error: rpcError } = await supabase.rpc('process_document_action', {
+                        p_doc_id: doc.id,
+                        p_log_action: 'Returned',
+                        p_log_location: originInfo.office,
+                        p_log_created_by: currentUserId,
+                        p_log_assigned_to: originInfo.creator,
+                        p_log_remarks: finalRemarks,
+                        p_new_status: 'pending',
+                        p_new_location: originInfo.office,
+                        p_new_clerk: originInfo.creator,
+                        p_new_remarks: finalRemarks
+                    });
+                    if (rpcError) throw rpcError;
 
                 } else if (activeAction === 'add_step') {
-                    const { error: updateError } = await supabase.from('documents').update({ status: 'routing', current_location: destination, remarks: null, updated_at: nowIso }).eq('id', doc.id);
-                    if (updateError) throw updateError;
-                    
-                    const { error: logError } = await supabase.from('document_logs').insert([{ document_id: doc.id, action: 'In transit', location: destination, assigned_to: receivingClerk.trim(), remarks: null, created_by: currentUserId, signature_url: sharedSignatureUrl }]);
-                    if (logError) throw logError;
+                    const { error: rpcError } = await supabase.rpc('process_document_action', {
+                        p_doc_id: doc.id,
+                        p_log_action: 'In transit',
+                        p_log_location: destination,
+                        p_log_created_by: currentUserId,
+                        p_log_assigned_to: receivingClerk.trim(),
+                        p_log_signature_url: sharedSignatureUrl,
+                        p_new_status: 'routing',
+                        p_new_location: destination,
+                        p_clear_remarks: true
+                    });
+                    if (rpcError) throw rpcError;
 
                 } else if (activeAction === 'reassign') {
                     const prevClerk = doc.assigned_clerk || 'Unassigned';
-                    const { error: updateError } = await supabase.from('documents').update({ assigned_clerk: selectedColleague, updated_at: nowIso }).eq('id', doc.id);
-                    if (updateError) throw updateError;
                     
-                    const { error: logError } = await supabase.from('document_logs').insert([{ document_id: doc.id, action: 'REASSIGNED', location: doc.current_location || 'Processing', remarks: `Batch re-assigned from ${prevClerk} to ${selectedColleague} by ${currentUserName}`, created_by: currentUserId }]);
-                    if (logError) throw logError;
+                    const { error: rpcError } = await supabase.rpc('process_document_action', {
+                        p_doc_id: doc.id,
+                        p_log_action: 'REASSIGNED',
+                        p_log_location: doc.current_location || 'Processing',
+                        p_log_created_by: currentUserId,
+                        p_log_remarks: `Batch re-assigned from ${prevClerk} to ${selectedColleague} by ${currentUserName}`,
+                        p_new_clerk: selectedColleague
+                    });
+                    if (rpcError) throw rpcError;
                 }
             });
 
