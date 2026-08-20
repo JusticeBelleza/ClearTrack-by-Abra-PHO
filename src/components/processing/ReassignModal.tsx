@@ -206,12 +206,12 @@ export default function ReassignModal({ doc, currentUserName, onClose, onSuccess
 
             const prevClerk = doc.assigned_clerk || 'Unassigned';
 
-            // 2. ATOMIC RPC CALL: Using the verified user.id
+            // 2. ATOMIC RPC CALL
             const { error: rpcError } = await supabase.rpc('process_document_action', {
                 p_doc_id: doc.id,
                 p_log_action: 'REASSIGNED',
                 p_log_location: doc.current_location || 'Processing',
-                p_log_created_by: user.id, // 🔒 THE SECURE UPGRADE
+                p_log_created_by: user.id,
                 p_log_assigned_to: null,
                 p_log_remarks: `Details: Reassigned from ${prevClerk} to ${selectedColleague} by ${currentUserName}`,
                 p_log_signature_url: null,
@@ -238,14 +238,14 @@ export default function ReassignModal({ doc, currentUserName, onClose, onSuccess
     };
 
     return (
-        <div className={`fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/60 backdrop-blur-sm transition-all ${isClosing ? 'animate-out fade-out duration-200 fill-mode-forwards' : 'animate-in fade-in duration-200'}`}>
-            <div className={`bg-white w-full max-w-sm max-h-[92vh] sm:max-h-[90vh] flex flex-col shadow-2xl rounded-t-[1.5rem] sm:rounded-3xl ${isClosing ? 'animate-out slide-out-to-bottom-[100%] sm:slide-out-to-bottom-0 sm:zoom-out-95 duration-200 fill-mode-forwards' : 'animate-in slide-in-from-bottom-[100%] sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200'}`}>
+        <div className={`fixed inset-0 z-[1050] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/70 backdrop-blur-sm transition-all ${isClosing ? 'animate-out fade-out duration-200 fill-mode-forwards' : 'animate-in fade-in duration-200'}`}>
+            <div className={`bg-white w-full max-w-xl max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden shadow-2xl rounded-t-[1.5rem] sm:rounded-3xl ${isClosing ? 'animate-out slide-out-to-bottom-[100%] sm:slide-out-to-bottom-0 sm:zoom-out-95 duration-200 fill-mode-forwards' : 'animate-in slide-in-from-bottom-[100%] sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-300'}`}>
                 
-                {/* Teal Header */}
-                <div className="text-white relative flex flex-col shrink-0 transition-colors duration-300 bg-[#0f766e] rounded-t-[1.5rem] sm:rounded-t-3xl">
+                {/* Teal Header - Perfectly centered without needing a back arrow */}
+                <div className="text-white relative flex flex-col shrink-0 transition-colors duration-300 bg-[#0f766e]">
                     <div className="w-16 h-1.5 bg-white/30 rounded-full mx-auto mt-3 sm:hidden shrink-0"></div>
                     <div className="p-5 pt-3 sm:pt-6 flex items-center justify-between">
-                        <div className="w-10"></div>
+                        <div className="w-10"></div> {/* Invisible spacer to perfectly balance the X button */}
                         <h3 className="font-black text-xl tracking-tight absolute left-1/2 -translate-x-1/2 whitespace-nowrap">Re-assign</h3>
                         <button onClick={handleClose} disabled={isReassigning} className="p-2 -mr-2 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-full transition-all active:scale-90 disabled:opacity-50">
                             <X size={24} />
@@ -254,18 +254,20 @@ export default function ReassignModal({ doc, currentUserName, onClose, onSuccess
                 </div>
                 
                 {/* Body Area */}
-                <div className="p-5 sm:p-8 pt-6 sm:pt-8 bg-white">
-                    <div className="relative z-20">
-                        <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Select Colleague *</label>
-                        <CustomSelect 
-                            options={colleagues} 
-                            value={selectedColleague} 
-                            onChange={(val: string) => setSelectedColleague(val)} 
-                            placeholder="Choose an employee..." 
-                            emptyText={isLoading ? "Loading colleagues..." : "No employee found"} 
-                            isRelative={true} 
-                            itemType="employee"
-                        />
+                <div className="flex-1 overflow-y-auto p-5 sm:p-8 space-y-6 custom-scrollbar bg-white">
+                    <div className="space-y-6">
+                        <div className="relative z-20">
+                            <label className="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Select Colleague *</label>
+                            <CustomSelect 
+                                options={colleagues} 
+                                value={selectedColleague} 
+                                onChange={(val: string) => setSelectedColleague(val)} 
+                                placeholder="Choose an employee..." 
+                                emptyText={isLoading ? "Loading colleagues..." : "No employee found"} 
+                                isRelative={true} 
+                                itemType="employee"
+                            />
+                        </div>
                     </div>
                 </div>
                 
@@ -274,7 +276,7 @@ export default function ReassignModal({ doc, currentUserName, onClose, onSuccess
                     <button 
                         onClick={handleConfirm} 
                         disabled={isReassigning || !selectedColleague} 
-                        className={`w-full text-white font-bold py-4 rounded-xl shadow-sm transition-all active:scale-[0.98] text-sm sm:text-base flex items-center justify-center gap-2 ${
+                        className={`w-full text-white font-bold py-3.5 rounded-xl shadow-sm transition-all active:scale-[0.98] text-sm flex items-center justify-center gap-2 ${
                             selectedColleague 
                                 ? 'bg-[#0f766e] hover:bg-[#0b5c55]'
                                 : 'bg-[#7bc1b5] cursor-not-allowed opacity-80'

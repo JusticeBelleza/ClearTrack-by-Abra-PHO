@@ -65,8 +65,9 @@ export default function Processing() {
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
   const [selectedDocs, setSelectedDocs] = useState<DocumentItem[]>([]);
   
-  // Batch Actions State
+  // --- UPGRADED BATCH ACTIONS STATE ---
   const [isBatchModalOpen, setIsBatchModalOpen] = useState(false);
+  const [isBatchMenuClosing, setIsBatchMenuClosing] = useState(false);
   
   // Modals
   const [selectedDoc, setSelectedDoc] = useState<DocumentItem | null>(null);
@@ -82,7 +83,6 @@ export default function Processing() {
   const { data, isLoading, isFetching, refetch } = useQuery<ProcessingData>({
       queryKey: ['processingDocuments'],
       queryFn: fetchProcessingData,
-      // Increased to 60 seconds as a fallback, relying primarily on Supabase Realtime
       refetchInterval: 60000, 
   });
 
@@ -143,7 +143,24 @@ export default function Processing() {
       return data.colleagues;
   }, [data, reassignDoc]);
 
-  useEffect(() => { setSelectedDocs([]); setIsBatchModalOpen(false); }, [activeTab, searchQuery]);
+  // SMOOTH MODAL CLOSING HANDLER
+  const handleToggleBatchMenu = () => {
+      if (isBatchModalOpen) {
+          setIsBatchMenuClosing(true);
+          setTimeout(() => {
+              setIsBatchMenuClosing(false);
+              setIsBatchModalOpen(false);
+          }, 200); // Wait for the menu's fade-out animation to finish
+      } else {
+          setIsBatchModalOpen(true);
+      }
+  };
+
+  useEffect(() => { 
+      setSelectedDocs([]); 
+      setIsBatchModalOpen(false); 
+      setIsBatchMenuClosing(false);
+  }, [activeTab, searchQuery]);
 
   const newProcessingCount = useMemo(() => documents.processing.filter((d: DocumentItem) => new Date(d.updated_at || d.created_at).getTime() > Number(lastViewedProcessing)).length, [documents.processing, lastViewedProcessing]);
   const newReturnedCount = useMemo(() => documents.returned.filter((d: DocumentItem) => new Date(d.updated_at || d.created_at).getTime() > Number(lastViewedReturned)).length, [documents.returned, lastViewedReturned]);
@@ -287,28 +304,48 @@ export default function Processing() {
           )}
       </div>
 
-      {/* FAB - directly opens the internal menu layout within BatchActionModal */}
+      {/* FAB - PERFECTLY NATIVE MORPHING TOGGLE */}
       {activeTab === 'processing' && (
-          <div className={`fixed bottom-6 right-6 sm:bottom-8 sm:right-8 z-[100] flex flex-col items-end transition-all duration-500 ease-[cubic-bezier(0.175,0.885,0.32,1.275)] ${selectedDocs.length > 0 ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto' : 'opacity-0 scale-50 translate-y-12 pointer-events-none'}`}>
-              <button onClick={() => setIsBatchModalOpen(true)} className="relative flex items-center justify-center w-14 h-14 bg-teal-700 hover:bg-teal-800 text-white rounded-[1.25rem] shadow-lg shadow-teal-900/30 transition-all active:scale-95 z-10 group">
-                  <Layers size={24} strokeWidth={2.5} className="group-hover:scale-110 transition-transform" />
-                  <span className="absolute -top-2 -right-2 bg-rose-500 text-white text-[10px] font-black w-6 h-6 flex items-center justify-center rounded-full shadow-sm ring-2 ring-white transition-all duration-300">
+          <div className={`fixed bottom-6 right-6 sm:bottom-8 sm:right-8 z-[1000] flex flex-col items-end transition-all duration-500 ease-[cubic-bezier(0.175,0.885,0.32,1.275)] ${selectedDocs.length > 0 ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto' : 'opacity-0 scale-50 translate-y-12 pointer-events-none'}`}>
+              <button 
+                  onClick={handleToggleBatchMenu} 
+                  className="relative flex items-center justify-center w-14 h-14 bg-teal-700 hover:bg-teal-800 text-white rounded-[1.25rem] shadow-lg shadow-teal-900/30 transition-all active:scale-95 z-10 group"
+              >
+                  {/* Layers Icon */}
+                  <div className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ${isBatchModalOpen ? 'opacity-0 -rotate-90 scale-50' : 'opacity-100 rotate-0 scale-100'}`}>
+                      <Layers size={24} strokeWidth={2.5} className="group-hover:scale-110 transition-transform" />
+                  </div>
+
+                  {/* X Icon */}
+                  <div className={`absolute inset-0 flex items-center justify-center transition-all duration-300 ${isBatchModalOpen && !isBatchMenuClosing ? 'opacity-100 rotate-0 scale-100' : 'opacity-0 rotate-90 scale-50'}`}>
+                      <X size={26} strokeWidth={2.5} />
+                  </div>
+
+                  {/* Perfectly Unclipped Badge */}
+                  <span className={`absolute -top-2 -right-2 bg-rose-500 text-white text-[10px] font-black w-6 h-6 flex items-center justify-center rounded-full shadow-sm ring-2 ring-white transition-all duration-300 ${isBatchModalOpen ? 'opacity-0 scale-50' : 'opacity-100 scale-100'}`}>
                       {selectedDocs.length}
                   </span>
               </button>
           </div>
       )}
 
+      {/* The Modal Component now relies on Processing.tsx for its closing states */}
       {isBatchModalOpen && (
           <BatchActionModal 
             selectedDocs={selectedDocs} 
-            currentUserName={data?.currentUserName || ''} departments={departments} colleagues={availableColleagues} 
-            onClose={() => setIsBatchModalOpen(false)} 
-            onSuccess={() => { setSelectedDocs([]); setIsBatchModalOpen(false); refetch(); }}
-            onClearSelection={() => {
-                setIsBatchModalOpen(false); 
-                setSelectedDocs([]);        
+            currentUserName={data?.currentUserName || ''} 
+            departments={departments} 
+            colleagues={availableColleagues} 
+            onClose={handleToggleBatchMenu} 
+            onSuccess={() => { 
+                handleToggleBatchMenu(); 
+                setTimeout(() => { setSelectedDocs([]); refetch(); }, 200);
             }}
+            onClearSelection={() => {
+                handleToggleBatchMenu(); 
+                setTimeout(() => setSelectedDocs([]), 200);        
+            }}
+            isClosingProp={isBatchMenuClosing}
           />
       )}
 

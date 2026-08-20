@@ -131,7 +131,6 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false,
     );
 }
 
-// --- Removed currentUserId from Interface ---
 interface BatchModalProps {
     selectedDocs: DocumentItem[]; 
     currentUserName: string; 
@@ -140,9 +139,10 @@ interface BatchModalProps {
     onClose: () => void; 
     onSuccess: () => void;
     onClearSelection?: () => void;
+    isClosingProp?: boolean; // Controlled strictly by Processing.tsx
 }
 
-export default function BatchActionModal({ selectedDocs, currentUserName, departments, colleagues, onClose, onSuccess, onClearSelection }: BatchModalProps) {
+export default function BatchActionModal({ selectedDocs, currentUserName, departments, colleagues, onClose, onSuccess, onClearSelection, isClosingProp = false }: BatchModalProps) {
     const signaturePadRef = useRef<SignaturePadRef>(null);
 
     const [isClosing, setIsClosing] = useState(false);
@@ -167,17 +167,6 @@ export default function BatchActionModal({ selectedDocs, currentUserName, depart
 
     const handleClose = () => { setIsClosing(true); setTimeout(onClose, 200); };
 
-    const handleClearSelectionClick = () => {
-        setIsClosing(true);
-        setTimeout(() => {
-            if (onClearSelection) {
-                onClearSelection();
-            } else {
-                onClose();
-            }
-        }, 200); 
-    };
-
     const handleBackBtn = () => {
         if (isSubmitting) return;
         setActiveAction(null); setHasSignature(false); setRemarks(''); setDestination(''); setReceivingClerk('');
@@ -200,7 +189,6 @@ export default function BatchActionModal({ selectedDocs, currentUserName, depart
                                 if (empData?.department) originOffice = empData.department;
                             }
                         } catch { 
-                            // ESLint fix: Removed unused 'err'
                             console.error("Failed to fetch origin"); 
                         }
                     }
@@ -243,7 +231,6 @@ export default function BatchActionModal({ selectedDocs, currentUserName, depart
                 setAttachmentName(""); 
             }
         } catch { 
-            // ESLint fix: Removed unused 'err'
             toast.error("Failed to process the document."); 
             setAttachmentName(""); 
         } finally { 
@@ -271,7 +258,6 @@ export default function BatchActionModal({ selectedDocs, currentUserName, depart
 
         setIsSubmitting(true);
         try {
-            // 🔒 SECURE SERVER VERIFICATION
             const { data: { user }, error: authError } = await supabase.auth.getUser();
             
             if (authError || !user) {
@@ -294,7 +280,6 @@ export default function BatchActionModal({ selectedDocs, currentUserName, depart
                 if (!uploadError) sharedAttachmentUrl = supabase.storage.from('attachments').getPublicUrl(fileName).data.publicUrl;
             }
 
-            // ATOMIC BATCH PROCESSING
             const promises = selectedDocs.map(async (doc: DocumentItem) => {
                 if (activeAction === 'complete') {
                     const fateString = retentionFate === 'originator' ? 'Returned to Originator' : 'Retained at Final Destination';
@@ -377,7 +362,6 @@ export default function BatchActionModal({ selectedDocs, currentUserName, depart
             }
 
         } catch { 
-            // ESLint fix: Removed unused 'error' parameter
             toast.error("An error occurred during batch setup."); 
         } finally { 
             setIsSubmitting(false); 
@@ -389,23 +373,27 @@ export default function BatchActionModal({ selectedDocs, currentUserName, depart
     // ========================================================================
     if (!activeAction) {
         return (
-            <div className={`fixed inset-0 z-[999] flex flex-col justify-end items-end p-5 pb-8 sm:pb-8 bg-slate-900/30 backdrop-blur-sm transition-all ${isClosing ? 'animate-out fade-out duration-200 fill-mode-forwards' : 'animate-in fade-in duration-200'}`}>
-                {/* Backdrop click to close */}
-                <div className="absolute inset-0 cursor-pointer" onClick={handleClose}></div>
+            <>
+                {/* Backdrop relies purely on parent state to fade in/out seamlessly */}
+                <div 
+                    className={`fixed inset-0 z-[998] bg-slate-900/30 backdrop-blur-sm transition-all ${isClosingProp ? 'animate-out fade-out duration-200' : 'animate-in fade-in duration-200'}`} 
+                    onClick={onClose}
+                ></div>
                 
-                <div className="relative z-10 flex flex-col items-end gap-3 mr-1 sm:mr-4">
-                    
-                    {/* The White Menu Card */}
-                    <div className={`bg-white p-2.5 rounded-3xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] flex flex-col min-w-[240px] origin-bottom border border-slate-100 ${isClosing ? 'animate-out slide-out-to-bottom-8 fade-out duration-200 fill-mode-forwards' : 'animate-in slide-in-from-bottom-8 fade-in duration-200'}`}>
+                {/* PERFECTLY STATIONARY MENU CARD 
+                    No sliding. It zooms and fades precisely above the parent FAB.
+                */}
+                <div className={`fixed bottom-[5.5rem] right-6 sm:bottom-[6.5rem] sm:right-8 z-[999] flex flex-col items-end origin-bottom-right ${isClosingProp ? 'animate-out zoom-out-95 fade-out duration-200' : 'animate-in zoom-in-95 fade-in duration-200'}`}>
+                    <div className="bg-white p-2.5 rounded-3xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] flex flex-col min-w-[240px] border border-slate-100 gap-1">
                         
                         {/* Header Area */}
-                        <div className="px-3 py-2 border-b border-slate-100 mb-1.5 flex items-center justify-between">
+                        <div className="px-3 py-2 border-b border-slate-100 mb-0.5 flex items-center justify-between">
                             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Batch Options</span>
                             <span className="bg-[#eaf4f1] text-[#0f766e] text-[10px] font-black px-2 py-0.5 rounded-md">{selectedDocs.length} Docs</span>
                         </div>
 
                         {!canProcessBatch && (
-                            <div className="px-3 py-2 mb-1">
+                            <div className="px-3 py-2">
                                 <p className="text-xs text-amber-600 font-bold leading-snug">Processing restricted. Only Re-assign allowed.</p>
                             </div>
                         )}
@@ -448,22 +436,16 @@ export default function BatchActionModal({ selectedDocs, currentUserName, depart
                         <div className="h-[1px] bg-slate-100 my-1 mx-2"></div>
 
                         {/* Clear Selection Button */}
-                        <button onClick={handleClearSelectionClick} className="flex items-center gap-3.5 w-full p-2 rounded-2xl transition-all hover:bg-slate-50 active:scale-[0.98] group">
+                        <button onClick={onClearSelection} className="flex items-center gap-3.5 w-full p-2 rounded-2xl transition-all hover:bg-slate-50 active:scale-[0.98] group">
                             <div className="w-[2.4rem] h-[2.4rem] rounded-[0.8rem] bg-slate-100 text-slate-500 flex items-center justify-center transition-colors group-hover:bg-slate-200 shrink-0">
                                 <X size={18} strokeWidth={2.5} />
                             </div>
                             <span className="font-bold text-[15px] text-slate-600">Clear selection</span>
                         </button>
                     </div>
-
-                    {/* Main Floating Action Button */}
-                    <div className={`${isClosing ? 'animate-out zoom-out-90 duration-200 fill-mode-forwards' : 'animate-in zoom-in duration-200'}`}>
-                        <button onClick={handleClose} className="w-[3.5rem] h-[3.5rem] bg-[#0f766e] hover:bg-[#0b5c55] text-white rounded-full shadow-[0_8px_20px_rgba(15,118,110,0.4)] flex items-center justify-center transition-all hover:scale-105 active:scale-95">
-                            <X size={26} strokeWidth={2.5} className={`${isClosing ? 'animate-out spin-out-90 duration-200' : 'animate-in spin-in-90 duration-200'}`} />
-                        </button>
-                    </div>
                 </div>
-            </div>
+                {/* No duplicate button is rendered here. Processing.tsx controls it entirely. */}
+            </>
         );
     }
 
@@ -473,7 +455,7 @@ export default function BatchActionModal({ selectedDocs, currentUserName, depart
     const headerColorClass = activeAction === 'add_step' ? 'bg-slate-900' : activeAction === 'reject' ? 'bg-red-700' : activeAction === 'complete' ? 'bg-emerald-700' : activeAction === 'reassign' ? 'bg-[#0f766e]' : 'bg-slate-900';
 
     return (
-        <div className={`fixed inset-0 z-[999] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/70 backdrop-blur-sm ${isClosing ? 'animate-out fade-out duration-200 fill-mode-forwards' : 'animate-in fade-in duration-200'}`}>
+        <div className={`fixed inset-0 z-[1050] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/70 backdrop-blur-sm ${isClosing ? 'animate-out fade-out duration-200 fill-mode-forwards' : 'animate-in fade-in duration-200'}`}>
             <div className={`bg-white w-full max-w-xl max-h-[92vh] sm:max-h-[90vh] flex flex-col overflow-hidden shadow-2xl rounded-t-[1.5rem] sm:rounded-3xl ${isClosing ? 'animate-out slide-out-to-bottom-[100%] sm:slide-out-to-bottom-0 sm:zoom-out-95 duration-200 fill-mode-forwards' : 'animate-in slide-in-from-bottom-[100%] sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-300'}`}>
                 
                 {/* Dynamic Colored Header */}
@@ -545,7 +527,6 @@ export default function BatchActionModal({ selectedDocs, currentUserName, depart
                     </div>
                 </div>
 
-                {/* Form Footer Buttons */}
                 <div className="bg-white p-4 sm:p-5 flex shrink-0 border-t border-slate-50">
                     {activeAction === 'add_step' && <button onClick={handleBatchSubmit} disabled={isSubmitting || !destination || !receivingClerk.trim() || !hasSignature} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all active:scale-[0.98] text-sm flex justify-center items-center gap-2 disabled:opacity-50">{isSubmitting ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : <><MapPin size={18} strokeWidth={2.5} /> Confirm Add Step</>}</button>}
                     {activeAction === 'complete' && <button onClick={handleBatchSubmit} disabled={isSubmitting || !releasedBy.trim() || !retentionFate || !hasSignature || isProcessingFile} className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3.5 rounded-xl shadow-sm transition-all active:scale-[0.98] text-sm flex items-center justify-center gap-2 disabled:opacity-50">{isSubmitting ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : <><CheckCircle size={18} strokeWidth={2.5} /> Finalize Batch</>}</button>}
