@@ -1,6 +1,6 @@
 import { useState, useEffect, type SyntheticEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Archive, Check, ArrowRight, FileText, UserPlus, PenTool, Ban, RefreshCcw, ShieldCheck, Send } from 'lucide-react';
+import { X, Archive, Check, ArrowRight, FileText, UserPlus, PenTool, Ban, RefreshCcw, ShieldCheck, Send, Timer } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import FilePreviewModal from './FilePreviewModal';
 import type { DocumentLog, SignatureData } from '../../types/processing';
@@ -18,6 +18,30 @@ interface DocumentTrailProps {
 interface SignatureModalState extends SignatureData {
     actionLabel: string;
 }
+
+// --- TAT CALCULATION HELPER ---
+const calculateTAT = (currentDate: string, previousDate?: string): string | null => {
+    if (!previousDate) return null;
+    
+    const diffMs = new Date(currentDate).getTime() - new Date(previousDate).getTime();
+    if (diffMs < 0) return null; 
+    
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 1) return '< 1m';
+    
+    const days = Math.floor(diffMins / (24 * 60));
+    const hours = Math.floor((diffMins % (24 * 60)) / 60);
+    const mins = diffMins % 60;
+    
+    // Format to a maximum of two units for a clean UI
+    if (days > 0) {
+        return `${days}d ${hours}h`;
+    } else if (hours > 0) {
+        return `${hours}h ${mins}m`;
+    } else {
+        return `${mins}m`;
+    }
+};
 
 export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
     const [isClosing, setIsClosing] = useState(false);
@@ -153,6 +177,10 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
                             const dateStr = dateObj.toLocaleDateString('en-US', { timeZone: 'Asia/Manila', month: 'short', day: 'numeric', year: 'numeric' });
                             const timeStr = dateObj.toLocaleTimeString('en-US', { timeZone: 'Asia/Manila', hour: 'numeric', minute: '2-digit' });
 
+                            // --- NEW: Calculate Turnaround Time from the previous step ---
+                            const prevLog = events[index + 1];
+                            const tatString = prevLog ? calculateTAT(log.created_at, prevLog.created_at) : null;
+
                             let icon = <div className="w-2 h-2 bg-slate-400 rounded-full"></div>;
                             let nodeBg = 'bg-slate-200';
                             let titleColor = 'text-slate-900';
@@ -212,10 +240,20 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
 
                             return (
                                 <div key={index} className="flex gap-4 relative w-full animate-in fade-in duration-300" style={{ animationFillMode: 'both', animationDelay: `${index * 50}ms` }}>
-                                    <div className="w-20 shrink-0 flex flex-col text-right pt-0.5">
+                                    
+                                    {/* UPDATED: Left Column with TAT Badge */}
+                                    <div className="w-20 shrink-0 flex flex-col items-end text-right pt-0.5">
                                         <span className="text-[11px] font-bold text-slate-600 uppercase tracking-tight leading-tight">{dateStr}</span>
                                         <span className="text-[10px] font-medium text-slate-400 mt-0.5">{timeStr}</span>
+                                        
+                                        {tatString && (
+                                            <div className="mt-2 flex items-center gap-1 text-[9px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded shadow-sm" title="Time taken since previous step">
+                                                <Timer size={10} strokeWidth={3} />
+                                                {tatString}
+                                            </div>
+                                        )}
                                     </div>
+
                                     <div className="relative flex flex-col items-center">
                                         {index !== events.length - 1 && <div className="absolute top-5 bottom-[-1.5rem] w-[2px] bg-slate-200"></div>}
                                         <div className={`relative z-10 w-[22px] h-[22px] mt-0.5 rounded-full flex items-center justify-center ${nodeBg}`}>{icon}</div>
@@ -269,16 +307,15 @@ export default function DigitalTrailModal({ doc, onBack }: DocumentTrailProps) {
     );
 }
 
-// --- NEW PROFESSIONAL SIGNATURE MODAL COMPONENT ---
+// --- PROFESSIONAL SIGNATURE MODAL COMPONENT ---
 function SignatureModal({ data, onClose }: { data: SignatureModalState, onClose: () => void }) {
     const [isClosing, setIsClosing] = useState(false);
 
     const handleClose = () => {
         setIsClosing(true);
-        setTimeout(onClose, 150); // Matches the new closing speed
+        setTimeout(onClose, 150); 
     };
 
-    // FAST ANIMATIONS (150ms instead of 200ms/300ms)
     const overlayAnimation = isClosing 
         ? "animate-out fade-out duration-150 ease-in fill-mode-forwards" 
         : "animate-in fade-in duration-150 ease-out fill-mode-forwards";
