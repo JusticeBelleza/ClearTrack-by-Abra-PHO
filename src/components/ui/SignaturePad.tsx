@@ -1,5 +1,5 @@
 // src/components/ui/SignaturePad.tsx
-import React, { useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
+import { useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 
 export interface SignaturePadRef {
     clear: () => void;

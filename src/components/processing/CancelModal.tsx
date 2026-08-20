@@ -1,5 +1,5 @@
 // src/components/processing/CancelModal.tsx
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Ban, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabase';

@@ -1,10 +1,9 @@
 // src/routes/processing.tsx
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search, X, Activity, CornerUpLeft, RefreshCw, CheckCircle, MapPin, ChevronDown, Layers } from 'lucide-react';
-import { toast } from 'sonner';
+import { Search, X, Activity, CornerUpLeft, RefreshCw, CheckCircle, MapPin, Layers } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import type { ProcessingData, DocumentItem, OptionType } from '../types/processing';
+import type { ProcessingData, DocumentItem } from '../types/processing';
 
 // Components & Modals
 import HandoverScreen from '../components/system/HandoverScreen';

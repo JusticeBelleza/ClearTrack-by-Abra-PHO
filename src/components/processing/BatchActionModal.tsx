@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { MapPin, CheckCircle, Ban, UserPlus, ArrowLeft, X, PenTool, Camera, ChevronRight, AlertCircle, Paperclip } from 'lucide-react';
+import { MapPin, CheckCircle, Ban, UserPlus, ArrowLeft, X, PenTool, Camera, ChevronRight, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabase';
 import { convertImageToScannedPDF } from '../../lib/utils';
