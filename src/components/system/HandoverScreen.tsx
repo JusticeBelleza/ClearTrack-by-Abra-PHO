@@ -174,14 +174,20 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
         }
     };
 
-    // --- PHASE 3: UPDATED RPC ROUTING ---
+    // --- PHASE 3: SECURE RPC ROUTING ---
     const handleSaveRouting = async () => {
         if (!destination || !receivingClerk.trim()) { toast.error("Validation Error", { description: "Please provide a destination and receiving clerk." }); return; }
         if (!hasSignature) { toast.error("Signature Required", { description: "The receiving clerk must sign the pad to confirm receipt." }); return; }
 
         setIsSubmitting(true);
         try {
-            const { data: { session } } = await supabase.auth.getSession();
+            // 🔒 SECURE SERVER VERIFICATION
+            const { data: { user }, error: authError } = await supabase.auth.getUser();
+            if (authError || !user) {
+                toast.error("Authentication Error", { description: "Your session is invalid or expired. Please log in again." });
+                return;
+            }
+
             let signatureUrl = null;
 
             const blob = await signaturePadRef.current?.getBlob();
@@ -192,12 +198,12 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
                 signatureUrl = supabase.storage.from('attachments').getPublicUrl(fileName).data.publicUrl;
             }
 
-            // ATOMIC RPC CALL: Explicitly map every parameter
+            // ATOMIC RPC CALL: Using verified user.id
             const { error: rpcError } = await supabase.rpc('process_document_action', {
                 p_doc_id: doc.id,
                 p_log_action: 'In transit',
                 p_log_location: destination,
-                p_log_created_by: session?.user?.id || null,
+                p_log_created_by: user.id, // 🔒 THE UPGRADE
                 p_log_assigned_to: receivingClerk.trim(),
                 p_log_remarks: null,
                 p_log_signature_url: signatureUrl || null,
@@ -218,7 +224,7 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
         finally { setIsSubmitting(false); }
     };
 
-    // --- PHASE 3: UPDATED RPC COMPLETION ---
+    // --- PHASE 3: SECURE RPC COMPLETION ---
     const confirmComplete = async () => {
         if (!releasedBy.trim()) { toast.error("Validation Error", { description: "Please specify who released the document." }); return; }
         if (!retentionFate) { toast.error("Validation Error", { description: "Please select where the document will be retained." }); return; }
@@ -226,7 +232,13 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
 
         setIsSubmitting(true);
         try {
-            const { data: { session } } = await supabase.auth.getSession();
+            // 🔒 SECURE SERVER VERIFICATION
+            const { data: { user }, error: authError } = await supabase.auth.getUser();
+            if (authError || !user) {
+                toast.error("Authentication Error", { description: "Your session is invalid or expired. Please log in again." });
+                return;
+            }
+
             let attachmentUrl = null;
             let signatureUrl = null;
 
@@ -248,12 +260,12 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
             const fateString = retentionFate === 'originator' ? 'Returned to Originator' : 'Retained at Final Destination';
             const detailedRemarks = `Released By: ${releasedBy.trim()}\nDocument Retention: ${fateString}${completionRemarks ? `\nRemarks: ${completionRemarks.trim()}` : ''}`;
 
-            // ATOMIC RPC CALL: Explicitly map every parameter
+            // ATOMIC RPC CALL: Using verified user.id
             const { error: rpcError } = await supabase.rpc('process_document_action', {
                 p_doc_id: doc.id,
                 p_log_action: 'Delivered',
                 p_log_location: doc.final_destination || doc.current_location || 'Processing',
-                p_log_created_by: session?.user?.id || null,
+                p_log_created_by: user.id, // 🔒 THE UPGRADE
                 p_log_assigned_to: null,
                 p_log_remarks: detailedRemarks || null,
                 p_log_signature_url: signatureUrl || null,
@@ -274,19 +286,25 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
         finally { setIsSubmitting(false); }
     };
 
-    // --- PHASE 3: UPDATED RPC REJECTION ---
+    // --- PHASE 3: SECURE RPC REJECTION ---
     const handleReject = async () => {
         setIsSubmitting(true);
         try {
-            const { data: { session } } = await supabase.auth.getSession();
+            // 🔒 SECURE SERVER VERIFICATION
+            const { data: { user }, error: authError } = await supabase.auth.getUser();
+            if (authError || !user) {
+                toast.error("Authentication Error", { description: "Your session is invalid or expired. Please log in again." });
+                return;
+            }
+
             const finalRemarks = rejectReason.trim() || 'Returned without remarks';
 
-            // ATOMIC RPC CALL: Explicitly map every parameter
+            // ATOMIC RPC CALL: Using verified user.id
             const { error: rpcError } = await supabase.rpc('process_document_action', {
                 p_doc_id: doc.id,
                 p_log_action: 'Returned',
                 p_log_location: originOffice,
-                p_log_created_by: session?.user?.id || null,
+                p_log_created_by: user.id, // 🔒 THE UPGRADE
                 p_log_assigned_to: originCreator,
                 p_log_remarks: finalRemarks || null,
                 p_log_signature_url: null,

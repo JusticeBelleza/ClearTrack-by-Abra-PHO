@@ -15,12 +15,12 @@ interface DocumentItem {
 
 interface CancelModalProps {
     doc: DocumentItem;
-    currentUserId: string;
+    currentUserId: string; // Kept to prevent breaking parent props, but bypassed for security below
     onClose: () => void;
     onSuccess: () => void;
 }
 
-export default function CancelModal({ doc, currentUserId, onClose, onSuccess }: CancelModalProps) {
+export default function CancelModal({ doc, onClose, onSuccess }: CancelModalProps) {
     const [reason, setReason] = useState('');
     const [isCancelling, setIsCancelling] = useState(false);
 
@@ -32,12 +32,23 @@ export default function CancelModal({ doc, currentUserId, onClose, onSuccess }: 
         
         setIsCancelling(true);
         try {
-            // ATOMIC RPC CALL: Explicitly mapping parameters
+            // 1. SECURE SERVER VERIFICATION
+            const { data: { user }, error: authError } = await supabase.auth.getUser();
+            
+            if (authError || !user) {
+                toast.error("Authentication Error", { description: "Your session is invalid or expired. Please log in again." });
+                return; 
+            }
+
+            // 2. ATOMIC RPC CALL: Using the verified user.id
             const { error: rpcError } = await supabase.rpc('process_document_action', {
                 p_doc_id: doc.id,
                 p_log_action: 'Cancelled',
                 p_log_location: doc.current_location || 'Processing',
-                p_log_created_by: currentUserId,
+                
+                // 🔒 THE UPGRADE: verified server ID
+                p_log_created_by: user.id, 
+                
                 p_log_assigned_to: null,
                 p_log_remarks: `Reason: ${reason.trim()}`,
                 p_log_signature_url: null,
@@ -45,7 +56,7 @@ export default function CancelModal({ doc, currentUserId, onClose, onSuccess }: 
                 p_new_status: 'cancelled',
                 p_new_location: null,
                 p_new_clerk: null,
-                p_new_remarks: reason.trim(), // Updates main document card
+                p_new_remarks: reason.trim(), 
                 p_clear_remarks: false,
                 p_completed_attachment_url: null
             });

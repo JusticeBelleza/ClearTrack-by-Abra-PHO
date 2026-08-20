@@ -1,7 +1,135 @@
-import { useState, useEffect } from 'react';
-import { X, UserPlus } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, UserPlus, Search, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabase';
+
+// --- UPGRADED SEARCHABLE CUSTOM SELECT ---
+interface SelectOption { label: string; value: string; }
+type OptionType = SelectOption | string;
+
+interface CustomSelectProps {
+    options: OptionType[];
+    value: string;
+    onChange: (val: string) => void;
+    placeholder?: string;
+    disabled?: boolean;
+    emptyText?: string;
+    isRelative?: boolean;
+    itemType?: string;
+}
+
+function CustomSelect({ options, value, onChange, placeholder, disabled = false, emptyText = "Loading options...", isRelative = false, itemType = "employee" }: CustomSelectProps) {
+    const [isOpen, setIsOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState("");
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const menuRef = useRef<HTMLDivElement>(null); 
+    const searchInputRef = useRef<HTMLInputElement>(null);
+ 
+    useEffect(() => {
+      function handleClickOutside(event: MouseEvent) {
+        if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) setIsOpen(false);
+      }
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }, []);
+
+    useEffect(() => {
+      if (isOpen) {
+        setTimeout(() => {
+          menuRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }, 50);
+      } else {
+        setSearchTerm("");
+      }
+    }, [isOpen]);
+
+    const filteredOptions = options.filter(opt => {
+        const optLabel = typeof opt === 'string' ? opt : opt.label;
+        return optLabel.toLowerCase().includes(searchTerm.toLowerCase());
+    });
+
+    const MAX_ITEMS_TO_SHOW = 4;
+    const visibleOptions = filteredOptions.slice(0, MAX_ITEMS_TO_SHOW);
+    const hiddenCount = filteredOptions.length - visibleOptions.length;
+
+    const selectedOptionLabel = options.find(opt => (typeof opt === 'string' ? opt : opt.value) === value);
+    const displayLabel = selectedOptionLabel 
+        ? (typeof selectedOptionLabel === 'string' ? selectedOptionLabel : selectedOptionLabel.label)
+        : placeholder;
+ 
+    return (
+      <div className="relative w-full" ref={dropdownRef}>
+        <button 
+            type="button" 
+            disabled={disabled}
+            onClick={() => !disabled && setIsOpen(!isOpen)} 
+            className={`w-full px-4 py-3 border-2 rounded-xl flex justify-between items-center transition-all text-sm sm:text-base outline-none active:scale-[0.99] ${
+                disabled ? 'bg-slate-50 border-slate-200 text-slate-500 cursor-not-allowed' :
+                isOpen ? 'border-blue-500 bg-white ring-4 ring-blue-500/10' : 'bg-white border-slate-200 hover:border-slate-300'
+            } ${!value && !disabled ? 'text-slate-500 font-medium' : 'text-slate-900 font-bold'}`}
+        >
+          <span className="truncate">{displayLabel}</span>
+          {!disabled && (
+              <ChevronDown size={20} className={`text-slate-400 transition-transform duration-300 ease-in-out sm:w-5 sm:h-5 ${isOpen ? 'rotate-180 text-slate-800' : ''}`} />
+          )}
+        </button>
+
+        {isOpen && !disabled && (
+          <div ref={menuRef} className={`${isRelative ? 'relative mt-2 mb-4' : 'absolute mt-1.5'} z-50 w-full bg-white border-2 border-slate-200 rounded-xl shadow-xl flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200`}>
+            
+            {options.length > 3 && (
+                <div className="p-2 border-b-2 border-slate-100 bg-white shrink-0">
+                    <div className="relative">
+                        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                            ref={searchInputRef}
+                            type="text"
+                            placeholder="Type to search..."
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="w-full pl-9 pr-3 py-2.5 bg-white border-2 border-blue-100 rounded-lg text-sm focus:outline-none focus:border-blue-500 transition-all font-medium text-slate-800 placeholder:text-slate-400"
+                        />
+                    </div>
+                </div>
+            )}
+
+            <div className="max-h-[240px] overflow-y-auto p-1.5 space-y-1 custom-scrollbar">
+              {filteredOptions.length === 0 ? (
+                  <div className="px-4 py-6 text-sm text-slate-500 text-center font-medium">
+                      {searchTerm ? `No results for "${searchTerm}"` : emptyText}
+                  </div>
+              ) : (
+                  visibleOptions.map((option: OptionType, idx: number) => {
+                    const optValue = typeof option === 'string' ? option : option.value;
+                    const optLabel = typeof option === 'string' ? option : option.label;
+                    const isSelected = optValue === value;
+
+                    return (
+                      <div 
+                        key={idx} 
+                        onClick={() => { onChange(optValue); setIsOpen(false); }} 
+                        className={`px-4 py-3 text-sm sm:text-base rounded-lg cursor-pointer transition-colors flex items-center active:scale-95 ${isSelected ? 'bg-blue-600 text-white font-bold shadow-sm' : 'text-slate-700 hover:bg-slate-100 font-medium'}`}
+                      >
+                        {optLabel}
+                      </div>
+                    );
+                  })
+              )}
+            </div>
+
+            {hiddenCount > 0 && (
+                <div className="p-3 bg-slate-50 border-t-2 border-slate-100 shrink-0 text-center">
+                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+                        +{hiddenCount} more {hiddenCount === 1 ? itemType : `${itemType}s`}. Keep typing to search.
+                    </p>
+                </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+}
 
 // --- Interfaces ---
 interface DocumentItem {
@@ -14,17 +142,28 @@ interface DocumentItem {
 
 interface ReassignModalProps {
     doc: DocumentItem;
-    currentUserId: string;
+    currentUserId: string; 
     currentUserName: string;
     onClose: () => void;
     onSuccess: () => void;
 }
 
-export default function ReassignModal({ doc, currentUserId, currentUserName, onClose, onSuccess }: ReassignModalProps) {
+export default function ReassignModal({ doc, currentUserName, onClose, onSuccess }: ReassignModalProps) {
     const [selectedColleague, setSelectedColleague] = useState('');
     const [isReassigning, setIsReassigning] = useState(false);
     const [colleagues, setColleagues] = useState<string[]>([]);
     const [isLoading, setIsLoading] = useState(true);
+    
+    // --- Added isClosing State for Slide-Down Animation ---
+    const [isClosing, setIsClosing] = useState(false);
+
+    const handleClose = () => {
+        if (isClosing) return;
+        setIsClosing(true);
+        setTimeout(() => {
+            onClose();
+        }, 200); 
+    };
 
     useEffect(() => {
         const fetchColleagues = async () => {
@@ -32,7 +171,13 @@ export default function ReassignModal({ doc, currentUserId, currentUserName, onC
             try {
                 const { data: userData } = await supabase.from('employees').select('department').eq('name', currentUserName).single();
                 if (userData && userData.department) {
-                    const { data: deptUsers } = await supabase.from('employees').select('name').eq('department', userData.department).neq('name', currentUserName);
+                    // Removed the .neq('name', currentUserName) filter! 
+                    // Now your own name will appear in the dropdown.
+                    const { data: deptUsers } = await supabase.from('employees')
+                        .select('name')
+                        .eq('department', userData.department)
+                        .order('name'); // Added an order by name for a cleaner dropdown
+                        
                     if (deptUsers) {
                         setColleagues(deptUsers.map(u => u.name));
                     }
@@ -54,14 +199,22 @@ export default function ReassignModal({ doc, currentUserId, currentUserName, onC
         
         setIsReassigning(true);
         try {
+            // 1. SECURE SERVER VERIFICATION
+            const { data: { user }, error: authError } = await supabase.auth.getUser();
+            
+            if (authError || !user) {
+                toast.error("Authentication Error", { description: "Your session is invalid or expired. Please log in again." });
+                return; 
+            }
+
             const prevClerk = doc.assigned_clerk || 'Unassigned';
 
-            // ATOMIC RPC CALL
+            // 2. ATOMIC RPC CALL: Using the verified user.id
             const { error: rpcError } = await supabase.rpc('process_document_action', {
                 p_doc_id: doc.id,
                 p_log_action: 'REASSIGNED',
                 p_log_location: doc.current_location || 'Processing',
-                p_log_created_by: currentUserId,
+                p_log_created_by: user.id, // 🔒 THE SECURE UPGRADE
                 p_log_assigned_to: null,
                 p_log_remarks: `Details: Reassigned from ${prevClerk} to ${selectedColleague} by ${currentUserName}`,
                 p_log_signature_url: null,
@@ -78,7 +231,7 @@ export default function ReassignModal({ doc, currentUserId, currentUserName, onC
 
             toast.success("Reassigned", { description: `Document assigned to ${selectedColleague}.` });
             onSuccess();
-            onClose();
+            handleClose(); 
         } catch (err: any) {
             toast.error("Reassignment Failed", { description: err.message });
         } finally {
@@ -87,46 +240,49 @@ export default function ReassignModal({ doc, currentUserId, currentUserName, onC
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-                <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                    <div className="flex items-center gap-2">
-                        <div className="p-2 bg-blue-100 text-blue-600 rounded-lg">
-                            <UserPlus size={20} />
-                        </div>
-                        <h3 className="font-bold text-slate-800">Reassign Document</h3>
+        <div className={`fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/60 backdrop-blur-sm transition-all ${isClosing ? 'animate-out fade-out duration-200 fill-mode-forwards' : 'animate-in fade-in duration-200'}`}>
+            <div className={`bg-white w-full max-w-sm max-h-[92vh] sm:max-h-[90vh] flex flex-col shadow-2xl rounded-t-[1.5rem] sm:rounded-3xl ${isClosing ? 'animate-out slide-out-to-bottom-[100%] sm:slide-out-to-bottom-0 sm:zoom-out-95 duration-200 fill-mode-forwards' : 'animate-in slide-in-from-bottom-[100%] sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200'}`}>
+                
+                {/* Teal Header */}
+                <div className="text-white relative flex flex-col shrink-0 transition-colors duration-300 bg-[#0f766e] rounded-t-[1.5rem] sm:rounded-t-3xl">
+                    <div className="w-16 h-1.5 bg-white/30 rounded-full mx-auto mt-3 sm:hidden shrink-0"></div>
+                    <div className="p-5 pt-3 sm:pt-6 flex items-center justify-between">
+                        <div className="w-10"></div>
+                        <h3 className="font-black text-xl tracking-tight absolute left-1/2 -translate-x-1/2 whitespace-nowrap">Re-assign</h3>
+                        <button onClick={handleClose} disabled={isReassigning} className="p-2 -mr-2 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-full transition-all active:scale-90 disabled:opacity-50">
+                            <X size={24} />
+                        </button>
                     </div>
-                    <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors" disabled={isReassigning}>
-                        <X size={20} />
-                    </button>
                 </div>
                 
-                <div className="p-5 space-y-4">
-                    <div className="bg-blue-50 p-3 rounded-xl border border-blue-100">
-                        <p className="text-sm text-blue-800">
-                            Assigning <strong>{doc.reference_no || 'document'}</strong> to a colleague within your department.
-                        </p>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Select Colleague *</label>
-                        <select 
+                {/* Body Area */}
+                <div className="p-5 sm:p-8 pt-6 sm:pt-8 bg-white">
+                    <div className="relative z-20">
+                        <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Select Colleague *</label>
+                        <CustomSelect 
+                            options={colleagues} 
                             value={selectedColleague} 
-                            onChange={(e) => setSelectedColleague(e.target.value)}
-                            disabled={isReassigning || isLoading}
-                            className="w-full p-3 bg-white border border-slate-200 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 rounded-xl outline-none text-sm transition-all"
-                        >
-                            <option value="" disabled>{isLoading ? 'Loading colleagues...' : 'Choose a colleague...'}</option>
-                            {colleagues.map((colleague, idx) => (
-                                <option key={idx} value={colleague}>{colleague}</option>
-                            ))}
-                        </select>
+                            onChange={(val: string) => setSelectedColleague(val)} 
+                            placeholder="Choose an employee..." 
+                            emptyText={isLoading ? "Loading colleagues..." : "No employee found"} 
+                            isRelative={true} 
+                            itemType="employee"
+                        />
                     </div>
                 </div>
                 
-                <div className="p-5 border-t border-slate-100 bg-slate-50 flex gap-3">
-                    <button onClick={onClose} disabled={isReassigning} className="flex-1 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-50">Back</button>
-                    <button onClick={handleConfirm} disabled={isReassigning} className="flex-1 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-sm transition-colors disabled:opacity-50 flex items-center justify-center">
-                        {isReassigning ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : 'Confirm Reassign'}
+                {/* Dynamic Footer Area */}
+                <div className="bg-white p-4 sm:p-5 flex shrink-0 border-t border-slate-50">
+                    <button 
+                        onClick={handleConfirm} 
+                        disabled={isReassigning || !selectedColleague} 
+                        className={`w-full text-white font-bold py-4 rounded-xl shadow-sm transition-all active:scale-[0.98] text-sm sm:text-base flex items-center justify-center gap-2 ${
+                            selectedColleague 
+                                ? 'bg-[#0f766e] hover:bg-[#0b5c55]'
+                                : 'bg-[#7bc1b5] cursor-not-allowed opacity-80'
+                        }`}
+                    >
+                        {isReassigning ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : <><UserPlus size={18} strokeWidth={2.5} /> Confirm Re-assign</>}
                     </button>
                 </div>
             </div>

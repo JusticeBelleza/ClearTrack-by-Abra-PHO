@@ -1,4 +1,3 @@
-// src/routes/processing.tsx
 import { useState, useMemo, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Search, X, Activity, CornerUpLeft, RefreshCw, CheckCircle, MapPin, Layers } from 'lucide-react';
@@ -304,7 +303,12 @@ export default function Processing() {
           <BatchActionModal 
             selectedDocs={selectedDocs} currentUserId={data?.currentUserId || ''} 
             currentUserName={data?.currentUserName || ''} departments={departments} colleagues={availableColleagues} 
-            onClose={() => setIsBatchModalOpen(false)} onSuccess={() => { setSelectedDocs([]); setIsBatchModalOpen(false); refetch(); }}
+            onClose={() => setIsBatchModalOpen(false)} 
+            onSuccess={() => { setSelectedDocs([]); setIsBatchModalOpen(false); refetch(); }}
+            onClearSelection={() => {
+                setIsBatchModalOpen(false); // Close modal
+                setSelectedDocs([]);        // Clear checked documents
+            }}
           />
       )}
 

@@ -291,7 +291,13 @@ export default function CreateDocumentModal() {
         setIsSubmitting(true);
 
         try {
-            const { data: { session } } = await supabase.auth.getSession();
+            // 🔒 SECURE SERVER VERIFICATION
+            const { data: { user }, error: authError } = await supabase.auth.getUser();
+            if (authError || !user) {
+                toast.error("Authentication Error", { description: "Your session is invalid or expired. Please log in again." });
+                return;
+            }
+
             let attachmentUrl = null;
 
             if (attachment) {
@@ -317,7 +323,7 @@ export default function CreateDocumentModal() {
                 assigned_clerk: formData.assignedClerk || null,
                 is_urgent: formData.isUrgent,
                 remarks: formData.remarks.trim(),
-                created_by: session?.user?.id || null,
+                created_by: user.id, // 🔒 THE UPGRADE
                 attachment_url: attachmentUrl,
                 status: 'routing' 
             }]).select().single();
@@ -330,7 +336,7 @@ export default function CreateDocumentModal() {
                 action: 'Document Logged',
                 location: currentUserDept || 'Originating Office',
                 attachment_url: attachmentUrl,
-                created_by: session?.user?.id || null
+                created_by: user.id // 🔒 THE UPGRADE
             }]);
 
             toast.success('Document Routed Successfully!', { description: `Tracking No: ${formData.trackingNumber}` });
