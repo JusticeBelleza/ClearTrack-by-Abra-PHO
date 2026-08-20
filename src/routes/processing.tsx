@@ -301,20 +301,20 @@ export default function Processing() {
 
       {isBatchModalOpen && (
           <BatchActionModal 
-            selectedDocs={selectedDocs} currentUserId={data?.currentUserId || ''} 
+            selectedDocs={selectedDocs} 
             currentUserName={data?.currentUserName || ''} departments={departments} colleagues={availableColleagues} 
             onClose={() => setIsBatchModalOpen(false)} 
             onSuccess={() => { setSelectedDocs([]); setIsBatchModalOpen(false); refetch(); }}
             onClearSelection={() => {
-                setIsBatchModalOpen(false); // Close modal
-                setSelectedDocs([]);        // Clear checked documents
+                setIsBatchModalOpen(false); 
+                setSelectedDocs([]);        
             }}
           />
       )}
 
       {/* Modals */}
       {reassignDoc && <ReassignModal doc={reassignDoc} currentUserName={data?.currentUserName || ''} currentUserId={data?.currentUserId || ''} onClose={() => setReassignDoc(null)} onSuccess={() => refetch()} />}
-      {cancelDoc && <CancelModal doc={cancelDoc} currentUserId={data?.currentUserId || ''} onClose={() => setCancelDoc(null)} onSuccess={() => refetch()} />}
+      {cancelDoc && <CancelModal doc={cancelDoc} onClose={() => setCancelDoc(null)} onSuccess={() => refetch()} />}
       {reRouteDoc && <ReRouteModal doc={reRouteDoc} currentUserName={data?.currentUserName || ''} currentUserId={data?.currentUserId || ''} departments={departments} colleagues={availableColleagues} onClose={() => setReRouteDoc(null)} onSuccess={() => refetch()} />}
       
       {selectedDoc && <HandoverScreen doc={selectedDoc} departments={departments} onBack={() => setSelectedDoc(null)} onSuccess={() => refetch()} />}

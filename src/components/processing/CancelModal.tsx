@@ -13,9 +13,9 @@ interface DocumentItem {
     assigned_clerk?: string;
 }
 
+// Removed currentUserId to satisfy strict ESLint rules
 interface CancelModalProps {
     doc: DocumentItem;
-    currentUserId: string; // Kept to prevent breaking parent props, but bypassed for security below
     onClose: () => void;
     onSuccess: () => void;
 }
@@ -23,6 +23,17 @@ interface CancelModalProps {
 export default function CancelModal({ doc, onClose, onSuccess }: CancelModalProps) {
     const [reason, setReason] = useState('');
     const [isCancelling, setIsCancelling] = useState(false);
+    
+    // --- Added isClosing State for Slide-Down Animation ---
+    const [isClosing, setIsClosing] = useState(false);
+
+    const handleClose = () => {
+        if (isClosing) return;
+        setIsClosing(true);
+        setTimeout(() => {
+            onClose();
+        }, 200); // 200ms matches the Tailwind duration
+    };
 
     const handleConfirm = async () => {
         if (!reason.trim()) {
@@ -65,51 +76,65 @@ export default function CancelModal({ doc, onClose, onSuccess }: CancelModalProp
 
             toast.success("Document Cancelled", { description: "The document has been marked as cancelled." });
             onSuccess();
-            onClose();
-        } catch (err: any) {
-            toast.error("Cancellation Failed", { description: err.message });
+            handleClose(); // Trigger slide-down animation
+            
+        } catch (err: unknown) {
+            // Strict TypeScript fix: replacing `any` with `unknown`
+            const errorMessage = err instanceof Error ? err.message : "An unknown error occurred.";
+            toast.error("Cancellation Failed", { description: errorMessage });
         } finally {
             setIsCancelling(false);
         }
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden animate-in zoom-in-95 duration-200">
-                <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
-                    <div className="flex items-center gap-2">
-                        <div className="p-2 bg-red-100 text-red-600 rounded-lg">
-                            <AlertCircle size={20} />
-                        </div>
-                        <h3 className="font-bold text-slate-800">Cancel Document</h3>
+        <div className={`fixed inset-0 z-[100] flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/60 backdrop-blur-sm transition-all ${isClosing ? 'animate-out fade-out duration-200 fill-mode-forwards' : 'animate-in fade-in duration-200'}`}>
+            <div className={`bg-white w-full max-w-sm max-h-[92vh] sm:max-h-[90vh] flex flex-col shadow-2xl rounded-t-[1.5rem] sm:rounded-3xl ${isClosing ? 'animate-out slide-out-to-bottom-[100%] sm:slide-out-to-bottom-0 sm:zoom-out-95 duration-200 fill-mode-forwards' : 'animate-in slide-in-from-bottom-[100%] sm:slide-in-from-bottom-0 sm:zoom-in-95 duration-200'}`}>
+                
+                {/* Red Header */}
+                <div className="text-white relative flex flex-col shrink-0 transition-colors duration-300 bg-red-600 rounded-t-[1.5rem] sm:rounded-t-3xl">
+                    <div className="w-16 h-1.5 bg-white/30 rounded-full mx-auto mt-3 sm:hidden shrink-0"></div>
+                    <div className="p-5 pt-3 sm:pt-6 flex items-center justify-between">
+                        <div className="w-10"></div>
+                        <h3 className="font-black text-xl tracking-tight absolute left-1/2 -translate-x-1/2 whitespace-nowrap">Cancel Document</h3>
+                        <button onClick={handleClose} disabled={isCancelling} className="p-2 -mr-2 bg-white/10 hover:bg-white/20 active:bg-white/30 rounded-full transition-all active:scale-90 disabled:opacity-50">
+                            <X size={24} />
+                        </button>
                     </div>
-                    <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-full transition-colors" disabled={isCancelling}>
-                        <X size={20} />
-                    </button>
                 </div>
                 
-                <div className="p-5 space-y-4">
-                    <div className="bg-red-50 p-3 rounded-xl border border-red-100">
-                        <p className="text-sm text-red-800">
-                            You are about to cancel <strong>{doc.reference_no || 'this document'}</strong>. This action will halt all processing.
+                {/* Body Area */}
+                <div className="p-5 sm:p-8 pt-6 sm:pt-8 bg-white">
+                    <div className="bg-red-50 p-4 rounded-xl border border-red-100 mb-6 shadow-sm">
+                        <p className="text-sm text-red-800 leading-relaxed">
+                            You are about to cancel <strong className="text-red-900 font-bold">{doc.reference_no || 'this document'}</strong>. This action will permanently halt all processing.
                         </p>
                     </div>
-                    <div>
-                        <label className="block text-xs font-bold text-slate-500 mb-1.5 uppercase tracking-wider">Reason for Cancellation *</label>
+                    
+                    <div className="relative z-10">
+                        <label className="block text-xs font-bold text-slate-500 mb-2 uppercase tracking-wider">Reason for Cancellation *</label>
                         <textarea 
                             value={reason} 
                             onChange={(e) => setReason(e.target.value)} 
                             placeholder="State why this document is being cancelled..." 
-                            className="w-full p-3 bg-white border border-slate-200 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 rounded-xl outline-none text-sm transition-all min-h-[100px] resize-y"
+                            className="w-full p-4 bg-white border border-slate-200 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 rounded-xl outline-none text-sm font-medium text-slate-700 transition-all min-h-[120px] resize-y"
                             disabled={isCancelling}
                         ></textarea>
                     </div>
                 </div>
                 
-                <div className="p-5 border-t border-slate-100 bg-slate-50 flex gap-3">
-                    <button onClick={onClose} disabled={isCancelling} className="flex-1 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors disabled:opacity-50">Back</button>
-                    <button onClick={handleConfirm} disabled={isCancelling} className="flex-1 px-4 py-2.5 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl shadow-sm transition-colors disabled:opacity-50 flex items-center justify-center">
-                        {isCancelling ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : 'Confirm Cancel'}
+                {/* Dynamic Footer Area */}
+                <div className="bg-white p-4 sm:p-5 flex shrink-0 border-t border-slate-50">
+                    <button 
+                        onClick={handleConfirm} 
+                        disabled={isCancelling || !reason.trim()} 
+                        className={`w-full text-white font-bold py-4 rounded-xl shadow-sm transition-all active:scale-[0.98] text-sm sm:text-base flex items-center justify-center gap-2 ${
+                            reason.trim() 
+                                ? 'bg-red-600 hover:bg-red-700' 
+                                : 'bg-red-400 cursor-not-allowed opacity-80'
+                        }`}
+                    >
+                        {isCancelling ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> : <><AlertCircle size={18} strokeWidth={2.5} /> Confirm Cancel</>}
                     </button>
                 </div>
             </div>

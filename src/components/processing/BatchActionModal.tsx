@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { MapPin, CheckCircle, Ban, UserPlus, ArrowLeft, X, PenTool, Camera, Search, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '../../lib/supabase';
@@ -131,10 +131,9 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false,
     );
 }
 
-// --- Added the optional onClearSelection prop here ---
+// --- Removed currentUserId from Interface ---
 interface BatchModalProps {
     selectedDocs: DocumentItem[]; 
-    currentUserId: string; 
     currentUserName: string; 
     departments: OptionType[]; 
     colleagues: string[]; 
@@ -168,14 +167,13 @@ export default function BatchActionModal({ selectedDocs, currentUserName, depart
 
     const handleClose = () => { setIsClosing(true); setTimeout(onClose, 200); };
 
-    // Safely handles the slide down animation for the clear button
     const handleClearSelectionClick = () => {
         setIsClosing(true);
         setTimeout(() => {
             if (onClearSelection) {
                 onClearSelection();
             } else {
-                onClose(); // Fallback if the parent component isn't updated yet
+                onClose();
             }
         }, 200); 
     };
@@ -201,7 +199,10 @@ export default function BatchActionModal({ selectedDocs, currentUserName, depart
                                 const { data: empData } = await supabase.from('employees').select('department').eq('name', creatorName).single();
                                 if (empData?.department) originOffice = empData.department;
                             }
-                        } catch (err) { console.error("Failed to fetch origin"); }
+                        } catch { 
+                            // ESLint fix: Removed unused 'err'
+                            console.error("Failed to fetch origin"); 
+                        }
                     }
                     newOriginData[doc.id] = { office: originOffice, creator: creatorName };
                 }));
@@ -242,6 +243,7 @@ export default function BatchActionModal({ selectedDocs, currentUserName, depart
                 setAttachmentName(""); 
             }
         } catch { 
+            // ESLint fix: Removed unused 'err'
             toast.error("Failed to process the document."); 
             setAttachmentName(""); 
         } finally { 
@@ -374,7 +376,8 @@ export default function BatchActionModal({ selectedDocs, currentUserName, depart
                 toast.error("Batch Failed", { description: "Failed to process the selected documents. Please check your permissions." });
             }
 
-        } catch (error) { 
+        } catch { 
+            // ESLint fix: Removed unused 'error' parameter
             toast.error("An error occurred during batch setup."); 
         } finally { 
             setIsSubmitting(false); 

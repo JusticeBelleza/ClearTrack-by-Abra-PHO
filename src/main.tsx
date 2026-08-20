@@ -1,4 +1,4 @@
-// src/main.tsx
+/* eslint-disable react-refresh/only-export-components */
 import { StrictMode, Suspense, lazy } from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -28,35 +28,11 @@ const queryClient = new QueryClient({
   },
 });
 
-// 2. VISIBLE SKELETON LOADER
+// 2. INVISIBLE ROUTE LOADER
+// This prevents the "double loader" clash by letting the individual pages 
+// handle their own data-loading spinners (the green circles).
 const PageSkeleton = () => (
-  <div className="p-6 sm:p-8 w-full max-w-7xl mx-auto space-y-8 animate-pulse">
-    {/* Header Skeleton */}
-    <div className="flex flex-col gap-3">
-      <div className="h-10 w-48 sm:w-64 bg-slate-200 rounded-xl"></div>
-      <div className="h-5 w-64 sm:w-96 bg-slate-100 rounded-lg"></div>
-    </div>
-
-    {/* Search/Tabs Skeleton */}
-    <div className="flex flex-col sm:flex-row gap-4">
-      <div className="h-14 flex-1 bg-slate-100 rounded-2xl border border-slate-200"></div>
-      <div className="h-14 w-full sm:w-32 bg-slate-100 rounded-xl border border-slate-200"></div>
-    </div>
-
-    {/* Content/List Skeleton */}
-    <div className="space-y-4">
-      {[1, 2, 3, 4].map((i) => (
-        <div key={i} className="bg-white h-24 rounded-2xl border border-slate-200 shadow-sm flex items-center p-5 gap-4">
-          <div className="w-1.5 h-full bg-slate-200 rounded-full"></div>
-          <div className="flex-1 space-y-3">
-            <div className="h-5 w-3/4 sm:w-1/2 bg-slate-200 rounded-lg"></div>
-            <div className="h-4 w-1/2 sm:w-1/3 bg-slate-100 rounded-lg"></div>
-          </div>
-          <div className="hidden sm:block h-10 w-10 bg-slate-100 rounded-full"></div>
-        </div>
-      ))}
-    </div>
-  </div>
+  <div className="w-full h-full min-h-[60vh] bg-transparent"></div>
 );
 
 // 3. SETUP REACT ROUTER WITH SUSPENSE WRAPPERS
