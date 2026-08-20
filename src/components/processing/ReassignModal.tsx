@@ -142,7 +142,6 @@ interface DocumentItem {
 
 interface ReassignModalProps {
     doc: DocumentItem;
-    currentUserId: string; 
     currentUserName: string;
     onClose: () => void;
     onSuccess: () => void;
@@ -171,12 +170,10 @@ export default function ReassignModal({ doc, currentUserName, onClose, onSuccess
             try {
                 const { data: userData } = await supabase.from('employees').select('department').eq('name', currentUserName).single();
                 if (userData && userData.department) {
-                    // Removed the .neq('name', currentUserName) filter! 
-                    // Now your own name will appear in the dropdown.
                     const { data: deptUsers } = await supabase.from('employees')
                         .select('name')
                         .eq('department', userData.department)
-                        .order('name'); // Added an order by name for a cleaner dropdown
+                        .order('name'); 
                         
                     if (deptUsers) {
                         setColleagues(deptUsers.map(u => u.name));
@@ -232,8 +229,9 @@ export default function ReassignModal({ doc, currentUserName, onClose, onSuccess
             toast.success("Reassigned", { description: `Document assigned to ${selectedColleague}.` });
             onSuccess();
             handleClose(); 
-        } catch (err: any) {
-            toast.error("Reassignment Failed", { description: err.message });
+        } catch (err: unknown) {
+            const errorMessage = err instanceof Error ? err.message : "An unknown error occurred.";
+            toast.error("Reassignment Failed", { description: errorMessage });
         } finally {
             setIsReassigning(false);
         }

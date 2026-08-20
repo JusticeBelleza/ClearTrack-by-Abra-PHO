@@ -132,7 +132,7 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
                         const { data: empData } = await supabase.from('employees').select('department').eq('name', creatorData.full_name).single();
                         if (empData?.department) setOriginOffice(empData.department);
                     }
-                } catch (err) { console.error("Failed to fetch origin office"); } 
+                } catch { console.error("Failed to fetch origin office"); } 
                 finally { setIsLoadingOrigin(false); }
             };
             fetchOriginData();
@@ -220,7 +220,10 @@ export default function HandoverScreen({ doc, departments, onBack, onSuccess }: 
 
             toast.success("Document Routed Successfully!", { description: `Forwarded to ${destination}.`});
             onSuccess(); handleClose();
-        } catch (err: any) { toast.error("Failed to route document", { description: err.message }); } 
+        } catch (err: unknown) { 
+            const errorMessage = err instanceof Error ? err.message : "An unknown error occurred.";
+            toast.error("Failed to route document", { description: errorMessage }); 
+        } 
         finally { setIsSubmitting(false); }
     };
 
