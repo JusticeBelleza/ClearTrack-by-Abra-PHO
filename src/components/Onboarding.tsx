@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShieldCheck, Activity, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, ClipboardCheck, ArrowRight, CheckCircle2 } from 'lucide-react';
 
 // Import the official logos
 import clearTrackLogo from '../assets/clear_track_logo.png';
@@ -7,7 +7,7 @@ import phoLogo from '../assets/pho_logo.png';
 
 interface OnboardingProps {
   onComplete: () => void;
-  onClosing: () => void; // <-- New prop to trigger login animation!
+  onClosing: () => void; 
 }
 
 export default function Onboarding({ onComplete, onClosing }: OnboardingProps) {
@@ -42,18 +42,18 @@ export default function Onboarding({ onComplete, onClosing }: OnboardingProps) {
       title: "Welcome to FileTrackr",
       description: "The official electronic document routing and tracking system operated by the Abra Provincial Health Office.",
       icon: (
-        <div className="flex gap-2.5 items-center justify-center pt-1">
-          <img src={clearTrackLogo} alt="FileTrackr Logo" className="w-12 h-12 object-contain" />
-          <img src={phoLogo} alt="Abra PHO Logo" className="w-12 h-12 object-contain" />
+        <div className="flex gap-4 items-center justify-center pt-1">
+          <img src={clearTrackLogo} alt="FileTrackr Logo" className="w-16 h-16 object-contain drop-shadow-md" />
+          <img src={phoLogo} alt="Abra PHO Logo" className="w-16 h-16 object-contain drop-shadow-md" />
         </div>
       ),
-      // Restored the beautiful white circle with a subtle gray border!
-      color: "bg-white border-slate-100" 
+      color: "" 
     },
     {
       title: "Absolute Accountability",
       description: "Say goodbye to lost files. Every document's location, custodian, and routing history is permanently logged and strictly verifiable.",
-      icon: <Activity size={64} className="text-emerald-600" />,
+      // --- CHANGED: Now uses ClipboardCheck to represent auditing/accountability ---
+      icon: <ClipboardCheck size={64} className="text-emerald-600" />,
       color: "bg-emerald-50 border-emerald-200"
     },
     {
@@ -77,9 +77,15 @@ export default function Onboarding({ onComplete, onClosing }: OnboardingProps) {
         
         {/* Dynamic Content Area */}
         <div className="flex-1 flex flex-col items-center justify-center p-8 text-center animate-in fade-in slide-in-from-right-4 duration-500" key={currentStep}>
-          <div className={`w-32 h-32 rounded-full flex items-center justify-center border-4 mb-8 shadow-sm transition-colors duration-500 ${steps[currentStep].color}`}>
+          
+          <div className={`w-32 h-32 flex items-center justify-center mb-8 transition-all duration-500 ${
+            currentStep === 0 
+              ? '' 
+              : `rounded-full border-4 shadow-sm ${steps[currentStep].color}`
+          }`}>
             {steps[currentStep].icon}
           </div>
+
           <h2 className="text-2xl font-black text-slate-900 mb-3 tracking-tight">
             {steps[currentStep].title}
           </h2>
