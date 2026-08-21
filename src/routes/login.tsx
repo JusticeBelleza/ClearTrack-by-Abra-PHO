@@ -37,14 +37,48 @@ export default function Login() {
 
   useEffect(() => {
     const hasSeenOnboarding = localStorage.getItem('filetrackr_onboarding_complete');
-    if (!hasSeenOnboarding) {
-      setShowOnboarding(true);
-      setIsLoginRevealed(false); 
-    } else {
-      setIsLoginRevealed(true); 
-    }
-    setIsCheckingOnboarding(false);
-  }, []);
+    
+    // --- Persistent Session Interceptor ---
+    const checkPersistentSession = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session) {
+            // A session exists from a previous visit! 
+            // We must check if they actually accepted the legal terms.
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('role, emp_id, has_accepted_legal')
+                .eq('id', session.user.id)
+                .single();
+
+            if (profile?.has_accepted_legal === true) {
+                // They are fully compliant, send them straight in!
+                if (profile.role === 'admin') {
+                  navigate('/admin', { replace: true });
+                } else {
+                  navigate('/dashboard', { replace: true });
+                }
+            } else {
+                // GOTCHA! They closed the app on the agreement screen last time.
+                // Re-open the legal modal immediately!
+                setPendingUser({ id: session.user.id, role: profile?.role || 'user', emp_id: profile?.emp_id || '' });
+                setShowPostLoginLegal(true);
+            }
+            return; // Stop running onboarding logic if they are already logged in
+        }
+
+        // If no session exists, proceed with normal onboarding/login flow
+        if (!hasSeenOnboarding) {
+            setShowOnboarding(true);
+            setIsLoginRevealed(false); 
+        } else {
+            setIsLoginRevealed(true); 
+        }
+        setIsCheckingOnboarding(false);
+    };
+
+    checkPersistentSession();
+  }, [navigate]);
 
   const handleOnboardingComplete = () => {
     localStorage.setItem('filetrackr_onboarding_complete', 'true');
