@@ -5,6 +5,8 @@ import {
 import { toast } from 'sonner';
 import { supabase } from '../lib/supabase';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import ReactMarkdown from 'react-markdown';
+import { legalContents } from './legalDocs'; // <-- Dynamic text import
 
 // --- Shared Modal Animation Styles ---
 const modalAnimationStyles = `
@@ -27,11 +29,7 @@ const modalAnimationStyles = `
 `;
 
 // --- TypeScript Interfaces ---
-interface SelectOption {
-    label: string;
-    value: string;
-}
-
+interface SelectOption { label: string; value: string; }
 type OptionType = SelectOption | string;
 
 interface CustomSelectProps {
@@ -52,9 +50,7 @@ interface UserProfile {
     email: string;
 }
 
-interface Department {
-    name: string;
-}
+interface Department { name: string; }
 
 // --- Custom Dropdown Component for Departments (Clean Version) ---
 function CustomSelect({ options, value, onChange, placeholder, disabled = false }: CustomSelectProps) {
@@ -140,12 +136,23 @@ function CustomSelect({ options, value, onChange, placeholder, disabled = false 
     );
 }
 
+// --- LEGAL TITLES CONSTANT ---
+const legalTitles = {
+    privacy: "Privacy Policy",
+    terms: "Terms and Conditions of Use",
+    aup: "Information Security & Acceptable Use Policy"
+};
+
 export default function Settings() {
   const queryClient = useQueryClient();
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
   
   // Passkey Registration State
   const [isRegisteringPasskey, setIsRegisteringPasskey] = useState(false);
+
+  // Legal Modal State (No loading state needed anymore!)
+  const [openLegalModal, setOpenLegalModal] = useState<"privacy" | "terms" | "aup" | null>(null);
+  const [isClosingLegal, setIsClosingLegal] = useState(false);
 
   // Edit Profile Modal States
   const [isEditing, setIsEditing] = useState(false);
@@ -280,6 +287,14 @@ export default function Settings() {
       } finally {
           setIsRegisteringPasskey(false);
       }
+  };
+
+  const handleCloseLegalModal = () => {
+      setIsClosingLegal(true);
+      setTimeout(() => {
+          setOpenLegalModal(null);
+          setIsClosingLegal(false);
+      }, 300); 
   };
 
   const getInitials = (name?: string) => {
@@ -458,7 +473,7 @@ export default function Settings() {
                   <Lock size={18} /> Change Password
                 </button>
                 
-                {/* NEW BIOMETRICS BUTTON */}
+                {/* BIOMETRICS BUTTON */}
                 <button 
                   onClick={handleRegisterPasskey}
                   disabled={isRegisteringPasskey}
@@ -476,10 +491,37 @@ export default function Settings() {
 
       </div>
 
-      {/* App Version Display */}
+      {/* --- Footer Area (Legal & Version) --- */}
       <div className="pt-8 pb-4 text-center">
+        
+        {/* Legal Links Component */}
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 mb-3 text-sm text-slate-500">
+            <button 
+                onClick={() => setOpenLegalModal('privacy')} 
+                className="hover:text-slate-800 hover:underline transition-colors"
+            >
+                Privacy Policy
+            </button>
+            <span className="text-slate-300">•</span>
+            <button 
+                onClick={() => setOpenLegalModal('terms')} 
+                className="hover:text-slate-800 hover:underline transition-colors"
+            >
+                Terms of Use
+            </button>
+            <span className="text-slate-300">•</span>
+            <button 
+                onClick={() => setOpenLegalModal('aup')} 
+                className="hover:text-slate-800 hover:underline transition-colors"
+            >
+                Acceptable Use
+            </button>
+        </div>
+
+        {/* Existing Version Display */}
+        {/* @ts-ignore */}
         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-            FileTrackr. • v{__APP_VERSION__}
+            FileTrackr. • v{/* __APP_VERSION__ */}1.1.4
         </p>
       </div>
 
@@ -489,6 +531,47 @@ export default function Settings() {
           userEmail={profile?.email} 
           onClose={() => setIsPasswordModalOpen(false)} 
         />
+      )}
+
+      {/* --- Legal Document Modal --- */}
+      {openLegalModal && (
+        <div className={`fixed inset-0 z-[70] flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-sm ${isClosingLegal ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
+            <div className={`relative flex w-full max-w-3xl flex-col max-h-[90vh] sm:max-h-[85vh] overflow-hidden rounded-2xl sm:rounded-3xl bg-white shadow-2xl ${isClosingLegal ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
+                
+                {/* Modal Header */}
+                <div className="flex items-center justify-between border-b border-slate-100 px-5 sm:px-6 py-4 sm:py-5 bg-slate-900 text-white shrink-0">
+                    <h2 className="text-base sm:text-lg font-bold flex items-center gap-2">
+                        <Shield size={18} className="text-slate-400" />
+                        {legalTitles[openLegalModal]}
+                    </h2>
+                    <button 
+                        onClick={handleCloseLegalModal} 
+                        className="rounded-full p-2 text-white/70 transition-colors hover:bg-white/20 hover:text-white"
+                    >
+                        <X size={20} />
+                    </button>
+                </div>
+
+                {/* Modal Content body (Markdown Parsed via Tailwind Typography) */}
+                <div className="flex-1 overflow-y-auto px-5 sm:px-8 py-6 sm:py-8 custom-scrollbar bg-slate-50/50">
+                    <article className="prose prose-slate prose-sm sm:prose-base max-w-none prose-headings:text-slate-900 prose-a:text-blue-600 prose-p:text-slate-700">
+                        <ReactMarkdown>
+                            {legalContents[openLegalModal]}
+                        </ReactMarkdown>
+                    </article>
+                </div>
+
+                {/* Modal Footer / Acknowledge Button */}
+                <div className="border-t border-slate-200 bg-white px-5 sm:px-6 py-4 text-right shrink-0">
+                    <button 
+                        onClick={handleCloseLegalModal} 
+                        className="w-full sm:w-auto rounded-xl bg-slate-900 px-8 py-3 sm:py-2.5 text-sm font-bold text-white transition-all active:scale-95 hover:bg-slate-800 border-2 border-slate-900 shadow-sm"
+                    >
+                        I Understand
+                    </button>
+                </div>
+            </div>
+        </div>
       )}
     </div>
   );
