@@ -1,6 +1,6 @@
 // src/routes/history.tsx
-import React, { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { 
     Search, MapPin, Clock, CheckCircle, AlertCircle, 
     Archive, FileText, X, Eye, Ban, ChevronDown, FolderTree, User, RefreshCw
@@ -68,6 +68,7 @@ interface TabButtonProps {
     onClick: () => void;
     colorClass: string;
     badgeClass: string;
+    newCount?: number; // ADDED: Support for new item count
 }
 
 // --- DATA FETCHING FUNCTION FOR REACT QUERY ---
@@ -137,20 +138,47 @@ const fetchHistoryData = async (): Promise<HistoryData> => {
 };
 
 export default function History() {
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<'completed' | 'cancelled'>('completed');
   const [searchQuery, setSearchQuery] = useState("");
   const [trailDoc, setTrailDoc] = useState<DocumentItem | null>(null);
   const [previewDocUrl, setPreviewDocUrl] = useState<string | null>(null);
 
-  // --- Accordion & Pagination State ---
+  // --- Accordion, Pagination & View State ---
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({});
   const [categoryPages, setCategoryPages] = useState<Record<string, number>>({});
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});
+  
+  // Track last viewed time per folder to calculate "New" badges
+  const [tabCategoryViewedTime, setTabCategoryViewedTime] = useState<Record<string, number>>(() => {
+      const saved = localStorage.getItem('filetrackr_history_viewed');
+      return saved ? JSON.parse(saved) : {};
+  });
 
   const { data, isLoading, refetch, isFetching } = useQuery<HistoryData>({
       queryKey: ['historyDocuments'],
       queryFn: fetchHistoryData
   });
+
+  // --- NEW: REALTIME SYNC FOR HISTORY TAB ---
+  useEffect(() => {
+      const channel = supabase
+        .channel('history-document-updates')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'documents' },
+          () => {
+            // Instantly refetch this screen and the global nav badges when documents change
+            queryClient.invalidateQueries({ queryKey: ['historyDocuments'] });
+            queryClient.invalidateQueries({ queryKey: ['globalNavNotifications'] });
+          }
+        )
+        .subscribe();
+        
+      return () => {
+        supabase.removeChannel(channel);
+      };
+  }, [queryClient]);
 
   const documents = useMemo<HistoryData>(() => {
       return { 
@@ -158,6 +186,31 @@ export default function History() {
           cancelled: data?.cancelled || [] 
       };
   }, [data]);
+
+  // --- CALCULATE TAB BADGES ---
+  const newCompletedCount = useMemo(() => {
+      let count = 0;
+      documents.completed.forEach(doc => {
+          const cat = doc.category || 'Uncategorized';
+          const key = `completed_${cat}`;
+          const docTime = new Date(doc.action_time || doc.updated_at || doc.created_at).getTime();
+          const lastViewed = tabCategoryViewedTime[key] || 0;
+          if (docTime > lastViewed) count++;
+      });
+      return count;
+  }, [documents.completed, tabCategoryViewedTime]);
+
+  const newCancelledCount = useMemo(() => {
+      let count = 0;
+      documents.cancelled.forEach(doc => {
+          const cat = doc.category || 'Uncategorized';
+          const key = `cancelled_${cat}`;
+          const docTime = new Date(doc.action_time || doc.updated_at || doc.created_at).getTime();
+          const lastViewed = tabCategoryViewedTime[key] || 0;
+          if (docTime > lastViewed) count++;
+      });
+      return count;
+  }, [documents.cancelled, tabCategoryViewedTime]);
 
   const filteredDocs = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
@@ -175,22 +228,45 @@ export default function History() {
     );
   }, [searchQuery, documents, activeTab]);
 
-  // --- Group Documents by Category ---
+  // --- Group Documents by Category & Calculate New Counts ---
   const groupedDocs = useMemo(() => {
-      const grouped: Record<string, DocumentItem[]> = {};
+      const grouped: Record<string, { docs: DocumentItem[], newCount: number }> = {};
 
       filteredDocs.forEach(doc => {
           const category = doc.category || 'Uncategorized';
-          if (!grouped[category]) grouped[category] = [];
-          grouped[category].push(doc);
+          const key = `${activeTab}_${category}`; // Unique key per tab and category
+          
+          if (!grouped[category]) grouped[category] = { docs: [], newCount: 0 };
+          
+          grouped[category].docs.push(doc);
+          
+          // Calculate if this document is newer than the last time the folder was opened
+          const docTime = new Date(doc.action_time || doc.updated_at || doc.created_at).getTime();
+          const lastViewed = tabCategoryViewedTime[key] || 0;
+          
+          if (docTime > lastViewed) {
+              grouped[category].newCount++;
+          }
       });
 
       return Object.entries(grouped)
-          .map(([category, docs]) => ({ category, docs }))
+          .map(([category, data]) => ({ category, docs: data.docs, newCount: data.newCount }))
           .sort((a, b) => a.category.localeCompare(b.category));
-  }, [filteredDocs]);
+  }, [filteredDocs, activeTab, tabCategoryViewedTime]);
 
   const toggleCategoryAccordion = (categoryName: string) => {
+      const key = `${activeTab}_${categoryName}`;
+      
+      const now = Date.now();
+      setTabCategoryViewedTime(prev => {
+          const next = { ...prev, [key]: now };
+          localStorage.setItem('filetrackr_history_viewed', JSON.stringify(next));
+          return next;
+      });
+
+      // DISPATCH INSTANT SYNC EVENT TO APPLAYOUT
+      window.dispatchEvent(new Event('history_folder_viewed'));
+
       setExpandedCategories(prev => ({
           ...prev,
           [categoryName]: !prev[categoryName]
@@ -264,6 +340,7 @@ export default function History() {
                 label="Completed" 
                 icon={<CheckCircle size={18} strokeWidth={activeTab === 'completed' ? 3 : 2} />}
                 count={documents.completed.length} 
+                newCount={newCompletedCount}
                 isActive={activeTab === 'completed'} 
                 onClick={() => { setActiveTab('completed'); setSearchQuery(''); }} 
                 colorClass="bg-emerald-600 text-white"
@@ -273,6 +350,7 @@ export default function History() {
                 label="Cancelled" 
                 icon={<Ban size={18} strokeWidth={activeTab === 'cancelled' ? 3 : 2} />}
                 count={documents.cancelled.length} 
+                newCount={newCancelledCount}
                 isActive={activeTab === 'cancelled'} 
                 onClick={() => { setActiveTab('cancelled'); setSearchQuery(''); }} 
                 colorClass="bg-rose-600 text-white"
@@ -296,7 +374,7 @@ export default function History() {
               </div>
           ) : (
               <div className="bg-transparent space-y-4">
-                  {groupedDocs.map(({ category, docs }) => {
+                  {groupedDocs.map(({ category, docs, newCount }) => {
                       const isCategoryExpanded = expandedCategories[category];
                       const currentPage = categoryPages[category] || 1;
                       const itemsPerPage = 5;
@@ -315,9 +393,18 @@ export default function History() {
                                           <FolderTree size={20} className={activeTab === 'completed' ? 'text-emerald-500' : 'text-rose-500'} strokeWidth={2.5} />
                                           <h4 className="font-bold text-slate-800 text-base sm:text-lg leading-snug break-words group-hover:text-slate-900 transition-colors">{category}</h4>
                                       </div>
-                                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-md text-slate-500 bg-white border border-slate-200 w-fit mt-1 shadow-sm">
-                                          {docs.length} document{docs.length !== 1 ? 's' : ''}
-                                      </span>
+                                      
+                                      <div className="flex items-center gap-2 mt-1">
+                                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md text-slate-500 bg-white border border-slate-200 shadow-sm">
+                                              {docs.length} document{docs.length !== 1 ? 's' : ''}
+                                          </span>
+                                          {/* --- THE NEW FOLDER NOTIFICATION BADGE --- */}
+                                          {newCount > 0 && !isCategoryExpanded && (
+                                              <span className="text-[9px] font-black text-white bg-red-500 px-1.5 py-0.5 rounded shadow-sm animate-pulse flex items-center tracking-wider">
+                                                  {newCount} NEW
+                                              </span>
+                                          )}
+                                      </div>
                                   </div>
                                   <div className={`p-2 rounded-full transition-colors ${isCategoryExpanded ? 'bg-slate-200 text-slate-800' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200 group-hover:text-slate-600'}`}>
                                     <ChevronDown 
@@ -481,20 +568,37 @@ export default function History() {
   );
 }
 
-function TabButton({ label, icon, count, isActive, onClick, colorClass, badgeClass }: TabButtonProps) {
+function TabButton({ label, icon, count, isActive, onClick, colorClass, badgeClass, newCount = 0 }: TabButtonProps) {
     return (
         <button 
             onClick={onClick}
             title={label}
-            className={`flex-none shrink-0 flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-95 active:shadow-inner text-sm whitespace-nowrap overflow-hidden border ${
+            className={`relative flex-none shrink-0 flex items-center justify-center gap-2 px-5 py-3 rounded-xl font-bold transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-95 active:shadow-inner text-sm whitespace-nowrap overflow-hidden border ${
                 isActive ? `${colorClass} border-transparent shadow-md` : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50 hover:text-slate-700'
             }`}
         >
+            {/* Ping indicator dot if there are new items and tab is inactive */}
+            {newCount > 0 && !isActive && (
+                <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500 border border-white"></span>
+                </span>
+            )}
+            
             {icon}
             {isActive && <span className="animate-in fade-in slide-in-from-left-2 duration-200">{label}</span>}
-            <span className={`px-2 py-0.5 rounded-md text-[10px] font-black border shadow-sm ${isActive ? badgeClass : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
-                {count}
-            </span>
+            
+            <div className="flex items-center gap-1.5">
+                <span className={`px-2 py-0.5 rounded-md text-[10px] font-black border shadow-sm ${isActive ? badgeClass : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
+                    {count}
+                </span>
+                {/* Text Badge for new items */}
+                {newCount > 0 && !isActive && (
+                    <span className="text-[9px] font-black text-white bg-red-500 px-1.5 py-0.5 rounded shadow-sm animate-in zoom-in flex items-center">
+                        {newCount} NEW
+                    </span>
+                )}
+            </div>
         </button>
     )
 }

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Outlet, Link, useLocation, useNavigate } from 'react-router-dom';
 import { 
     FileText, Activity, History, Settings, LogOut, Shield, AlertCircle, X, Calendar, FilePlus 
@@ -49,18 +49,16 @@ export default function AppLayout() {
   const queryClient = useQueryClient();
   const activeTab = location.pathname.replace('/', '') || 'dashboard';
 
-  // Extract both states from UI Store
   const isCreateModalOpen = useUiStore((state) => state.isCreateModalOpen);
   const openCreateModal = useUiStore((state) => state.openCreateModal);
 
   const [currentUserRole, setCurrentUserRole] = useState<'admin' | 'pho_staff' | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
   const [isClosingLogout, setIsClosingLogout] = useState(false);
-
   const [dateInfo, setDateInfo] = useState({ long: '', short: '', time: '' });
 
+  // Clock
   useEffect(() => {
       const updateDate = () => {
           const now = new Date();
@@ -71,20 +69,16 @@ export default function AppLayout() {
           });
       };
       updateDate();
-      // Update every second to ensure the minute ticks over precisely
       const interval = setInterval(updateDate, 1000);
       return () => clearInterval(interval);
   }, []);
 
+  // Auth & Settings
   useEffect(() => {
     const fetchUserAndSettings = async () => {
       try {
         const { data: { session }, error: authError } = await supabase.auth.getSession();
-        
-        if (authError || !session) {
-          navigate('/login', { replace: true });
-          return;
-        }
+        if (authError || !session) return navigate('/login', { replace: true });
 
         const [profileRes, settingsRes] = await Promise.all([
             supabase.from('profiles').select('role').eq('id', session.user.id).single(),
@@ -92,67 +86,122 @@ export default function AppLayout() {
         ]);
 
         const role = profileRes.data?.role || 'pho_staff';
-        const isMaintenance = settingsRes.data?.maintenance_mode || false;
-
-        if (isMaintenance && role !== 'admin') {
+        if (settingsRes.data?.maintenance_mode && role !== 'admin') {
             await supabase.auth.signOut(); 
-            toast.error('System Maintenance', { description: 'The system is currently undergoing maintenance. Please try again later.' });
+            toast.error('System Maintenance', { description: 'The system is currently undergoing maintenance.' });
             navigate('/login', { replace: true });
             return;
         }
-
         setCurrentUserRole(role as 'admin' | 'pho_staff');
       } catch (err) {
-        console.error("Error fetching user role:", err);
         setCurrentUserRole('pho_staff'); 
       } finally {
         setIsLoading(false);
       }
     };
-
     fetchUserAndSettings();
   }, [navigate]);
 
-  const { data: unreadCount } = useQuery({
-      queryKey: ['globalNavNotifications'],
+  // --- ZERO-DELAY CACHED DATA FETCH ---
+  const { data: navData } = useQuery({
+      queryKey: ['globalNavData'],
       queryFn: async () => {
           const { data: { session } } = await supabase.auth.getSession();
-          if (!session) return 0;
+          if (!session) return null;
 
           const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', session.user.id).single();
           const fullName = profile?.full_name || '';
 
           const { data: docs } = await supabase.from('documents')
-              .select('updated_at, created_at, status, remarks')
-              .neq('status', 'sealed')
-              .neq('status', 'cancelled')
+              .select('updated_at, created_at, status, remarks, created_by, category')
               .or(`created_by.eq.${session.user.id},assigned_clerk.eq.${fullName}`);
 
-          if (!docs) return 0;
-
-          const lastProc = Number(localStorage.getItem('filetrackr_viewed_processing') || '0');
-          const lastRet = Number(localStorage.getItem('filetrackr_viewed_returned') || '0');
-
-          let count = 0;
-          docs.forEach(d => {
-              const time = new Date(d.updated_at || d.created_at).getTime();
-              const isReturned = d.status === 'pending' && !!d.remarks;
-              if (isReturned && time > lastRet) count++;
-              else if (!isReturned && time > lastProc) count++;
-          });
-
-          return count;
+          return { docs: docs || [], userId: session.user.id };
       },
       refetchInterval: 15000, 
       enabled: currentUserRole === 'pho_staff'
   });
 
+  // --- INSTANT UI SYNC STATE ---
+  const [localViewed, setLocalViewed] = useState(() => ({
+      proc: 0, ret: 0, hist: {} as Record<string, number>
+  }));
+
   useEffect(() => {
-      queryClient.invalidateQueries({ queryKey: ['globalNavNotifications'] });
-  }, [activeTab, queryClient]);
+      const syncStorage = () => {
+          setLocalViewed({
+              proc: Number(localStorage.getItem('filetrackr_viewed_processing') || '0'),
+              ret: Number(localStorage.getItem('filetrackr_viewed_returned') || '0'),
+              hist: JSON.parse(localStorage.getItem('filetrackr_history_viewed') || '{}')
+          });
+      };
+      
+      syncStorage(); // Sync on mount/tab change
+      
+      // Listen to the History custom event for absolute zero-delay clearing
+      window.addEventListener('history_folder_viewed', syncStorage);
+      
+      // Fast polling fallback to instantly catch Processing tab updates
+      const interval = setInterval(syncStorage, 1000); 
 
-  const processingNotificationCount = activeTab === 'processing' ? 0 : (unreadCount || 0);
+      return () => {
+          window.removeEventListener('history_folder_viewed', syncStorage);
+          clearInterval(interval);
+      };
+  }, [activeTab]);
 
+  // --- SUPABASE REALTIME FETCH (Only when data ACTUALLY changes) ---
+  useEffect(() => {
+    const channel = supabase
+      .channel('global-nav-document-updates')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'documents' },
+        () => {
+          // When a document changes in the DB, fetch new data.
+          queryClient.invalidateQueries({ queryKey: ['globalNavData'] });
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [queryClient]);
+
+  // --- SYNCHRONOUS, INSTANT BADGE CALCULATION ---
+  const { processingCount, historyCount } = useMemo(() => {
+      let pCount = 0;
+      let hCount = 0;
+      
+      if (!navData?.docs) return { processingCount: 0, historyCount: 0 };
+
+      navData.docs.forEach(d => {
+          const time = new Date(d.updated_at || d.created_at).getTime();
+          
+          if (d.status === 'sealed' || d.status === 'cancelled') {
+              if (d.created_by === navData.userId) {
+                  const tab = d.status === 'sealed' ? 'completed' : 'cancelled';
+                  const cat = d.category || 'Uncategorized';
+                  const key = `${tab}_${cat}`;
+                  const lastViewed = localViewed.hist[key] || 0;
+                  if (time > lastViewed) hCount++;
+              }
+          } else {
+              const isReturned = d.status === 'pending' && !!d.remarks;
+              if (isReturned && time > localViewed.ret) pCount++;
+              else if (!isReturned && time > localViewed.proc) pCount++;
+          }
+      });
+
+      return { processingCount: pCount, historyCount: hCount };
+  }, [navData, localViewed]);
+
+  // Hide the badge if we are currently looking at that tab
+  const finalProcessingCount = activeTab === 'processing' ? 0 : processingCount;
+  const finalHistoryCount = historyCount; // Keep showing history badge until they open the specific folder
+
+  // Security Redirects
   useEffect(() => {
     if (!currentUserRole) return; 
     if (currentUserRole === 'admin') {
@@ -163,25 +212,22 @@ export default function AppLayout() {
   }, [activeTab, currentUserRole, navigate]);
 
   const openLogoutModal = () => setIsLogoutModalOpen(true);
-  
   const closeLogoutModal = () => {
       setIsClosingLogout(true);
       setTimeout(() => { setIsLogoutModalOpen(false); setIsClosingLogout(false); }, 300);
   };
-
   const confirmLogout = async () => {
       await supabase.auth.signOut();
       window.location.href = '/login'; 
   };
 
-  // Logic to calculate the "liquid" sliding bubble position
   const getActiveTranslateStaff = () => {
       switch(activeTab) {
           case 'dashboard': return 'left-[10%] opacity-100 scale-100';
           case 'processing': return 'left-[30%] opacity-100 scale-100';
           case 'history': return 'left-[70%] opacity-100 scale-100';
           case 'settings': return 'left-[90%] opacity-100 scale-100';
-          default: return 'left-[50%] opacity-0 scale-50'; // hidden
+          default: return 'left-[50%] opacity-0 scale-50';
       }
   };
 
@@ -227,7 +273,6 @@ export default function AppLayout() {
                 <Calendar size={12} className="text-[#4D6787] shrink-0" />
                 <span className="text-[10px] font-bold leading-none">{dateInfo.long}</span>
               </div>
-              {/* Added Desktop Time */}
               <span className="text-[10px] font-bold text-slate-500 pl-1">{dateInfo.time}</span>
             </div>
           </div>
@@ -242,9 +287,15 @@ export default function AppLayout() {
                   label="Processing" 
                   to="/processing" 
                   isActive={activeTab === 'processing'} 
-                  notificationCount={processingNotificationCount} 
+                  notificationCount={finalProcessingCount} 
               />
-              <DesktopNavItem icon={<History />} label="History" to="/history" isActive={activeTab === 'history'} />
+              <DesktopNavItem 
+                  icon={<History />} 
+                  label="History" 
+                  to="/history" 
+                  isActive={activeTab === 'history'} 
+                  notificationCount={finalHistoryCount}
+              />
             </>
           )}
           {currentUserRole === 'admin' && (
@@ -263,8 +314,6 @@ export default function AppLayout() {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
-        
-        {/* Mobile Header (Includes Logout Button) */}
         <header className="md:hidden flex items-center justify-between p-4 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 text-white shadow-lg z-20 relative shrink-0 overflow-hidden border-b border-slate-800">
           <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 bg-[#4D6787] rounded-full mix-blend-screen filter blur-3xl opacity-30 animate-pulse"></div>
 
@@ -290,7 +339,6 @@ export default function AppLayout() {
                      <span className="text-[11px] font-bold text-slate-200">
                         {dateInfo.short}
                      </span>
-                     {/* Added Mobile Time */}
                      <span className="text-[10px] font-bold text-slate-400 mt-0.5">
                         {dateInfo.time}
                      </span>
@@ -302,24 +350,14 @@ export default function AppLayout() {
           </div>
         </header>
 
-        {/* Scrollable Content Routing Outlet */}
         <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-28 md:pb-8">
           <Outlet />
         </div>
       </main>
 
-      {/* 
-        NEW MOBILE NAVIGATION
-        Solid custom background (#213C51) with a liquid sliding bubble.
-        The center button is now a perfect circle with a crisp white border.
-        Bottom padding is reduced to tighten the overall look.
-      */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#213C51] border-t border-[#213C51] shadow-[0_-15px_40px_rgba(33,60,81,0.25)] rounded-t-[1.5rem] pb-[env(safe-area-inset-bottom)] overflow-visible">
-          
           {currentUserRole === 'pho_staff' && (
              <nav className="relative grid grid-cols-5 items-center w-full px-0 h-[4.25rem]">
-                
-                {/* Liquid Sliding Background Bubble */}
                 <div 
                     className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-11 h-11 bg-white rounded-[1.15rem] transition-all duration-500 ease-[cubic-bezier(0.68,-0.55,0.26,1.55)] shadow-md z-0 ${getActiveTranslateStaff()}`}
                 ></div>
@@ -328,15 +366,11 @@ export default function AppLayout() {
                     <MobileIconNav icon={<Activity />} to="/dashboard" isActive={activeTab === 'dashboard'} />
                 </div>
                 <div className="flex justify-center z-10">
-                    <MobileIconNav icon={<FileText />} to="/processing" isActive={activeTab === 'processing'} notificationCount={processingNotificationCount} />
+                    <MobileIconNav icon={<FileText />} to="/processing" isActive={activeTab === 'processing'} notificationCount={finalProcessingCount} />
                 </div>
                 
-                {/* CENTER BUTTON (Route Document) */}
                 <div className="flex justify-center relative -mt-6 z-20">
-                    {/* Dark circular backdrop cutout matching the nav bar */}
                     <div className="absolute inset-0 bg-[#213C51] rounded-full w-[3.5rem] h-[3.5rem] mx-auto scale-[1.18] shadow-[0_-8px_15px_rgba(33,60,81,0.15)] z-0"></div>
-                    
-                    {/* Circular Cyan Button with White Border */}
                     <button 
                         onClick={openCreateModal}
                         className="relative flex items-center justify-center w-[3.5rem] h-[3.5rem] bg-cyan-400 hover:bg-cyan-300 text-[#213C51] rounded-full border-[3px] border-white shadow-[0_0_25px_rgba(34,211,238,0.4)] hover:shadow-[0_0_30px_rgba(34,211,238,0.6)] transition-all duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.275)] active:scale-75 active:rotate-12 z-10"
@@ -346,7 +380,12 @@ export default function AppLayout() {
                 </div>
 
                 <div className="flex justify-center z-10">
-                    <MobileIconNav icon={<History />} to="/history" isActive={activeTab === 'history'} />
+                    <MobileIconNav 
+                      icon={<History />} 
+                      to="/history" 
+                      isActive={activeTab === 'history'} 
+                      notificationCount={finalHistoryCount} 
+                    />
                 </div>
                 <div className="flex justify-center z-10">
                     <MobileIconNav icon={<Settings />} to="/settings" isActive={activeTab === 'settings'} />
@@ -356,7 +395,6 @@ export default function AppLayout() {
 
           {currentUserRole === 'admin' && (
              <nav className="relative grid grid-cols-2 items-center w-full px-0 h-[4.25rem]">
-                {/* Liquid Sliding Background Bubble for Admin */}
                 <div 
                     className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-11 h-11 bg-white rounded-[1.15rem] transition-all duration-500 ease-[cubic-bezier(0.68,-0.55,0.26,1.55)] shadow-md z-0 ${getActiveTranslateAdmin()}`}
                 ></div>
@@ -369,10 +407,8 @@ export default function AppLayout() {
                 </div>
              </nav>
           )}
-
       </div>
 
-      {/* GLOBAL LOGOUT CONFIRMATION MODAL */}
       {isLogoutModalOpen && (
         <div className={`fixed inset-0 z-50 flex items-end sm:items-center justify-center sm:p-4 bg-slate-900/50 backdrop-blur-sm ${isClosingLogout ? 'animate-overlay-fade-out' : 'animate-overlay-fade'}`}>
           <div className={`bg-white w-full max-w-md rounded-t-[1.5rem] sm:rounded-2xl shadow-2xl overflow-hidden ${isClosingLogout ? 'animate-responsive-modal-close' : 'animate-responsive-modal'}`}>
@@ -393,18 +429,13 @@ export default function AppLayout() {
         </div>
       )}
 
-      {/* Global Create Document Modal */}
       {isCreateModalOpen && <CreateDocumentModal />}
-      
-      {/* PWA Install Prompt */}
       <InstallPrompt />
     </div>
   );
 }
 
 // --- Helper Components --- //
-
-// DESKTOP NAVIGATION ITEM
 function DesktopNavItem({ icon, label, to, isActive, notificationCount = 0 }: NavItemProps) {
   return (
     <Link to={to} className={`flex items-center gap-3 px-4 py-3 w-full text-left rounded-lg transition-all ${
@@ -431,15 +462,14 @@ function DesktopNavItem({ icon, label, to, isActive, notificationCount = 0 }: Na
   );
 }
 
-// MOBILE ICON-ONLY NAVIGATION ITEM
 function MobileIconNav({ icon, to, isActive, notificationCount = 0 }: NavItemProps) {
     return (
       <Link 
         to={to} 
         className={`relative flex items-center justify-center w-12 h-12 rounded-2xl transition-colors duration-300 ${
           isActive 
-            ? 'text-[#213C51]' // Icon turns dark blue when white bubble slides behind it
-            : 'text-white/60 hover:text-white hover:bg-white/10' // Subtle transparent white when inactive
+            ? 'text-[#213C51]' 
+            : 'text-white/60 hover:text-white hover:bg-white/10'
         }`}
       >
         <div className={`transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${isActive ? 'scale-110 -translate-y-0.5' : 'scale-100'}`}>
