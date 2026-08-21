@@ -94,6 +94,7 @@ export default function AppLayout() {
         }
         setCurrentUserRole(role as 'admin' | 'pho_staff');
       } catch (err) {
+        console.error("Error fetching user role:", err);
         setCurrentUserRole('pho_staff'); 
       } finally {
         setIsLoading(false);
