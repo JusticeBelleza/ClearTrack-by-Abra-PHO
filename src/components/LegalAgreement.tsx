@@ -28,7 +28,7 @@ export default function LegalAgreement({ onAccept, onDecline, isSaving }: LegalA
   
   const [hasAgreed, setHasAgreed] = useState(false);
   
-  // --- NEW: Document Reader Animation States ---
+  // --- Document Reader Animation States ---
   const [activeDoc, setActiveDoc] = useState<"privacy" | "terms" | "aup" | null>(null);
   const [isDocVisible, setIsDocVisible] = useState(false);
   
@@ -75,7 +75,7 @@ export default function LegalAgreement({ onAccept, onDecline, isSaving }: LegalA
     }, 600); 
   };
 
-  // --- NEW: Document Open & Close Animators ---
+  // --- Document Open & Close Animators ---
   const handleOpenDoc = (docKey: "privacy" | "terms" | "aup") => {
     setActiveDoc(docKey);
     // Allow the DOM to render the modal instantly hidden, then trigger the slide up!
@@ -126,7 +126,7 @@ export default function LegalAgreement({ onAccept, onDecline, isSaving }: LegalA
              <div className="flex items-center justify-between mb-2">
                 <p className="text-sm font-bold text-slate-500 uppercase tracking-wider">Please review the following:</p>
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-200 px-2 py-0.5 rounded-full">
-                  {Object.values(readStatus).filter(Boolean).length} / 3 Read
+                  {Object.values(readStatus).filter(Boolean).length} / 3
                 </span>
              </div>
              
