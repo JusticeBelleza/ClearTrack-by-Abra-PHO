@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom'; // <-- NEW: Added useNavigate
 import { 
     Search, Activity, AlertCircle, MapPin, Clock, 
     ChevronRight, CheckCircle, FileText, Eye, X, Plus,
@@ -114,6 +115,7 @@ const formatPHDateTime = (isoString?: string) => {
 };
 
 export default function Dashboard() {
+  const navigate = useNavigate(); // <-- NEW: initialized navigate
   const queryClient = useQueryClient();
   const openCreateModal = useUiStore((state) => state.openCreateModal);
   
@@ -151,8 +153,25 @@ export default function Dashboard() {
       if (sessionError || !session) throw new Error("Authentication required");
       const currentUserId = session.user.id;
 
-      // 2. Fetch Profile and Colleagues
-      const { data: profile } = await supabase.from('profiles').select('full_name').eq('id', currentUserId).single();
+      // 2. Fetch Profile and Enforce Compliance
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('full_name, has_accepted_legal')
+        .eq('id', currentUserId)
+        .single();
+
+      if (profileError) throw profileError;
+
+      // --- THE BOUNCER: IF NOT ACCEPTED, KICK OUT IMMEDIATELY ---
+      if (profile?.has_accepted_legal === false) {
+        await supabase.auth.signOut();
+        toast.error("Access Denied", {
+          description: "You must review and accept the official policies before accessing FileTrackr."
+        });
+        navigate('/', { replace: true });
+        throw new Error("Legal agreements not accepted");
+      }
+
       const currentUserName = profile?.full_name || '';
       const firstName = currentUserName.split(' ')[0];
 
