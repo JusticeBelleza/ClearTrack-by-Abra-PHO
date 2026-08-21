@@ -519,7 +519,6 @@ export default function Settings() {
         </div>
 
         {/* Existing Version Display */}
-        {/* @ts-ignore */}
         <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
             FileTrackr. • v{/* __APP_VERSION__ */}1.1.4
         </p>
