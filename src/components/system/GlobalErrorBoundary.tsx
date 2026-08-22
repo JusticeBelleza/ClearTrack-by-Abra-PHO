@@ -1,5 +1,5 @@
 import { Component } from 'react';
-import type { ErrorInfo, ReactNode } from 'react'; // <-- Added 'type' import here
+import type { ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCcw, Home } from 'lucide-react';
 
 interface Props {
@@ -9,31 +9,55 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error | null;
+  isChunkError: boolean; // <-- Added to track if it's a Vite deployment error
 }
 
 export default class GlobalErrorBoundary extends Component<Props, State> {
   public state: State = {
     hasError: false,
     error: null,
+    isChunkError: false,
   };
 
   public static getDerivedStateFromError(error: Error): State {
-    // Update state so the next render will show the fallback UI.
-    return { hasError: true, error };
+    // Detect if this is the Vite/Cloudflare missing chunk error
+    const isChunkError = 
+        error.message.includes('Failed to fetch dynamically imported module') ||
+        error.message.includes('Importing a module script failed');
+
+    // Update state so the next render will show the appropriate fallback UI.
+    return { hasError: true, error, isChunkError };
   }
 
   public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    // If it's a chunk error, force a hard reload immediately to grab the new files
+    if (this.state.isChunkError) {
+      window.location.reload();
+      return;
+    }
+
     // In a full enterprise setup, this is where you send the error to Sentry:
     // Sentry.captureException(error, { extra: errorInfo });
     console.error('Uncaught error:', error, errorInfo);
   }
 
   private handleReset = () => {
-    this.setState({ hasError: false, error: null });
+    this.setState({ hasError: false, error: null, isChunkError: false });
     window.location.reload();
   };
 
   public render() {
+    // 1. Silent Recovery UI for deployment updates
+    if (this.state.isChunkError) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+                <RefreshCcw className="w-8 h-8 animate-spin mb-4 text-red-500" />
+                <p className="font-bold text-slate-600">Applying latest system updates...</p>
+            </div>
+        );
+    }
+
+    // 2. Standard Crash UI for everything else
     if (this.state.hasError) {
       return (
         <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4 selection:bg-red-200">
