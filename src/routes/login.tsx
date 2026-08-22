@@ -172,13 +172,12 @@ export default function Login() {
     }
   };
 
-  // --- NEW: Handle Post-Login Acceptance (Fixed 400 Error) ---
+  // --- Handle Post-Login Acceptance ---
   const handleLegalAccept = async () => {
     if (!pendingUser) return;
     setIsSavingLegal(true);
     
     try {
-      // 1. Update Profiles Table ONLY (Removed the employees table update)
       const { error } = await supabase.from('profiles')
         .update({ has_accepted_legal: true })
         .eq('id', pendingUser.id);
@@ -202,7 +201,7 @@ export default function Login() {
     }
   };
 
-  // --- NEW: Handle Post-Login Decline ---
+  // --- Handle Post-Login Decline ---
   const handleLegalDecline = async () => {
     setIsSavingLegal(true);
     // Sever the auth session immediately
@@ -343,21 +342,19 @@ export default function Login() {
                 )}
               </button>
 
-              {localStorage.getItem('filetrackr_passkey_registered') === 'true' && (
-                <button 
-                    type="button"
+              <button 
+                  type="button"
                   onClick={handleBiometricLogin}
                   disabled={isLoading || isBiometricLoading || showPostLoginLegal}
                   title="Sign in with Passkey or Face ID"
                   className="w-[56px] shrink-0 bg-white hover:bg-slate-50 text-blue-600 font-bold rounded-xl transition-all active:scale-[0.95] flex items-center justify-center border border-slate-300 hover:border-blue-300 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
-                >
-                    {isBiometricLoading ? (
-                        <Loader2 className="animate-spin h-5 w-5" />
-                    ) : (
-                        <Fingerprint size={24} strokeWidth={2} />
-                    )}
-                </button>
-              )}
+              >
+                  {isBiometricLoading ? (
+                      <Loader2 className="animate-spin h-5 w-5" />
+                  ) : (
+                      <Fingerprint size={24} strokeWidth={2} />
+                  )}
+              </button>
             </div>
           </form>
 
