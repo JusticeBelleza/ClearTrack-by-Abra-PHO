@@ -1,8 +1,8 @@
 # 📂 ClearTrack Document Tracker
 
 ![Version](https://img.shields.io/badge/version-1.1.6-blue.svg)
-![React](https://img.shields.io/badge/React-18.x-61DAFB.svg?logo=react)
-![Tailwind](https://img.shields.io/badge/Tailwind_CSS-3.x-38B2AC.svg?logo=tailwind-css)
+![React](https://img.shields.io/badge/React-19.2.8-61DAFB.svg?logo=react)
+![Tailwind](https://img.shields.io/badge/Tailwind_CSS-4.3.3-38B2AC.svg?logo=tailwind-css)
 ![Supabase](https://img.shields.io/badge/Supabase-Powered-3ECF8E.svg?logo=supabase)
 
 A modern, real-time document routing and tracking system built for the Provincial Health Office. ClearTrack eliminates lost paperwork by providing a strict digital trail, electronic signatures, and real-time accountability for every document moving through the organization.
