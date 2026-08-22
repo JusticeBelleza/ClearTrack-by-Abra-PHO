@@ -1,6 +1,6 @@
 # 📂 ClearTrack Document Tracker
 
-![Version](https://img.shields.io/badge/version-1.0.0-blue.svg)
+![Version](https://img.shields.io/badge/version-1.1.6-blue.svg)
 ![React](https://img.shields.io/badge/React-18.x-61DAFB.svg?logo=react)
 ![Tailwind](https://img.shields.io/badge/Tailwind_CSS-3.x-38B2AC.svg?logo=tailwind-css)
 ![Supabase](https://img.shields.io/badge/Supabase-Powered-3ECF8E.svg?logo=supabase)
